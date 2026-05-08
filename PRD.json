@@ -140,7 +140,7 @@
     {
       "title": "28 - Add end-to-end test for init, index, and context",
       "description": "Add an E2E test through the CLI or public functions.\n\nScenario:\n1. create a temporary fixture repository,\n2. run init,\n3. adjust project.yaml/protected_paths if needed,\n4. run index,\n5. run context with task `Update context panel copy. Do not change matching algorithms.`,\n6. verify artifacts.\n\nExpectations:\n- context_pack.md contains the task,\n- it contains the relevant TSX screen/test,\n- it contains invariants,\n- it marks matching.py as risky/protected,\n- it does not contain node_modules,\n- opencode_prompt.md is created only when platform export is requested.\n\nAcceptance criteria:\n- test passes repeatedly,\n- it does not require OpenCode,\n- it verifies real files under `.vibecode/`.\n\nVerification:\n- `python -m pytest` includes this E2E test.",
-      "completed": false
+      "completed": true
     },
     {
       "title": "29 - Add Windows path compatibility tests",

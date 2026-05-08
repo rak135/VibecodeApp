@@ -27,3 +27,4 @@
 - [✓] 2026-05-08 15:59 - 25 - Enforce the human-maintained vs generated file boundary
 - [✓] 2026-05-08 16:03 - 26 - Add fixture repositories for indexer tests
 - [✓] 2026-05-08 16:05 - 27 - Add unit tests for the main indexing modules
+- [✓] 2026-05-08 16:11 - 28 - Add end-to-end test for init, index, and context
