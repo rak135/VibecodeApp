@@ -39,6 +39,9 @@ Thumbs.db
 tmp/
 temp/
 
+# Local PRD/task specs
+PRD.json
+
 # Local Ralph/Ralphy runtime state
 .ralph/
 .ralphy/
