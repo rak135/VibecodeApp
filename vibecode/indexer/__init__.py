@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import sys
+import json
 from datetime import datetime, timezone
 from pathlib import Path
 
@@ -22,6 +23,8 @@ from vibecode.indexer.entrypoints import detect_entrypoints, render_entrypoints,
 from vibecode.indexer.repo_tree import render_repo_tree, write_repo_tree
 from vibecode.indexer.symbol_map import build_symbol_map, write_symbol_map
 from vibecode.indexer.test_map import build_test_map, write_test_map
+from vibecode.indexer.run_record import write_run_record
+from vibecode.validation import validate_project, write_validation_report
 
 __all__ = [
     "scan",
@@ -51,6 +54,11 @@ __all__ = [
 
 def cmd_index(args) -> int:
     repo_root = Path(args.repo_root).resolve()
+    started_at = datetime.now(tz=timezone.utc)
+
+    if not repo_root.exists():
+        print(f"Error: repository root does not exist: {repo_root}", file=sys.stderr)
+        return 1
 
     include: list[str] = []
     exclude: list[str] = []
@@ -122,9 +130,10 @@ def cmd_index(args) -> int:
 
     _warn_unfilled_architecture_templates(repo_root, run_log)
 
+    timestamp = started_at.strftime("%Y%m%dT%H%M%S%fZ")
+
     if run_log:
-        ts = datetime.now(tz=timezone.utc).strftime("%Y%m%dT%H%M%SZ")
-        log_path = vibecode_dir / "logs" / "index_runs" / f"{ts}.log"
+        log_path = vibecode_dir / "logs" / "index_runs" / f"{timestamp}.log"
         log_path.parent.mkdir(parents=True, exist_ok=True)
         log_path.write_text("\n".join(run_log) + "\n", encoding="utf-8")
         print(
@@ -133,7 +142,47 @@ def cmd_index(args) -> int:
             file=sys.stderr,
         )
 
-    return 0
+    validation_report = validate_project(repo_root)
+    write_validation_report(validation_report, vibecode_dir)
+    _print_validation_summary(validation_report)
+
+    errors = [
+        item["message"]
+        for item in validation_report.get("items", [])
+        if item.get("level") == "ERROR"
+    ]
+    validation_warnings = [
+        item["message"]
+        for item in validation_report.get("items", [])
+        if item.get("level") == "WARN"
+    ]
+    warnings = [*run_log, *validation_warnings]
+    counts = _index_counts(
+        files=files,
+        symbol_map_path=symbol_map_path,
+        dependency_map_path=dependency_map_path,
+        test_map_path=test_map_path,
+        warnings=warnings,
+        errors=errors,
+    )
+    finished_at = datetime.now(tz=timezone.utc)
+
+    current_path, run_path = write_run_record(
+        project_id=project_id,
+        root=repo_root,
+        started_at=started_at,
+        finished_at=finished_at,
+        counts=counts,
+        warnings=warnings,
+        errors=errors,
+        vibecode_dir=vibecode_dir,
+        timestamp=timestamp,
+        validation=validation_report,
+    )
+    print(f"  last index written to {current_path.relative_to(repo_root).as_posix()}", file=sys.stderr)
+    print(f"  run record written to {run_path.relative_to(repo_root).as_posix()}", file=sys.stderr)
+
+    return 1 if errors else 0
 
 
 def _warn_unfilled_architecture_templates(repo_root: Path, run_log: list[str]) -> None:
@@ -145,3 +194,47 @@ def _warn_unfilled_architecture_templates(repo_root: Path, run_log: list[str]) -
             msg = f"Warning: {rel} still contains unfilled template content."
             print(f"  {msg}", file=sys.stderr)
             run_log.append(msg)
+
+
+def _index_counts(
+    *,
+    files: list[IndexedFile],
+    symbol_map_path: Path,
+    dependency_map_path: Path,
+    test_map_path: Path,
+    warnings: list[str],
+    errors: list[str],
+) -> dict:
+    symbol_map = _read_json(symbol_map_path)
+    dependency_map = _read_json(dependency_map_path)
+    test_map = _read_json(test_map_path)
+    symbols = 0
+    for entry in symbol_map.get("files", []):
+        if isinstance(entry, dict):
+            symbols += len(entry.get("symbols") or [])
+    return {
+        "files": len(files),
+        "symbols": symbols,
+        "tests": len(test_map.get("tests") or []),
+        "dependency_edges": len(dependency_map.get("edges") or []),
+        "warnings": len(warnings),
+        "errors": len(errors),
+    }
+
+
+def _read_json(path: Path) -> dict:
+    try:
+        return json.loads(path.read_text(encoding="utf-8"))
+    except (json.JSONDecodeError, OSError):
+        return {}
+
+
+def _print_validation_summary(report: dict) -> None:
+    summary = report.get("summary", {})
+    print(
+        "  validation:"
+        f" {summary.get('ok', 0)} OK,"
+        f" {summary.get('warnings', 0)} WARN,"
+        f" {summary.get('errors', 0)} ERROR",
+        file=sys.stderr,
+    )

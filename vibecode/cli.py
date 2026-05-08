@@ -58,6 +58,17 @@ def create_parser() -> argparse.ArgumentParser:
         help="Repository root directory (default: current directory).",
     )
 
+    # validate
+    validate_parser = subparsers.add_parser(
+        "validate", help="Validate .vibecode project artifacts."
+    )
+    validate_parser.add_argument(
+        "repo_root",
+        nargs="?",
+        default=".",
+        help="Repository root directory (default: current directory).",
+    )
+
     return parser
 
 
@@ -84,6 +95,10 @@ def main(argv: list[str] | None = None) -> int:
     if args.command == "map":
         from vibecode.project import cmd_map
         return cmd_map(args)
+
+    if args.command == "validate":
+        from vibecode.validation import cmd_validate
+        return cmd_validate(args)
 
     parser.print_help()
     return 1

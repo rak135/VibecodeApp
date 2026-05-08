@@ -37,6 +37,12 @@ def test_map_help_exits_zero():
     assert exc_info.value.code == 0
 
 
+def test_validate_help_exits_zero():
+    with pytest.raises(SystemExit) as exc_info:
+        main(["validate", "--help"])
+    assert exc_info.value.code == 0
+
+
 def test_no_command_returns_zero():
     assert main([]) == 0
 

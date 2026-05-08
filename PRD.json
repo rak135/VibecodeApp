@@ -85,12 +85,12 @@
     {
       "title": "17 - Implement index run log and last_index.json",
       "description": "Each `vibecode index` run must write an auditable record.\n\nOutputs:\n- `.vibecode/current/last_index.json`,\n- `.vibecode/logs/index_runs/<timestamp>.json`.\n\nContent:\n- project_id,\n- root,\n- started_at,\n- finished_at,\n- counts: files, symbols, tests, dependency_edges, warnings, errors,\n- warnings[],\n- errors[] for non-fatal errors,\n- generator/build identifier when available.\n\nAcceptance criteria:\n- an index run log exists after every index,\n- parsing warnings are discoverable,\n- fatal errors exit non-zero with a readable message,\n- non-fatal errors in one file do not stop the whole repository.\n\nVerification:\n- test with a syntactically broken Python file produces a warning in the log,\n- last_index.json contains counts.",
-      "completed": false
+      "completed": true
     },
     {
       "title": "18 - Implement validation command or validation phase",
       "description": "Run validation after indexing. This may be a standalone `vibecode validate <repo_root>` command or an automatic phase of `index`.\n\nChecks:\n- .vibecode/project.yaml exists,\n- root path exists,\n- generated JSON files are valid,\n- .git/node_modules/.venv are not in inventory,\n- architecture/INVARIANTS.md exists,\n- protected_paths is non-empty or warning is emitted,\n- a dummy context pack can be generated,\n- generated vs human-maintained write rules are respected.\n\nAcceptance criteria:\n- validation prints OK/WARN/ERROR items,\n- warnings are not failures,\n- errors are failures,\n- validation result is saved into last_index.json or a validation report.\n\nVerification:\n- valid fixture exits 0,\n- missing project.yaml exits non-zero,\n- empty invariants produce a warning, not a failure.",
-      "completed": false
+      "completed": true
     },
     {
       "title": "19 - Implement relevant-file scoring for a task",
