@@ -8,6 +8,8 @@ from pathlib import Path
 
 from vibecode.indexer.classifier import FileRecord, classify
 from vibecode.indexer.inventory import build_inventory, write_inventory
+from vibecode.indexer.risk_engine import RiskResult, build_risk_index
+from vibecode.indexer.risky_files import write_risky_files
 from vibecode.indexer.scanner import (
     DEFAULT_SIZE_LIMIT,
     FileStatus,
@@ -30,6 +32,9 @@ __all__ = [
     "FileRecord",
     "build_inventory",
     "write_inventory",
+    "RiskResult",
+    "build_risk_index",
+    "write_risky_files",
     "render_repo_tree",
     "write_repo_tree",
     "build_symbol_map",
@@ -50,6 +55,8 @@ def cmd_index(args) -> int:
     include: list[str] = []
     exclude: list[str] = []
     project_id = repo_root.name.lower().replace(" ", "_")
+    protected_paths: list[str] = []
+    risk_rules: list[dict] = []
     vibecode_dir = repo_root / ".vibecode"
     if (vibecode_dir / "project.yaml").exists():
         try:
@@ -59,6 +66,8 @@ def cmd_index(args) -> int:
             include = cfg.include
             exclude = cfg.exclude
             project_id = cfg.project_id
+            protected_paths = cfg.protected_paths
+            risk_rules = [r for r in cfg.risk_rules if isinstance(r, dict)]
         except Exception as exc:  # noqa: BLE001
             print(f"Warning: could not load project.yaml: {exc}", file=sys.stderr)
 
@@ -68,12 +77,24 @@ def cmd_index(args) -> int:
     for f in files:
         print(f.path)
 
+    run_log: list[str] = []
+
+    # Build risk index (warns if protected_paths is empty)
+    records = [classify(f.path, f.size) for f in files]
+    risk_index = build_risk_index(records, protected_paths, risk_rules, run_log=run_log)
+
     inventory_path = vibecode_dir / "index" / "file_inventory.json"
-    write_inventory(project_id, repo_root, files, inventory_path)
+    write_inventory(project_id, repo_root, files, inventory_path, risk_index=risk_index)
     print(f"  {len(files)} file(s) indexed", file=sys.stderr)
     print(f"  inventory written to {inventory_path.relative_to(repo_root).as_posix()}", file=sys.stderr)
 
-    run_log: list[str] = []
+    risky_files_path = vibecode_dir / "index" / "risky_files.md"
+    write_risky_files(risk_index, risky_files_path)
+    print(
+        f"  risky files written to {risky_files_path.relative_to(repo_root).as_posix()}",
+        file=sys.stderr,
+    )
+
     symbol_map_path = vibecode_dir / "index" / "symbol_map.json"
     write_symbol_map(repo_root, files, symbol_map_path, run_log=run_log)
     print(f"  symbol map written to {symbol_map_path.relative_to(repo_root).as_posix()}", file=sys.stderr)

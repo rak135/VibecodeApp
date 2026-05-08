@@ -75,7 +75,7 @@
     {
       "title": "15 - Implement risk and protected-area mapping",
       "description": "Implement the risk engine for `risky_files.md` and risk_level in file inventory.\n\nSources:\n- explicit `protected_paths` from project.yaml,\n- `risk_rules` from project.yaml,\n- filename heuristics: matching, policy, state, migration, auth, security, tax, fx, payments, permissions,\n- docs/audit and architecture files are at least medium risk unless config says otherwise.\n\nOutput:\n- `.vibecode/index/risky_files.md`,\n- updated `risk_level` in file_inventory.json.\n\nAcceptance criteria:\n- explicit protected paths are always high risk or use the configured rule severity,\n- risky_files.md explains the reason,\n- high-risk files are mentioned in the context pack as protected/risky,\n- empty protected_paths produce a warning.\n\nVerification:\n- unit test for explicit protected path,\n- unit test for heuristic matching.py/policy.py,\n- test that empty protected_paths creates a warning.",
-      "completed": false
+      "completed": true
     },
     {
       "title": "16 - Create human-maintained architecture templates without destructive overwrite",

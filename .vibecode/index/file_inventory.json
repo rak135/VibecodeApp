@@ -1,7 +1,7 @@
 {
   "$schema": "vibecode/file-inventory/v1",
   "project_id": "vibecodeapp",
-  "generated_at": "2026-05-08T13:27:55.333031+00:00",
+  "generated_at": "2026-05-08T13:49:43.548359+00:00",
   "root": "C:/DATA/PROJECTS/VibecodeApp",
   "files": [
     {
@@ -34,7 +34,7 @@
       "is_test": false,
       "is_config": false,
       "is_doc": true,
-      "risk_level": "low",
+      "risk_level": "high",
       "tracked": "tracked"
     },
     {
@@ -45,7 +45,7 @@
       "is_test": false,
       "is_config": false,
       "is_doc": true,
-      "risk_level": "low",
+      "risk_level": "high",
       "tracked": "tracked"
     },
     {
@@ -56,7 +56,7 @@
       "is_test": false,
       "is_config": false,
       "is_doc": true,
-      "risk_level": "low",
+      "risk_level": "high",
       "tracked": "tracked"
     },
     {
@@ -67,7 +67,7 @@
       "is_test": false,
       "is_config": false,
       "is_doc": true,
-      "risk_level": "low",
+      "risk_level": "high",
       "tracked": "tracked"
     },
     {
@@ -78,7 +78,7 @@
       "is_test": false,
       "is_config": false,
       "is_doc": true,
-      "risk_level": "low",
+      "risk_level": "high",
       "tracked": "tracked"
     },
     {
@@ -89,7 +89,7 @@
       "is_test": false,
       "is_config": false,
       "is_doc": true,
-      "risk_level": "low",
+      "risk_level": "high",
       "tracked": "tracked"
     },
     {
@@ -100,7 +100,7 @@
       "is_test": false,
       "is_config": false,
       "is_doc": true,
-      "risk_level": "low",
+      "risk_level": "high",
       "tracked": "tracked"
     },
     {
@@ -111,7 +111,7 @@
       "is_test": false,
       "is_config": false,
       "is_doc": true,
-      "risk_level": "low",
+      "risk_level": "high",
       "tracked": "tracked"
     },
     {
@@ -128,7 +128,7 @@
     {
       "path": "PRD.json",
       "language": "json",
-      "size_bytes": 35276,
+      "size_bytes": 35272,
       "role_guess": "unknown",
       "is_test": false,
       "is_config": false,
@@ -144,7 +144,7 @@
       "is_test": false,
       "is_config": false,
       "is_doc": true,
-      "risk_level": "low",
+      "risk_level": "medium",
       "tracked": "tracked"
     },
     {
@@ -184,6 +184,28 @@
       "path": "tests/test_vibecode_config.py",
       "language": "python",
       "size_bytes": 2732,
+      "role_guess": "test",
+      "is_test": true,
+      "is_config": false,
+      "is_doc": false,
+      "risk_level": "low",
+      "tracked": "tracked"
+    },
+    {
+      "path": "tests/test_vibecode_dependency_map.py",
+      "language": "python",
+      "size_bytes": 14075,
+      "role_guess": "test",
+      "is_test": true,
+      "is_config": false,
+      "is_doc": false,
+      "risk_level": "low",
+      "tracked": "tracked"
+    },
+    {
+      "path": "tests/test_vibecode_entrypoints.py",
+      "language": "python",
+      "size_bytes": 14356,
       "role_guess": "test",
       "is_test": true,
       "is_config": false,
@@ -236,9 +258,9 @@
       "tracked": "tracked"
     },
     {
-      "path": "tests/test_vibecode_symbol_map.py",
+      "path": "tests/test_vibecode_risk_engine.py",
       "language": "python",
-      "size_bytes": 10821,
+      "size_bytes": 18314,
       "role_guess": "test",
       "is_test": true,
       "is_config": false,
@@ -247,9 +269,31 @@
       "tracked": "untracked"
     },
     {
+      "path": "tests/test_vibecode_symbol_map.py",
+      "language": "python",
+      "size_bytes": 10821,
+      "role_guess": "test",
+      "is_test": true,
+      "is_config": false,
+      "is_doc": false,
+      "risk_level": "low",
+      "tracked": "tracked"
+    },
+    {
       "path": "tests/test_vibecode_symbols.py",
       "language": "python",
       "size_bytes": 8913,
+      "role_guess": "test",
+      "is_test": true,
+      "is_config": false,
+      "is_doc": false,
+      "risk_level": "low",
+      "tracked": "tracked"
+    },
+    {
+      "path": "tests/test_vibecode_test_map.py",
+      "language": "python",
+      "size_bytes": 17334,
       "role_guess": "test",
       "is_test": true,
       "is_config": false,
@@ -304,7 +348,7 @@
     {
       "path": "vibecode/context/__init__.py",
       "language": "python",
-      "size_bytes": 419,
+      "size_bytes": 1296,
       "role_guess": "unknown",
       "is_test": false,
       "is_config": false,
@@ -315,7 +359,7 @@
     {
       "path": "vibecode/indexer/__init__.py",
       "language": "python",
-      "size_bytes": 2724,
+      "size_bytes": 5140,
       "role_guess": "unknown",
       "is_test": false,
       "is_config": false,
@@ -335,9 +379,31 @@
       "tracked": "tracked"
     },
     {
+      "path": "vibecode/indexer/dependency_map.py",
+      "language": "python",
+      "size_bytes": 9157,
+      "role_guess": "unknown",
+      "is_test": false,
+      "is_config": false,
+      "is_doc": false,
+      "risk_level": "low",
+      "tracked": "tracked"
+    },
+    {
+      "path": "vibecode/indexer/entrypoints.py",
+      "language": "python",
+      "size_bytes": 9303,
+      "role_guess": "unknown",
+      "is_test": false,
+      "is_config": false,
+      "is_doc": false,
+      "risk_level": "low",
+      "tracked": "tracked"
+    },
+    {
       "path": "vibecode/indexer/inventory.py",
       "language": "python",
-      "size_bytes": 1786,
+      "size_bytes": 2268,
       "role_guess": "unknown",
       "is_test": false,
       "is_config": false,
@@ -355,6 +421,28 @@
       "is_doc": false,
       "risk_level": "low",
       "tracked": "tracked"
+    },
+    {
+      "path": "vibecode/indexer/risk_engine.py",
+      "language": "python",
+      "size_bytes": 6488,
+      "role_guess": "unknown",
+      "is_test": false,
+      "is_config": false,
+      "is_doc": false,
+      "risk_level": "low",
+      "tracked": "untracked"
+    },
+    {
+      "path": "vibecode/indexer/risky_files.py",
+      "language": "python",
+      "size_bytes": 1548,
+      "role_guess": "unknown",
+      "is_test": false,
+      "is_config": false,
+      "is_doc": false,
+      "risk_level": "low",
+      "tracked": "untracked"
     },
     {
       "path": "vibecode/indexer/scanner.py",
@@ -376,7 +464,7 @@
       "is_config": false,
       "is_doc": false,
       "risk_level": "low",
-      "tracked": "untracked"
+      "tracked": "tracked"
     },
     {
       "path": "vibecode/indexer/symbols.py",
@@ -384,6 +472,17 @@
       "size_bytes": 4395,
       "role_guess": "unknown",
       "is_test": false,
+      "is_config": false,
+      "is_doc": false,
+      "risk_level": "low",
+      "tracked": "tracked"
+    },
+    {
+      "path": "vibecode/indexer/test_map.py",
+      "language": "python",
+      "size_bytes": 10600,
+      "role_guess": "test",
+      "is_test": true,
       "is_config": false,
       "is_doc": false,
       "risk_level": "low",

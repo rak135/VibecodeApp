@@ -1,6 +1,6 @@
 {
   "$schema": "vibecode/symbol-map/v1",
-  "generated_at": "2026-05-08T13:27:55.365850+00:00",
+  "generated_at": "2026-05-08T13:49:43.608258+00:00",
   "files": [
     {
       "path": "tests/test_vibecode_classifier.py",
@@ -533,6 +533,570 @@
           "kind": "function",
           "line_start": 87,
           "line_end": 100
+        }
+      ]
+    },
+    {
+      "path": "tests/test_vibecode_dependency_map.py",
+      "language": "python",
+      "symbols": [
+        {
+          "name": "_write",
+          "kind": "function",
+          "line_start": 17,
+          "line_end": 20
+        },
+        {
+          "name": "_indexed",
+          "kind": "function",
+          "line_start": 23,
+          "line_end": 25
+        },
+        {
+          "name": "_edges_from",
+          "kind": "function",
+          "line_start": 28,
+          "line_end": 29
+        },
+        {
+          "name": "_edge",
+          "kind": "function",
+          "line_start": 32,
+          "line_end": 36
+        },
+        {
+          "name": "TestSchemaAndMetadata",
+          "kind": "class",
+          "line_start": 44,
+          "line_end": 61
+        },
+        {
+          "name": "test_schema_marker",
+          "kind": "method",
+          "line_start": 45,
+          "line_end": 47
+        },
+        {
+          "name": "test_generated_at_present",
+          "kind": "method",
+          "line_start": 49,
+          "line_end": 52
+        },
+        {
+          "name": "test_edges_list_present",
+          "kind": "method",
+          "line_start": 54,
+          "line_end": 57
+        },
+        {
+          "name": "test_empty_files_yields_no_edges",
+          "kind": "method",
+          "line_start": 59,
+          "line_end": 61
+        },
+        {
+          "name": "TestPythonImports",
+          "kind": "class",
+          "line_start": 69,
+          "line_end": 150
+        },
+        {
+          "name": "test_bare_import_detected",
+          "kind": "method",
+          "line_start": 70,
+          "line_end": 74
+        },
+        {
+          "name": "test_from_import_module_detected",
+          "kind": "method",
+          "line_start": 76,
+          "line_end": 80
+        },
+        {
+          "name": "test_external_stdlib_marked_external",
+          "kind": "method",
+          "line_start": 82,
+          "line_end": 87
+        },
+        {
+          "name": "test_external_third_party_marked_external",
+          "kind": "method",
+          "line_start": 89,
+          "line_end": 93
+        },
+        {
+          "name": "test_relative_import_resolved_to_sibling",
+          "kind": "method",
+          "line_start": 95,
+          "line_end": 102
+        },
+        {
+          "name": "test_from_dot_module_import_resolved",
+          "kind": "method",
+          "line_start": 104,
+          "line_end": 110
+        },
+        {
+          "name": "test_relative_import_unresolved_when_file_missing",
+          "kind": "method",
+          "line_start": 112,
+          "line_end": 117
+        },
+        {
+          "name": "test_absolute_package_import_resolved",
+          "kind": "method",
+          "line_start": 119,
+          "line_end": 126
+        },
+        {
+          "name": "test_does_not_crash_on_broken_python",
+          "kind": "method",
+          "line_start": 128,
+          "line_end": 131
+        },
+        {
+          "name": "test_does_not_crash_on_unknown_package",
+          "kind": "method",
+          "line_start": 133,
+          "line_end": 137
+        },
+        {
+          "name": "test_type_field_is_python",
+          "kind": "method",
+          "line_start": 139,
+          "line_end": 143
+        },
+        {
+          "name": "test_multiple_imports_all_detected",
+          "kind": "method",
+          "line_start": 145,
+          "line_end": 150
+        },
+        {
+          "name": "TestTypescriptImports",
+          "kind": "class",
+          "line_start": 158,
+          "line_end": 230
+        },
+        {
+          "name": "test_relative_import_resolved",
+          "kind": "method",
+          "line_start": 159,
+          "line_end": 166
+        },
+        {
+          "name": "test_relative_tsx_import_resolved",
+          "kind": "method",
+          "line_start": 168,
+          "line_end": 174
+        },
+        {
+          "name": "test_external_package_marked_external",
+          "kind": "method",
+          "line_start": 176,
+          "line_end": 182
+        },
+        {
+          "name": "test_unresolved_relative_marked_unresolved",
+          "kind": "method",
+          "line_start": 184,
+          "line_end": 190
+        },
+        {
+          "name": "test_side_effect_import_detected",
+          "kind": "method",
+          "line_start": 192,
+          "line_end": 196
+        },
+        {
+          "name": "test_type_import_detected",
+          "kind": "method",
+          "line_start": 198,
+          "line_end": 202
+        },
+        {
+          "name": "test_require_detected",
+          "kind": "method",
+          "line_start": 204,
+          "line_end": 209
+        },
+        {
+          "name": "test_parent_relative_import_resolved",
+          "kind": "method",
+          "line_start": 211,
+          "line_end": 217
+        },
+        {
+          "name": "test_type_field_reflects_language",
+          "kind": "method",
+          "line_start": 219,
+          "line_end": 223
+        },
+        {
+          "name": "test_no_duplicate_edges_for_same_import",
+          "kind": "method",
+          "line_start": 225,
+          "line_end": 230
+        },
+        {
+          "name": "TestExternalImports",
+          "kind": "class",
+          "line_start": 238,
+          "line_end": 251
+        },
+        {
+          "name": "test_python_external_no_resolved_path",
+          "kind": "method",
+          "line_start": 239,
+          "line_end": 244
+        },
+        {
+          "name": "test_ts_external_no_resolved_path",
+          "kind": "method",
+          "line_start": 246,
+          "line_end": 251
+        },
+        {
+          "name": "TestValidJson",
+          "kind": "class",
+          "line_start": 259,
+          "line_end": 301
+        },
+        {
+          "name": "test_output_is_valid_json",
+          "kind": "method",
+          "line_start": 260,
+          "line_end": 266
+        },
+        {
+          "name": "test_write_creates_valid_json_file",
+          "kind": "method",
+          "line_start": 268,
+          "line_end": 275
+        },
+        {
+          "name": "test_write_creates_parent_dirs",
+          "kind": "method",
+          "line_start": 277,
+          "line_end": 281
+        },
+        {
+          "name": "test_mixed_python_and_ts_output_valid",
+          "kind": "method",
+          "line_start": 283,
+          "line_end": 296
+        },
+        {
+          "name": "test_unsupported_file_skipped",
+          "kind": "method",
+          "line_start": 298,
+          "line_end": 301
+        }
+      ]
+    },
+    {
+      "path": "tests/test_vibecode_entrypoints.py",
+      "language": "python",
+      "symbols": [
+        {
+          "name": "_write",
+          "kind": "function",
+          "line_start": 22,
+          "line_end": 25
+        },
+        {
+          "name": "TestDetectBackend",
+          "kind": "class",
+          "line_start": 33,
+          "line_end": 86
+        },
+        {
+          "name": "test_main_py_at_root",
+          "kind": "method",
+          "line_start": 34,
+          "line_end": 38
+        },
+        {
+          "name": "test_app_py_at_root",
+          "kind": "method",
+          "line_start": 40,
+          "line_end": 44
+        },
+        {
+          "name": "test_fastapi_bootstrap_detected",
+          "kind": "method",
+          "line_start": 46,
+          "line_end": 50
+        },
+        {
+          "name": "test_flask_bootstrap_detected",
+          "kind": "method",
+          "line_start": 52,
+          "line_end": 56
+        },
+        {
+          "name": "test_wsgi_and_asgi_detected",
+          "kind": "method",
+          "line_start": 58,
+          "line_end": 64
+        },
+        {
+          "name": "test_manage_py_detected",
+          "kind": "method",
+          "line_start": 66,
+          "line_end": 70
+        },
+        {
+          "name": "test_backend_subdir_main_py",
+          "kind": "method",
+          "line_start": 72,
+          "line_end": 76
+        },
+        {
+          "name": "test_no_backend_files_returns_empty",
+          "kind": "method",
+          "line_start": 78,
+          "line_end": 81
+        },
+        {
+          "name": "test_nonexistent_backend_not_hallucinated",
+          "kind": "method",
+          "line_start": 83,
+          "line_end": 86
+        },
+        {
+          "name": "TestDetectFrontend",
+          "kind": "class",
+          "line_start": 94,
+          "line_end": 126
+        },
+        {
+          "name": "test_main_tsx",
+          "kind": "method",
+          "line_start": 95,
+          "line_end": 99
+        },
+        {
+          "name": "test_app_tsx",
+          "kind": "method",
+          "line_start": 101,
+          "line_end": 105
+        },
+        {
+          "name": "test_vite_config_ts",
+          "kind": "method",
+          "line_start": 107,
+          "line_end": 111
+        },
+        {
+          "name": "test_vite_config_js",
+          "kind": "method",
+          "line_start": 113,
+          "line_end": 117
+        },
+        {
+          "name": "test_no_frontend_returns_empty",
+          "kind": "method",
+          "line_start": 119,
+          "line_end": 122
+        },
+        {
+          "name": "test_nonexistent_frontend_not_hallucinated",
+          "kind": "method",
+          "line_start": 124,
+          "line_end": 126
+        },
+        {
+          "name": "TestDetectCliScripts",
+          "kind": "class",
+          "line_start": 134,
+          "line_end": 201
+        },
+        {
+          "name": "test_cli_py_at_root",
+          "kind": "method",
+          "line_start": 135,
+          "line_end": 139
+        },
+        {
+          "name": "test_pyproject_scripts",
+          "kind": "method",
+          "line_start": 141,
+          "line_end": 155
+        },
+        {
+          "name": "test_pyproject_scripts_source",
+          "kind": "method",
+          "line_start": 157,
+          "line_end": 164
+        },
+        {
+          "name": "test_package_json_scripts",
+          "kind": "method",
+          "line_start": 166,
+          "line_end": 175
+        },
+        {
+          "name": "test_package_json_scripts_source",
+          "kind": "method",
+          "line_start": 177,
+          "line_end": 181
+        },
+        {
+          "name": "test_package_json_without_scripts_key",
+          "kind": "method",
+          "line_start": 183,
+          "line_end": 188
+        },
+        {
+          "name": "test_shell_scripts_in_scripts_dir",
+          "kind": "method",
+          "line_start": 190,
+          "line_end": 196
+        },
+        {
+          "name": "test_no_scripts_returns_empty",
+          "kind": "method",
+          "line_start": 198,
+          "line_end": 201
+        },
+        {
+          "name": "TestDetectRuntimeConfig",
+          "kind": "class",
+          "line_start": 209,
+          "line_end": 236
+        },
+        {
+          "name": "test_dockerfile",
+          "kind": "method",
+          "line_start": 210,
+          "line_end": 214
+        },
+        {
+          "name": "test_docker_compose_yml",
+          "kind": "method",
+          "line_start": 216,
+          "line_end": 220
+        },
+        {
+          "name": "test_docker_compose_yaml",
+          "kind": "method",
+          "line_start": 222,
+          "line_end": 226
+        },
+        {
+          "name": "test_makefile",
+          "kind": "method",
+          "line_start": 228,
+          "line_end": 232
+        },
+        {
+          "name": "test_no_runtime_config_returns_empty",
+          "kind": "method",
+          "line_start": 234,
+          "line_end": 236
+        },
+        {
+          "name": "TestRenderEntrypoints",
+          "kind": "class",
+          "line_start": 244,
+          "line_end": 308
+        },
+        {
+          "name": "test_heading_present",
+          "kind": "method",
+          "line_start": 245,
+          "line_end": 248
+        },
+        {
+          "name": "test_root_name_in_output",
+          "kind": "method",
+          "line_start": 250,
+          "line_end": 253
+        },
+        {
+          "name": "test_all_section_headings_present",
+          "kind": "method",
+          "line_start": 255,
+          "line_end": 261
+        },
+        {
+          "name": "test_not_detected_for_empty_sections",
+          "kind": "method",
+          "line_start": 263,
+          "line_end": 266
+        },
+        {
+          "name": "test_backend_entry_rendered",
+          "kind": "method",
+          "line_start": 268,
+          "line_end": 272
+        },
+        {
+          "name": "test_frontend_entry_rendered",
+          "kind": "method",
+          "line_start": 274,
+          "line_end": 278
+        },
+        {
+          "name": "test_package_json_script_rendered",
+          "kind": "method",
+          "line_start": 280,
+          "line_end": 285
+        },
+        {
+          "name": "test_dockerfile_rendered",
+          "kind": "method",
+          "line_start": 287,
+          "line_end": 291
+        },
+        {
+          "name": "test_mixed_fixture_main_py_and_main_tsx",
+          "kind": "method",
+          "line_start": 293,
+          "line_end": 300
+        },
+        {
+          "name": "test_not_detected_sections_say_not_detected_not_empty",
+          "kind": "method",
+          "line_start": 302,
+          "line_end": 308
+        },
+        {
+          "name": "TestWriteEntrypoints",
+          "kind": "class",
+          "line_start": 316,
+          "line_end": 350
+        },
+        {
+          "name": "test_file_created",
+          "kind": "method",
+          "line_start": 317,
+          "line_end": 320
+        },
+        {
+          "name": "test_file_content_is_markdown",
+          "kind": "method",
+          "line_start": 322,
+          "line_end": 326
+        },
+        {
+          "name": "test_parent_dirs_created_automatically",
+          "kind": "method",
+          "line_start": 328,
+          "line_end": 331
+        },
+        {
+          "name": "test_fixture_with_package_json_scripts",
+          "kind": "method",
+          "line_start": 333,
+          "line_end": 339
+        },
+        {
+          "name": "test_nonexistent_entrypoints_not_present_in_output",
+          "kind": "method",
+          "line_start": 341,
+          "line_end": 350
         }
       ]
     },
@@ -1221,6 +1785,498 @@
       ]
     },
     {
+      "path": "tests/test_vibecode_risk_engine.py",
+      "language": "python",
+      "symbols": [
+        {
+          "name": "_rec",
+          "kind": "function",
+          "line_start": 27,
+          "line_end": 32
+        },
+        {
+          "name": "_evaluate",
+          "kind": "function",
+          "line_start": 35,
+          "line_end": 36
+        },
+        {
+          "name": "TestMatchesGlob",
+          "kind": "class",
+          "line_start": 44,
+          "line_end": 65
+        },
+        {
+          "name": "test_exact_match",
+          "kind": "method",
+          "line_start": 45,
+          "line_end": 46
+        },
+        {
+          "name": "test_wildcard",
+          "kind": "method",
+          "line_start": 48,
+          "line_end": 49
+        },
+        {
+          "name": "test_double_star_prefix",
+          "kind": "method",
+          "line_start": 51,
+          "line_end": 52
+        },
+        {
+          "name": "test_double_star_deep",
+          "kind": "method",
+          "line_start": 54,
+          "line_end": 55
+        },
+        {
+          "name": "test_double_star_dir_itself",
+          "kind": "method",
+          "line_start": 57,
+          "line_end": 59
+        },
+        {
+          "name": "test_no_match",
+          "kind": "method",
+          "line_start": 61,
+          "line_end": 62
+        },
+        {
+          "name": "test_fnmatch_star",
+          "kind": "method",
+          "line_start": 64,
+          "line_end": 65
+        },
+        {
+          "name": "TestFindKeyword",
+          "kind": "class",
+          "line_start": 73,
+          "line_end": 114
+        },
+        {
+          "name": "test_matching_stem",
+          "kind": "method",
+          "line_start": 74,
+          "line_end": 75
+        },
+        {
+          "name": "test_policy_stem",
+          "kind": "method",
+          "line_start": 77,
+          "line_end": 78
+        },
+        {
+          "name": "test_auth_stem",
+          "kind": "method",
+          "line_start": 80,
+          "line_end": 81
+        },
+        {
+          "name": "test_payments_stem",
+          "kind": "method",
+          "line_start": 83,
+          "line_end": 84
+        },
+        {
+          "name": "test_compound_name",
+          "kind": "method",
+          "line_start": 86,
+          "line_end": 89
+        },
+        {
+          "name": "test_no_match",
+          "kind": "method",
+          "line_start": 91,
+          "line_end": 92
+        },
+        {
+          "name": "test_case_insensitive_stem",
+          "kind": "method",
+          "line_start": 94,
+          "line_end": 96
+        },
+        {
+          "name": "test_migration_stem",
+          "kind": "method",
+          "line_start": 98,
+          "line_end": 99
+        },
+        {
+          "name": "test_security_stem",
+          "kind": "method",
+          "line_start": 101,
+          "line_end": 102
+        },
+        {
+          "name": "test_permissions_stem",
+          "kind": "method",
+          "line_start": 104,
+          "line_end": 105
+        },
+        {
+          "name": "test_fx_stem",
+          "kind": "method",
+          "line_start": 107,
+          "line_end": 108
+        },
+        {
+          "name": "test_tax_stem",
+          "kind": "method",
+          "line_start": 110,
+          "line_end": 111
+        },
+        {
+          "name": "test_state_stem",
+          "kind": "method",
+          "line_start": 113,
+          "line_end": 114
+        },
+        {
+          "name": "TestIsSensitiveDir",
+          "kind": "class",
+          "line_start": 122,
+          "line_end": 139
+        },
+        {
+          "name": "test_docs_dir",
+          "kind": "method",
+          "line_start": 123,
+          "line_end": 124
+        },
+        {
+          "name": "test_audit_dir",
+          "kind": "method",
+          "line_start": 126,
+          "line_end": 127
+        },
+        {
+          "name": "test_architecture_dir",
+          "kind": "method",
+          "line_start": 129,
+          "line_end": 130
+        },
+        {
+          "name": "test_nested_docs",
+          "kind": "method",
+          "line_start": 132,
+          "line_end": 133
+        },
+        {
+          "name": "test_root_file",
+          "kind": "method",
+          "line_start": 135,
+          "line_end": 136
+        },
+        {
+          "name": "test_src_file",
+          "kind": "method",
+          "line_start": 138,
+          "line_end": 139
+        },
+        {
+          "name": "TestEvaluateRiskProtectedPaths",
+          "kind": "class",
+          "line_start": 147,
+          "line_end": 186
+        },
+        {
+          "name": "test_protected_path_always_high",
+          "kind": "method",
+          "line_start": 148,
+          "line_end": 154
+        },
+        {
+          "name": "test_protected_reason_included",
+          "kind": "method",
+          "line_start": 156,
+          "line_end": 162
+        },
+        {
+          "name": "test_protected_overrides_medium_base",
+          "kind": "method",
+          "line_start": 164,
+          "line_end": 170
+        },
+        {
+          "name": "test_non_protected_path_unchanged",
+          "kind": "method",
+          "line_start": 172,
+          "line_end": 178
+        },
+        {
+          "name": "test_multiple_protected_patterns_first_match_wins",
+          "kind": "method",
+          "line_start": 180,
+          "line_end": 186
+        },
+        {
+          "name": "TestEvaluateRiskHeuristics",
+          "kind": "class",
+          "line_start": 194,
+          "line_end": 222
+        },
+        {
+          "name": "test_matching_py_is_high",
+          "kind": "method",
+          "line_start": 195,
+          "line_end": 197
+        },
+        {
+          "name": "test_policy_py_is_high",
+          "kind": "method",
+          "line_start": 199,
+          "line_end": 201
+        },
+        {
+          "name": "test_auth_py_is_high",
+          "kind": "method",
+          "line_start": 203,
+          "line_end": 205
+        },
+        {
+          "name": "test_payments_py_is_high",
+          "kind": "method",
+          "line_start": 207,
+          "line_end": 209
+        },
+        {
+          "name": "test_heuristic_does_not_lower_existing_high",
+          "kind": "method",
+          "line_start": 211,
+          "line_end": 213
+        },
+        {
+          "name": "test_keyword_reason_included",
+          "kind": "method",
+          "line_start": 215,
+          "line_end": 217
+        },
+        {
+          "name": "test_no_keyword_plain_file",
+          "kind": "method",
+          "line_start": 219,
+          "line_end": 222
+        },
+        {
+          "name": "TestEvaluateRiskSensitiveDir",
+          "kind": "class",
+          "line_start": 230,
+          "line_end": 254
+        },
+        {
+          "name": "test_docs_file_at_least_medium",
+          "kind": "method",
+          "line_start": 231,
+          "line_end": 233
+        },
+        {
+          "name": "test_audit_file_at_least_medium",
+          "kind": "method",
+          "line_start": 235,
+          "line_end": 237
+        },
+        {
+          "name": "test_architecture_dir_file_at_least_medium",
+          "kind": "method",
+          "line_start": 239,
+          "line_end": 241
+        },
+        {
+          "name": "test_docs_existing_high_stays_high",
+          "kind": "method",
+          "line_start": 243,
+          "line_end": 245
+        },
+        {
+          "name": "test_docs_existing_medium_stays_medium",
+          "kind": "method",
+          "line_start": 247,
+          "line_end": 249
+        },
+        {
+          "name": "test_docs_sensitive_keyword_is_high",
+          "kind": "method",
+          "line_start": 251,
+          "line_end": 254
+        },
+        {
+          "name": "TestEvaluateRiskRules",
+          "kind": "class",
+          "line_start": 262,
+          "line_end": 291
+        },
+        {
+          "name": "test_rule_pattern_match_raises_severity",
+          "kind": "method",
+          "line_start": 263,
+          "line_end": 266
+        },
+        {
+          "name": "test_rule_reason_included",
+          "kind": "method",
+          "line_start": 268,
+          "line_end": 271
+        },
+        {
+          "name": "test_rule_medium_severity",
+          "kind": "method",
+          "line_start": 273,
+          "line_end": 276
+        },
+        {
+          "name": "test_rule_does_not_lower_higher_risk",
+          "kind": "method",
+          "line_start": 278,
+          "line_end": 281
+        },
+        {
+          "name": "test_invalid_severity_defaults_to_high",
+          "kind": "method",
+          "line_start": 283,
+          "line_end": 286
+        },
+        {
+          "name": "test_no_matching_rule_no_change",
+          "kind": "method",
+          "line_start": 288,
+          "line_end": 291
+        },
+        {
+          "name": "TestBuildRiskIndexWarning",
+          "kind": "class",
+          "line_start": 299,
+          "line_end": 344
+        },
+        {
+          "name": "test_empty_protected_paths_emits_warning",
+          "kind": "method",
+          "line_start": 300,
+          "line_end": 303
+        },
+        {
+          "name": "test_empty_protected_paths_logs_to_run_log",
+          "kind": "method",
+          "line_start": 305,
+          "line_end": 311
+        },
+        {
+          "name": "test_non_empty_protected_paths_no_warning",
+          "kind": "method",
+          "line_start": 313,
+          "line_end": 318
+        },
+        {
+          "name": "test_returns_risk_index_for_all_files",
+          "kind": "method",
+          "line_start": 320,
+          "line_end": 326
+        },
+        {
+          "name": "test_explicit_protected_path_is_high",
+          "kind": "method",
+          "line_start": 328,
+          "line_end": 337
+        },
+        {
+          "name": "test_heuristic_file_in_index_is_high",
+          "kind": "method",
+          "line_start": 339,
+          "line_end": 344
+        },
+        {
+          "name": "TestRenderRiskyFiles",
+          "kind": "class",
+          "line_start": 352,
+          "line_end": 398
+        },
+        {
+          "name": "test_no_elevated_risk",
+          "kind": "method",
+          "line_start": 353,
+          "line_end": 358
+        },
+        {
+          "name": "test_high_risk_section_present",
+          "kind": "method",
+          "line_start": 360,
+          "line_end": 367
+        },
+        {
+          "name": "test_medium_risk_section_present",
+          "kind": "method",
+          "line_start": 369,
+          "line_end": 377
+        },
+        {
+          "name": "test_reason_indented_under_file",
+          "kind": "method",
+          "line_start": 379,
+          "line_end": 388
+        },
+        {
+          "name": "test_files_sorted_alphabetically",
+          "kind": "method",
+          "line_start": 390,
+          "line_end": 398
+        },
+        {
+          "name": "TestWriteRiskyFiles",
+          "kind": "class",
+          "line_start": 406,
+          "line_end": 433
+        },
+        {
+          "name": "test_creates_file",
+          "kind": "method",
+          "line_start": 407,
+          "line_end": 413
+        },
+        {
+          "name": "test_creates_parent_dirs",
+          "kind": "method",
+          "line_start": 415,
+          "line_end": 418
+        },
+        {
+          "name": "test_content_written",
+          "kind": "method",
+          "line_start": 420,
+          "line_end": 427
+        },
+        {
+          "name": "test_repeated_write_overwrites",
+          "kind": "method",
+          "line_start": 429,
+          "line_end": 433
+        },
+        {
+          "name": "TestInventoryRiskLevelUpdate",
+          "kind": "class",
+          "line_start": 441,
+          "line_end": 482
+        },
+        {
+          "name": "test_inventory_uses_engine_risk_level",
+          "kind": "method",
+          "line_start": 442,
+          "line_end": 454
+        },
+        {
+          "name": "test_protected_path_updates_inventory_risk",
+          "kind": "method",
+          "line_start": 456,
+          "line_end": 474
+        },
+        {
+          "name": "test_no_risk_index_uses_classifier_baseline",
+          "kind": "method",
+          "line_start": 476,
+          "line_end": 482
+        }
+      ]
+    },
+    {
       "path": "tests/test_vibecode_symbol_map.py",
       "language": "python",
       "symbols": [
@@ -1629,6 +2685,396 @@
       ]
     },
     {
+      "path": "tests/test_vibecode_test_map.py",
+      "language": "python",
+      "symbols": [
+        {
+          "name": "_file",
+          "kind": "function",
+          "line_start": 27,
+          "line_end": 28
+        },
+        {
+          "name": "_write",
+          "kind": "function",
+          "line_start": 31,
+          "line_end": 34
+        },
+        {
+          "name": "TestIsPythonTest",
+          "kind": "class",
+          "line_start": 42,
+          "line_end": 62
+        },
+        {
+          "name": "test_test_prefix_at_root",
+          "kind": "method",
+          "line_start": 43,
+          "line_end": 44
+        },
+        {
+          "name": "test_test_prefix_in_subdir",
+          "kind": "method",
+          "line_start": 46,
+          "line_end": 47
+        },
+        {
+          "name": "test_test_suffix",
+          "kind": "method",
+          "line_start": 49,
+          "line_end": 51
+        },
+        {
+          "name": "test_inside_tests_dir",
+          "kind": "method",
+          "line_start": 53,
+          "line_end": 54
+        },
+        {
+          "name": "test_non_test_source",
+          "kind": "method",
+          "line_start": 56,
+          "line_end": 58
+        },
+        {
+          "name": "test_non_python_file_rejected",
+          "kind": "method",
+          "line_start": 60,
+          "line_end": 62
+        },
+        {
+          "name": "TestIsTsTest",
+          "kind": "class",
+          "line_start": 70,
+          "line_end": 93
+        },
+        {
+          "name": "test_test_tsx",
+          "kind": "method",
+          "line_start": 71,
+          "line_end": 73
+        },
+        {
+          "name": "test_spec_tsx",
+          "kind": "method",
+          "line_start": 75,
+          "line_end": 76
+        },
+        {
+          "name": "test_test_ts",
+          "kind": "method",
+          "line_start": 78,
+          "line_end": 79
+        },
+        {
+          "name": "test_spec_ts",
+          "kind": "method",
+          "line_start": 81,
+          "line_end": 82
+        },
+        {
+          "name": "test_tests_subdir",
+          "kind": "method",
+          "line_start": 84,
+          "line_end": 85
+        },
+        {
+          "name": "test_non_test_tsx",
+          "kind": "method",
+          "line_start": 87,
+          "line_end": 89
+        },
+        {
+          "name": "test_non_ts_file_rejected",
+          "kind": "method",
+          "line_start": 91,
+          "line_end": 93
+        },
+        {
+          "name": "TestClassifyPythonTestKind",
+          "kind": "class",
+          "line_start": 101,
+          "line_end": 115
+        },
+        {
+          "name": "test_pure_pytest",
+          "kind": "method",
+          "line_start": 102,
+          "line_end": 104
+        },
+        {
+          "name": "test_unittest_import",
+          "kind": "method",
+          "line_start": 106,
+          "line_end": 108
+        },
+        {
+          "name": "test_from_unittest_import",
+          "kind": "method",
+          "line_start": 110,
+          "line_end": 112
+        },
+        {
+          "name": "test_missing_file_defaults_to_pytest",
+          "kind": "method",
+          "line_start": 114,
+          "line_end": 115
+        },
+        {
+          "name": "TestClassifyTsTestKind",
+          "kind": "class",
+          "line_start": 123,
+          "line_end": 140
+        },
+        {
+          "name": "test_jest_default",
+          "kind": "method",
+          "line_start": 124,
+          "line_end": 126
+        },
+        {
+          "name": "test_playwright",
+          "kind": "method",
+          "line_start": 128,
+          "line_end": 130
+        },
+        {
+          "name": "test_cypress",
+          "kind": "method",
+          "line_start": 132,
+          "line_end": 137
+        },
+        {
+          "name": "test_missing_file_defaults_to_jest",
+          "kind": "method",
+          "line_start": 139,
+          "line_end": 140
+        },
+        {
+          "name": "TestDiscoverTests",
+          "kind": "class",
+          "line_start": 148,
+          "line_end": 185
+        },
+        {
+          "name": "test_discovers_pytest_file",
+          "kind": "method",
+          "line_start": 149,
+          "line_end": 154
+        },
+        {
+          "name": "test_discovers_unittest_file",
+          "kind": "method",
+          "line_start": 156,
+          "line_end": 160
+        },
+        {
+          "name": "test_discovers_ts_jest",
+          "kind": "method",
+          "line_start": 162,
+          "line_end": 167
+        },
+        {
+          "name": "test_discovers_playwright",
+          "kind": "method",
+          "line_start": 169,
+          "line_end": 173
+        },
+        {
+          "name": "test_non_test_files_excluded",
+          "kind": "method",
+          "line_start": 175,
+          "line_end": 179
+        },
+        {
+          "name": "test_suffix_test_name",
+          "kind": "method",
+          "line_start": 181,
+          "line_end": 185
+        },
+        {
+          "name": "TestBuildTestMapPython",
+          "kind": "class",
+          "line_start": 193,
+          "line_end": 232
+        },
+        {
+          "name": "test_name_match_test_prefix",
+          "kind": "method",
+          "line_start": 194,
+          "line_end": 200
+        },
+        {
+          "name": "test_name_match_test_suffix",
+          "kind": "method",
+          "line_start": 202,
+          "line_end": 208
+        },
+        {
+          "name": "test_import_based_match",
+          "kind": "method",
+          "line_start": 210,
+          "line_end": 222
+        },
+        {
+          "name": "test_source_without_test_produces_no_rule",
+          "kind": "method",
+          "line_start": 224,
+          "line_end": 227
+        },
+        {
+          "name": "test_test_file_itself_has_no_rule",
+          "kind": "method",
+          "line_start": 229,
+          "line_end": 232
+        },
+        {
+          "name": "TestBuildTestMapTsx",
+          "kind": "class",
+          "line_start": 240,
+          "line_end": 289
+        },
+        {
+          "name": "test_name_match_test_tsx",
+          "kind": "method",
+          "line_start": 241,
+          "line_end": 249
+        },
+        {
+          "name": "test_name_match_spec_tsx",
+          "kind": "method",
+          "line_start": 251,
+          "line_end": 259
+        },
+        {
+          "name": "test_related_screen_test",
+          "kind": "method",
+          "line_start": 261,
+          "line_end": 270
+        },
+        {
+          "name": "test_import_based_match",
+          "kind": "method",
+          "line_start": 272,
+          "line_end": 284
+        },
+        {
+          "name": "test_tsx_without_test_produces_no_rule",
+          "kind": "method",
+          "line_start": 286,
+          "line_end": 289
+        },
+        {
+          "name": "TestBuildTestMapRequiredChecks",
+          "kind": "class",
+          "line_start": 297,
+          "line_end": 318
+        },
+        {
+          "name": "test_required_checks_produces_global_rule",
+          "kind": "method",
+          "line_start": 298,
+          "line_end": 304
+        },
+        {
+          "name": "test_global_rule_is_first",
+          "kind": "method",
+          "line_start": 306,
+          "line_end": 314
+        },
+        {
+          "name": "test_no_required_checks_no_global_rule",
+          "kind": "method",
+          "line_start": 316,
+          "line_end": 318
+        },
+        {
+          "name": "TestBuildTestMapNoTests",
+          "kind": "class",
+          "line_start": 326,
+          "line_end": 339
+        },
+        {
+          "name": "test_empty_tests_list",
+          "kind": "method",
+          "line_start": 327,
+          "line_end": 329
+        },
+        {
+          "name": "test_warning_present",
+          "kind": "method",
+          "line_start": 331,
+          "line_end": 334
+        },
+        {
+          "name": "test_no_crash_on_empty_indexed_files",
+          "kind": "method",
+          "line_start": 336,
+          "line_end": 339
+        },
+        {
+          "name": "TestBuildTestMapSchema",
+          "kind": "class",
+          "line_start": 347,
+          "line_end": 387
+        },
+        {
+          "name": "test_schema_marker",
+          "kind": "method",
+          "line_start": 348,
+          "line_end": 350
+        },
+        {
+          "name": "test_generated_at_present",
+          "kind": "method",
+          "line_start": 352,
+          "line_end": 355
+        },
+        {
+          "name": "test_output_is_json_serialisable",
+          "kind": "method",
+          "line_start": 357,
+          "line_end": 369
+        },
+        {
+          "name": "test_tests_entries_have_path_and_kind",
+          "kind": "method",
+          "line_start": 371,
+          "line_end": 376
+        },
+        {
+          "name": "test_rules_entries_have_required_fields",
+          "kind": "method",
+          "line_start": 378,
+          "line_end": 387
+        },
+        {
+          "name": "TestWriteTestMap",
+          "kind": "class",
+          "line_start": 395,
+          "line_end": 412
+        },
+        {
+          "name": "test_creates_output_file",
+          "kind": "method",
+          "line_start": 396,
+          "line_end": 400
+        },
+        {
+          "name": "test_output_is_valid_json",
+          "kind": "method",
+          "line_start": 402,
+          "line_end": 407
+        },
+        {
+          "name": "test_creates_parent_directories",
+          "kind": "method",
+          "line_start": 409,
+          "line_end": 412
+        }
+      ]
+    },
+    {
       "path": "tests/test_vibecode_ts_symbols.py",
       "language": "python",
       "symbols": [
@@ -1870,7 +3316,7 @@
           "name": "cmd_context",
           "kind": "function",
           "line_start": 9,
-          "line_end": 15
+          "line_end": 33
         }
       ]
     },
@@ -1881,8 +3327,8 @@
         {
           "name": "cmd_index",
           "kind": "function",
-          "line_start": 37,
-          "line_end": 82
+          "line_start": 52,
+          "line_end": 134
         }
       ]
     },
@@ -1953,6 +3399,132 @@
       ]
     },
     {
+      "path": "vibecode/indexer/dependency_map.py",
+      "language": "python",
+      "symbols": [
+        {
+          "name": "_extract_python_imports",
+          "kind": "function",
+          "line_start": 51,
+          "line_end": 82
+        },
+        {
+          "name": "_extract_ts_imports",
+          "kind": "function",
+          "line_start": 90,
+          "line_end": 109
+        },
+        {
+          "name": "_resolve_python_import",
+          "kind": "function",
+          "line_start": 117,
+          "line_end": 139
+        },
+        {
+          "name": "_try_python_candidate",
+          "kind": "function",
+          "line_start": 142,
+          "line_end": 154
+        },
+        {
+          "name": "_resolve_ts_import",
+          "kind": "function",
+          "line_start": 157,
+          "line_end": 190
+        },
+        {
+          "name": "_make_edge",
+          "kind": "function",
+          "line_start": 198,
+          "line_end": 222
+        },
+        {
+          "name": "build_dependency_map",
+          "kind": "function",
+          "line_start": 230,
+          "line_end": 265
+        },
+        {
+          "name": "write_dependency_map",
+          "kind": "function",
+          "line_start": 268,
+          "line_end": 280
+        }
+      ]
+    },
+    {
+      "path": "vibecode/indexer/entrypoints.py",
+      "language": "python",
+      "symbols": [
+        {
+          "name": "_Entry",
+          "kind": "class",
+          "line_start": 12,
+          "line_end": 14
+        },
+        {
+          "name": "_Script",
+          "kind": "class",
+          "line_start": 18,
+          "line_end": 21
+        },
+        {
+          "name": "_probe_python_framework",
+          "kind": "function",
+          "line_start": 69,
+          "line_end": 79
+        },
+        {
+          "name": "_detect_backend",
+          "kind": "function",
+          "line_start": 82,
+          "line_end": 109
+        },
+        {
+          "name": "_detect_frontend",
+          "kind": "function",
+          "line_start": 112,
+          "line_end": 121
+        },
+        {
+          "name": "_detect_cli_scripts",
+          "kind": "function",
+          "line_start": 124,
+          "line_end": 160
+        },
+        {
+          "name": "_parse_pyproject_scripts",
+          "kind": "function",
+          "line_start": 163,
+          "line_end": 177
+        },
+        {
+          "name": "_detect_runtime_config",
+          "kind": "function",
+          "line_start": 180,
+          "line_end": 185
+        },
+        {
+          "name": "detect_entrypoints",
+          "kind": "function",
+          "line_start": 193,
+          "line_end": 205
+        },
+        {
+          "name": "render_entrypoints",
+          "kind": "function",
+          "line_start": 208,
+          "line_end": 261
+        },
+        {
+          "name": "write_entrypoints",
+          "kind": "function",
+          "line_start": 264,
+          "line_end": 269
+        }
+      ]
+    },
+    {
       "path": "vibecode/indexer/inventory.py",
       "language": "python",
       "symbols": [
@@ -1960,13 +3532,13 @@
           "name": "build_inventory",
           "kind": "function",
           "line_start": 15,
-          "line_end": 44
+          "line_end": 53
         },
         {
           "name": "write_inventory",
           "kind": "function",
-          "line_start": 47,
-          "line_end": 59
+          "line_start": 56,
+          "line_end": 69
         }
       ]
     },
@@ -2027,6 +3599,72 @@
           "kind": "function",
           "line_start": 187,
           "line_end": 197
+        }
+      ]
+    },
+    {
+      "path": "vibecode/indexer/risk_engine.py",
+      "language": "python",
+      "symbols": [
+        {
+          "name": "_severity_cmp",
+          "kind": "function",
+          "line_start": 34,
+          "line_end": 35
+        },
+        {
+          "name": "_matches_glob",
+          "kind": "function",
+          "line_start": 43,
+          "line_end": 55
+        },
+        {
+          "name": "_find_keyword",
+          "kind": "function",
+          "line_start": 63,
+          "line_end": 75
+        },
+        {
+          "name": "_is_sensitive_dir",
+          "kind": "function",
+          "line_start": 78,
+          "line_end": 81
+        },
+        {
+          "name": "RiskResult",
+          "kind": "class",
+          "line_start": 90,
+          "line_end": 95
+        },
+        {
+          "name": "evaluate_risk",
+          "kind": "function",
+          "line_start": 103,
+          "line_end": 161
+        },
+        {
+          "name": "build_risk_index",
+          "kind": "function",
+          "line_start": 169,
+          "line_end": 193
+        }
+      ]
+    },
+    {
+      "path": "vibecode/indexer/risky_files.py",
+      "language": "python",
+      "symbols": [
+        {
+          "name": "render_risky_files",
+          "kind": "function",
+          "line_start": 10,
+          "line_end": 42
+        },
+        {
+          "name": "write_risky_files",
+          "kind": "function",
+          "line_start": 45,
+          "line_end": 48
         }
       ]
     },
@@ -2201,6 +3839,96 @@
           "kind": "function",
           "line_start": 121,
           "line_end": 127
+        }
+      ]
+    },
+    {
+      "path": "vibecode/indexer/test_map.py",
+      "language": "python",
+      "symbols": [
+        {
+          "name": "TestEntry",
+          "kind": "class",
+          "line_start": 36,
+          "line_end": 40
+        },
+        {
+          "name": "TestRule",
+          "kind": "class",
+          "line_start": 44,
+          "line_end": 49
+        },
+        {
+          "name": "_is_python_test",
+          "kind": "function",
+          "line_start": 57,
+          "line_end": 65
+        },
+        {
+          "name": "_is_ts_test",
+          "kind": "function",
+          "line_start": 68,
+          "line_end": 76
+        },
+        {
+          "name": "_classify_python_test_kind",
+          "kind": "function",
+          "line_start": 79,
+          "line_end": 87
+        },
+        {
+          "name": "_classify_ts_test_kind",
+          "kind": "function",
+          "line_start": 90,
+          "line_end": 100
+        },
+        {
+          "name": "discover_tests",
+          "kind": "function",
+          "line_start": 108,
+          "line_end": 118
+        },
+        {
+          "name": "_python_test_imports_source",
+          "kind": "function",
+          "line_start": 126,
+          "line_end": 134
+        },
+        {
+          "name": "_ts_test_imports_source",
+          "kind": "function",
+          "line_start": 137,
+          "line_end": 149
+        },
+        {
+          "name": "_build_rule_for_python_source",
+          "kind": "function",
+          "line_start": 157,
+          "line_end": 188
+        },
+        {
+          "name": "_test_stem_from_name",
+          "kind": "function",
+          "line_start": 191,
+          "line_end": 196
+        },
+        {
+          "name": "_build_rule_for_ts_source",
+          "kind": "function",
+          "line_start": 199,
+          "line_end": 244
+        },
+        {
+          "name": "build_test_map",
+          "kind": "function",
+          "line_start": 252,
+          "line_end": 303
+        },
+        {
+          "name": "write_test_map",
+          "kind": "function",
+          "line_start": 306,
+          "line_end": 318
         }
       ]
     },
