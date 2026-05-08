@@ -124,5 +124,35 @@ def cmd_init(args) -> int:
 def cmd_map(args) -> int:
     repo_root = Path(args.repo_root).resolve()
     print(f"Repository map for {repo_root}", file=sys.stderr)
-    # Full implementation in task 08.
+
+    include: list[str] = []
+    exclude: list[str] = []
+    vibecode_dir = repo_root / ".vibecode"
+
+    if (vibecode_dir / "project.yaml").exists():
+        try:
+            from vibecode.config import load_config
+
+            cfg = load_config(vibecode_dir)
+            include = cfg.include
+            exclude = cfg.exclude
+        except Exception as exc:  # noqa: BLE001
+            print(f"Warning: could not load project.yaml: {exc}", file=sys.stderr)
+
+    from vibecode.indexer import scan
+    from vibecode.indexer.classifier import classify
+    from vibecode.indexer.repo_tree import write_repo_tree
+
+    files = scan(repo_root, include=include, exclude=exclude)
+    records = [classify(f.path, f.size) for f in files]
+
+    output_path = vibecode_dir / "current" / "repo_tree.md"
+    write_repo_tree(repo_root, records, output_path)
+
+    tree_content = output_path.read_text(encoding="utf-8")
+    print(tree_content)
+    print(
+        f"  repo_tree.md written to {output_path.relative_to(repo_root).as_posix()}",
+        file=sys.stderr,
+    )
     return 0

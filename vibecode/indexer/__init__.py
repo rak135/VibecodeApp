@@ -14,6 +14,8 @@ from vibecode.indexer.scanner import (
     scan,
 )
 
+from vibecode.indexer.repo_tree import render_repo_tree, write_repo_tree
+
 __all__ = [
     "scan",
     "IndexedFile",
@@ -23,6 +25,8 @@ __all__ = [
     "FileRecord",
     "build_inventory",
     "write_inventory",
+    "render_repo_tree",
+    "write_repo_tree",
 ]
 
 

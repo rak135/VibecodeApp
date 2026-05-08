@@ -40,7 +40,7 @@
     {
       "title": "08 - Generate compact .vibecode/index/repo_tree.md",
       "description": "Implement a renderer for `repo_tree.md`.\n\nContent:\n- heading: Repo tree,\n- project root,\n- top-level folders with short role notes,\n- important subfolders according to role_guess,\n- highlight high/medium risk files,\n- omit excluded/generated/cache folders,\n- the tree must not become an endless dump of the entire repository.\n\nAcceptance criteria:\n- repo_tree.md is readable for humans and agents,\n- it includes the main folders,\n- it does not show node_modules, .venv, or .git,\n- high-risk files are marked `[HIGH RISK]` when present,\n- large repositories still produce a compact tree.\n\nVerification:\n- snapshot or text test over a fixture repository,\n- manual review that the tree is not a blind `tree /F` dump.",
-      "completed": false
+      "completed": true
     },
     {
       "title": "09 - Implement Python symbol extraction through ast",
