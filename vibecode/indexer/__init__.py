@@ -5,9 +5,37 @@ from __future__ import annotations
 import sys
 from pathlib import Path
 
+from vibecode.indexer.scanner import (
+    DEFAULT_SIZE_LIMIT,
+    FileStatus,
+    IndexedFile,
+    scan,
+)
+
+__all__ = ["scan", "IndexedFile", "FileStatus", "DEFAULT_SIZE_LIMIT"]
+
 
 def cmd_index(args) -> int:
     repo_root = Path(args.repo_root).resolve()
+
+    include: list[str] = []
+    exclude: list[str] = []
+    vibecode_dir = repo_root / ".vibecode"
+    if (vibecode_dir / "project.yaml").exists():
+        try:
+            from vibecode.config import load_config
+
+            cfg = load_config(vibecode_dir)
+            include = cfg.include
+            exclude = cfg.exclude
+        except Exception as exc:  # noqa: BLE001
+            print(f"Warning: could not load project.yaml: {exc}", file=sys.stderr)
+
     print(f"Indexing {repo_root}", file=sys.stderr)
-    # Full implementation in tasks 05–07.
+    files = scan(repo_root, include=include, exclude=exclude)
+
+    for f in files:
+        print(f.path)
+
+    print(f"  {len(files)} file(s) indexed", file=sys.stderr)
     return 0

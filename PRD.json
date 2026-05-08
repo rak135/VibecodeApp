@@ -25,7 +25,7 @@
     {
       "title": "05 - Implement safe file scanning through git ls-files with filesystem fallback",
       "description": "Implement an indexer that collects the repository file list.\n\nRequirements:\n- prefer `git ls-files` when the target is a git repository,\n- fall back to filesystem walking when git is unavailable or the target is not a git repository,\n- distinguish tracked/untracked files at a basic level when git is available,\n- never index `.git/`, `node_modules/`, `.venv/`, `venv/`, `__pycache__/`, `dist/`, `build/`, `.pytest_cache/`, `.mypy_cache/`, cache directories, or binary/large artifacts excluded by rules,\n- respect include/exclude rules from project.yaml.\n\nAcceptance criteria:\n- the scan does not enter node_modules or .venv,\n- returned paths are relative POSIX-style paths from the repository root,\n- scanning works without git,\n- files above a reasonable size limit are skipped or marked according to a clear strategy instead of being pushed into the map.\n\nVerification:\n- test with a temporary git repository,\n- test without git,\n- test exclude rules,\n- test that `.git/` and `node_modules/` do not appear in results.",
-      "completed": false
+      "completed": true
     },
     {
       "title": "06 - Implement language detection and role_guess for file_inventory",
