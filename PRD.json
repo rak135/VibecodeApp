@@ -170,7 +170,7 @@
     {
       "title": "34 - Prepare extension points for future OpenCode and Serena support without runtime implementation",
       "description": "Prepare interfaces but do not implement a real runtime.\n\nEnough for now:\n- platform export registry: opencode currently only exports a prompt,\n- code intelligence providers: symbol_map provider plus future Serena provider placeholder,\n- context builder uses a provider interface instead of hardcoding everything in one file.\n\nNon-goals:\n- do not launch OpenCode,\n- do not start an MCP server,\n- do not install Serena.\n\nAcceptance criteria:\n- code is not a single monolithic 2000-line file,\n- OpenCode prompt export is separated from the context-builder core,\n- future Serena/OpenCode runtime support can be added as another module without rewriting the indexer.\n\nVerification:\n- code review confirms module boundaries are clear,\n- tests still pass.",
-      "completed": false
+      "completed": true
     },
     {
       "title": "35 - Final validation checklist for the initial implementation",

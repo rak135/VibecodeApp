@@ -59,11 +59,15 @@ def cmd_context(args) -> int:
     output_path = write_context_pack(repo, task)
     print(f"Context pack written: {output_path}", file=sys.stderr)
 
-    if platform == "opencode":
-        from vibecode.context.platform_export import write_opencode_prompt
+    if platform:
+        from vibecode.context.platform_registry import get_exporter
 
-        context_pack_content = output_path.read_text(encoding="utf-8")
-        prompt_path = write_opencode_prompt(repo, context_pack_content)
-        print(f"OpenCode prompt written: {prompt_path}", file=sys.stderr)
+        exporter = get_exporter(platform)
+        if exporter is not None:
+            context_pack_content = output_path.read_text(encoding="utf-8")
+            prompt_path = exporter(repo, context_pack_content)
+            print(f"Platform export written ({platform}): {prompt_path}", file=sys.stderr)
+        else:
+            print(f"Warning: unknown platform '{platform}'; no export written.", file=sys.stderr)
 
     return 0

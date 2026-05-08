@@ -33,3 +33,4 @@
 - [✓] 2026-05-08 16:23 - 31 - Add fail-safe behavior for empty or weak invariants
 - [✓] 2026-05-08 16:27 - 32 - Prevent whole-file dumps in context packs
 - [✓] 2026-05-08 16:36 - 33 - Add clear user-facing errors without noisy stack traces
+- [✓] 2026-05-08 16:40 - 34 - Prepare extension points for future OpenCode and Serena support without runtime implementation

@@ -7,6 +7,7 @@ from pathlib import Path
 from typing import NamedTuple
 
 from vibecode.context.scoring import score_relevant_files
+from vibecode.indexer.code_intelligence import DEFAULT_PROVIDER as _code_intelligence_provider
 from vibecode.project import TEMPLATE_UNFILLED_MARKER
 
 ARCHITECTURE_DIR = Path(".vibecode") / "architecture"
@@ -191,32 +192,6 @@ def _architecture_summary(repo_root: Path) -> list[str]:
     return lines or ["- No architecture summary docs found beyond invariants."]
 
 
-def _load_symbol_map(repo_root: Path) -> dict[str, list[str]]:
-    """Return {path: [symbol_name, ...]} from symbol_map.json.
-
-    Only symbol *names* are surfaced — never file content.  Returns an empty
-    dict if the index file is absent or unreadable.
-    """
-    symbol_map_path = repo_root / INDEX_DIR / "symbol_map.json"
-    if not symbol_map_path.is_file():
-        return {}
-    try:
-        data = json.loads(symbol_map_path.read_text(encoding="utf-8"))
-    except (OSError, json.JSONDecodeError):
-        return {}
-    result: dict[str, list[str]] = {}
-    for entry in data.get("files") or []:
-        path = entry.get("path", "")
-        names = [
-            s["name"]
-            for s in (entry.get("symbols") or [])
-            if isinstance(s, dict) and s.get("name")
-        ]
-        if path and names:
-            result[path] = names
-    return result
-
-
 def _relevant_files(repo_root: Path, task: str) -> list[str]:
     scored = score_relevant_files(repo_root, task, limit=16)
     by_path = {item["path"]: item for item in scored}
@@ -229,7 +204,7 @@ def _relevant_files(repo_root: Path, task: str) -> list[str]:
     if not ordered_paths:
         return ["- No relevant files scored. Run `vibecode index` and retry."]
 
-    symbol_map = _load_symbol_map(repo_root)
+    symbol_map = _code_intelligence_provider.get_symbol_map(repo_root)
     lines = ["Do not paste full source into follow-up prompts; use these paths as navigation targets."]
     for rel in ordered_paths[:24]:
         item = by_path.get(rel)
