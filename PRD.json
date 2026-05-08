@@ -150,7 +150,7 @@
     {
       "title": "30 - Add command documentation and the first working scenario",
       "description": "Update documentation for using the initial implementation.\n\nMust include:\n- what it can do,\n- what it cannot do,\n- local install/run instructions,\n- init command,\n- index command,\n- map/inspect command,\n- context command,\n- OpenCode prompt export,\n- explanation of the `.vibecode/` structure,\n- human-maintained vs generated files,\n- first scenario using `C:\\path\\to\\example-repo` as an example, not a hardcoded dependency.\n\nAcceptance criteria:\n- a new developer can create a map for a fixture or real repository from the documentation,\n- documentation specifically says OpenCode runtime comes later,\n- documentation shows how to inspect output files.\n\nVerification:\n- manually walk through the quickstart on a temporary repository.",
-      "completed": false
+      "completed": true
     },
     {
       "title": "31 - Add fail-safe behavior for empty or weak invariants",

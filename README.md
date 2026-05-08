@@ -17,6 +17,8 @@ This repository is intentionally CLI-first. It does not launch OpenCode, Codex, 
 7. [License](#license)
 8. [Acknowledgments](#acknowledgments)
 
+→ **[Full quickstart guide — docs/QUICKSTART.md](docs/QUICKSTART.md)**
+
 ## About The Project
 
 VibecodeApp is meant to become the project control layer around agentic coding work. The initial architecture-map scope focuses on:
