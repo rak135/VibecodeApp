@@ -5,6 +5,7 @@ from __future__ import annotations
 import sys
 from pathlib import Path
 
+from vibecode.indexer.classifier import FileRecord, classify
 from vibecode.indexer.scanner import (
     DEFAULT_SIZE_LIMIT,
     FileStatus,
@@ -12,7 +13,14 @@ from vibecode.indexer.scanner import (
     scan,
 )
 
-__all__ = ["scan", "IndexedFile", "FileStatus", "DEFAULT_SIZE_LIMIT"]
+__all__ = [
+    "scan",
+    "IndexedFile",
+    "FileStatus",
+    "DEFAULT_SIZE_LIMIT",
+    "classify",
+    "FileRecord",
+]
 
 
 def cmd_index(args) -> int:

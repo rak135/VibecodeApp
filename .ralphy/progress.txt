@@ -5,3 +5,4 @@
 - [✓] 2026-05-08 12:57 - 03 - Implement init and create the .vibecode structure
 - [✓] 2026-05-08 12:59 - 04 - Implement loading and validation for project.yaml
 - [✓] 2026-05-08 13:07 - 05 - Implement safe file scanning through git ls-files with filesystem fallback
+- [✓] 2026-05-08 13:10 - 06 - Implement language detection and role_guess for file_inventory

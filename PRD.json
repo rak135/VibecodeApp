@@ -30,7 +30,7 @@
     {
       "title": "06 - Implement language detection and role_guess for file_inventory",
       "description": "Implement deterministic language detection and a rough file role guess.\n\nMinimum languages:\n- python: .py\n- typescript: .ts\n- typescriptreact: .tsx\n- javascript: .js\n- javascriptreact: .jsx\n- markdown: .md\n- json: .json\n- yaml: .yml/.yaml\n- toml: .toml\n- config/unknown as needed.\n\nMinimum role guesses:\n- backend_engine\n- backend_api\n- frontend_screen\n- frontend_component\n- test\n- doc\n- config\n- script\n- generated\n- unknown.\n\nHeuristics:\n- `tests/**`, `test_*.py`, `*_test.py`, `*.test.tsx`, `*.spec.tsx` => test,\n- `docs/**`, `README.md`, `*.md` => doc,\n- `ui/frontend/src/screens/**` => frontend_screen,\n- `ui/frontend/src/components/**` => frontend_component,\n- `stock_tax_app/engine/**` or similar engine paths => backend_engine,\n- `api/**`, `routes/**`, `server/**` => backend_api,\n- config names such as pyproject.toml, package.json, tsconfig.json, vite.config.* => config.\n\nAcceptance criteria:\n- every FileRecord has path, language, size_bytes, role_guess, is_test, is_config, is_doc, risk_level,\n- heuristics are deterministic,\n- unknown file types never crash indexing.\n\nVerification:\n- unit tests for typical Python, TSX, Markdown, config, and test files.",
-      "completed": false
+      "completed": true
     },
     {
       "title": "07 - Generate .vibecode/index/file_inventory.json",
