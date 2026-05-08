@@ -203,3 +203,42 @@ def test_high_priority_sections_present_before_lower_in_output(tmp_path):
     architecture_pos = content.index("## Relevant architecture")
 
     assert task_pos < invariants_pos < architecture_pos
+
+
+# ---------------------------------------------------------------------------
+# No-confirmed-invariants warning tests
+# ---------------------------------------------------------------------------
+
+def test_context_pack_warns_when_invariants_empty(tmp_path):
+    """Empty INVARIANTS.md causes context pack to include the no-invariants warning."""
+    _write(tmp_path / ".vibecode" / "architecture" / "INVARIANTS.md", "\n")
+    _write(tmp_path / ".vibecode" / "index" / "file_inventory.json", '{"files": []}\n')
+
+    content = render_context_pack(tmp_path, "some task")
+
+    assert "no confirmed invariants" in content
+    assert "weak project rules" in content
+
+
+def test_context_pack_warns_when_invariants_missing(tmp_path):
+    """Missing INVARIANTS.md causes context pack to include the no-invariants warning."""
+    _write(tmp_path / ".vibecode" / "index" / "file_inventory.json", '{"files": []}\n')
+
+    content = render_context_pack(tmp_path, "some task")
+
+    assert "no confirmed invariants" in content
+    assert "weak project rules" in content
+
+
+def test_context_pack_no_warning_when_invariants_filled(tmp_path):
+    """Filled INVARIANTS.md does not trigger the no-invariants warning in context pack."""
+    _write(
+        tmp_path / ".vibecode" / "architecture" / "INVARIANTS.md",
+        "# Invariants\n\n- No package may import from a sibling package.\n",
+    )
+    _write(tmp_path / ".vibecode" / "index" / "file_inventory.json", '{"files": []}\n')
+
+    content = render_context_pack(tmp_path, "some task")
+
+    assert "no confirmed invariants" not in content
+    assert "- No package may import from a sibling package." in content

@@ -155,7 +155,7 @@
     {
       "title": "31 - Add fail-safe behavior for empty or weak invariants",
       "description": "When a project has no confirmed invariants, the tool must not ignore that fact.\n\nBehavior:\n- context pack may still be generated,\n- it contains a visible warning: `Project has no confirmed invariants. Agent gets technical map but weak project rules.`,\n- validation report emits WARN,\n- map/inspect displays the warning.\n\nAcceptance criteria:\n- empty INVARIANTS.md is not a fatal error,\n- warning is visible in validation and context pack,\n- warning disappears when invariants exist.\n\nVerification:\n- test empty invariants,\n- test filled invariants.",
-      "completed": false
+      "completed": true
     },
     {
       "title": "32 - Prevent whole-file dumps in context packs",

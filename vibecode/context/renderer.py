@@ -7,6 +7,7 @@ from pathlib import Path
 from typing import NamedTuple
 
 from vibecode.context.scoring import score_relevant_files
+from vibecode.project import TEMPLATE_UNFILLED_MARKER
 
 ARCHITECTURE_DIR = Path(".vibecode") / "architecture"
 CHECKS_PATH = Path(".vibecode") / "checks" / "required_checks.yaml"
@@ -135,12 +136,36 @@ def _project_summary(repo_root: Path) -> list[str]:
     ]
 
 
+_NO_INVARIANTS_WARNING = (
+    "- Project has no confirmed invariants. Agent gets technical map but weak project rules."
+)
+
+
+def _has_confirmed_invariants(content: str) -> bool:
+    """Return True if *content* contains at least one meaningful invariant line."""
+    if not content.strip() or TEMPLATE_UNFILLED_MARKER in content:
+        return False
+    for line in content.splitlines():
+        stripped = line.strip()
+        if not stripped or stripped.startswith("#") or stripped.startswith("<!--"):
+            continue
+        if stripped.startswith(">") or stripped.upper().startswith("TODO"):
+            continue
+        return True
+    return False
+
+
 def _project_invariants(repo_root: Path) -> list[str]:
     invariants = repo_root / ARCHITECTURE_DIR / "INVARIANTS.md"
     if not invariants.is_file():
-        return ["- Missing `.vibecode/architecture/INVARIANTS.md`; verify project truth before editing."]
-    bullets = _markdown_bullets(invariants.read_text(encoding="utf-8", errors="replace"))
-    return bullets or ["- `INVARIANTS.md` exists but has no bullet invariants."]
+        return [
+            _NO_INVARIANTS_WARNING,
+            "- Missing `.vibecode/architecture/INVARIANTS.md`; verify project truth before editing.",
+        ]
+    content = invariants.read_text(encoding="utf-8", errors="replace")
+    if not _has_confirmed_invariants(content):
+        return [_NO_INVARIANTS_WARNING]
+    return _markdown_bullets(content)
 
 
 def _architecture_summary(repo_root: Path) -> list[str]:
