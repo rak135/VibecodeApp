@@ -82,11 +82,28 @@ python -m pytest -p no:cacheprovider
 
 ## Usage
 
-Initialize a target repository:
+### Windows paths
+
+All commands accept Windows-style paths with backslashes.  Paths are
+normalised to forward-slash POSIX format internally, so JSON and Markdown
+outputs are always portable and never contain broken backslash escaping.
 
 ```powershell
-python -m vibecode.cli init C:\path\to\example-repo --id example_repo --name ExampleRepo
+# Init, index, validate, and map all accept C:\... roots directly.
+python -m vibecode.cli init   C:\path\to\example-repo --id example_repo
+python -m vibecode.cli index  C:\path\to\example-repo
+python -m vibecode.cli validate C:\path\to\example-repo
+python -m vibecode.cli map    C:\path\to\example-repo
+
+# Context pack using the --repo flag with a Windows path
+python -m vibecode.cli context "Update login flow" --repo C:\path\to\example-repo
 ```
+
+The generated JSON files (``file_inventory.json``, ``last_index.json``, etc.)
+always use forward slashes in their ``root`` and ``path`` fields regardless of
+the host OS.
+
+
 
 Index a repository:
 

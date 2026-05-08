@@ -28,3 +28,4 @@
 - [✓] 2026-05-08 16:03 - 26 - Add fixture repositories for indexer tests
 - [✓] 2026-05-08 16:05 - 27 - Add unit tests for the main indexing modules
 - [✓] 2026-05-08 16:11 - 28 - Add end-to-end test for init, index, and context
+- [✓] 2026-05-08 16:16 - 29 - Add Windows path compatibility tests

@@ -8,6 +8,8 @@ from typing import List
 
 import yaml
 
+from vibecode.paths import strip_to_posix
+
 
 @dataclass
 class ProjectConfig:
@@ -49,7 +51,7 @@ def load_config(vibecode_dir: Path) -> ProjectConfig:
     project_name = str(project_section.get("name") or project_id)
 
     # Normalize root path — accept both forward and back slashes.
-    raw_root = str(project_section.get("root") or ".").replace("\\", "/")
+    raw_root = strip_to_posix(str(project_section.get("root") or "."))
     root_path = Path(raw_root)
     if not root_path.is_absolute():
         root_path = (vibecode_dir.parent / root_path).resolve()

@@ -108,11 +108,15 @@ def main(argv: list[str] | None = None) -> int:
         parser.print_help()
         return 0
 
+    from vibecode.paths import normalise_root
+
     if args.command == "init":
+        args.repo_root = normalise_root(args.repo_root)
         from vibecode.project import cmd_init
         return cmd_init(args)
 
     if args.command == "index":
+        args.repo_root = normalise_root(args.repo_root)
         from vibecode.indexer import cmd_index
         return cmd_index(args)
 
@@ -121,14 +125,17 @@ def main(argv: list[str] | None = None) -> int:
         return cmd_context(args)
 
     if args.command == "map":
+        args.repo_root = normalise_root(args.repo_root)
         from vibecode.project import cmd_map
         return cmd_map(args)
 
     if args.command == "validate":
+        args.repo_root = normalise_root(args.repo_root)
         from vibecode.validation import cmd_validate
         return cmd_validate(args)
 
     if args.command == "export-agents":
+        args.repo_root = normalise_root(args.repo_root)
         from vibecode.context.agents_export import cmd_export_agents
         return cmd_export_agents(args)
 

@@ -145,7 +145,7 @@
     {
       "title": "29 - Add Windows path compatibility tests",
       "description": "Verify that the tool works with Windows-style paths because the primary working environment is Windows/PowerShell.\n\nRequirements:\n- internally normalize relative paths to POSIX-style for JSON/MD outputs,\n- do not write broken backslash escaping into JSON,\n- accept roots such as `C:\\path\\to\\example-repo` when running on Windows,\n- do not treat a drive-letter colon as a YAML or path parsing problem.\n\nAcceptance criteria:\n- path normalizer has unit tests,\n- JSON outputs are valid,\n- documentation includes PowerShell examples.\n\nVerification:\n- unit test for the path normalizer,\n- if CI is not Windows, at least test the pure normalization function with Windows-like strings.",
-      "completed": false
+      "completed": true
     },
     {
       "title": "30 - Add command documentation and the first working scenario",

@@ -3,9 +3,9 @@
 from __future__ import annotations
 
 import sys
-from pathlib import Path
 
 from vibecode.context.renderer import write_context_pack
+from vibecode.paths import normalise_root
 
 
 def cmd_context(args) -> int:
@@ -16,10 +16,10 @@ def cmd_context(args) -> int:
     platform = getattr(args, "platform", None)
 
     if task_option:
-        repo = Path(repo_arg or context_arg or ".").resolve()
+        repo = normalise_root(str(repo_arg or context_arg or "."))
         task = task_option
     else:
-        repo = Path(repo_arg or ".").resolve()
+        repo = normalise_root(str(repo_arg or "."))
         task = legacy_task or context_arg or "(no task specified)"
 
     print(f"Generating context pack for: {task}", file=sys.stderr)
