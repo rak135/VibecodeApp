@@ -12,6 +12,8 @@ from pathlib import Path
 from types import SimpleNamespace
 
 from vibecode.project import TEMPLATE_UNFILLED_MARKER
+from vibecode.write_rules import GENERATED_PATH_PREFIXES as _GENERATED_PREFIXES
+from vibecode.write_rules import HUMAN_MAINTAINED_PATHS as _HUMAN_MAINTAINED_SET
 
 _SCHEMA = "vibecode/validation-report/v1"
 
@@ -25,27 +27,6 @@ _GENERATED_JSON = (
 _OPTIONAL_GENERATED_JSON = (
     ".vibecode/current/last_index.json",
     ".vibecode/current/validation.json",
-)
-
-_GENERATED_PREFIXES = (
-    ".vibecode/index/",
-    ".vibecode/current/",
-    ".vibecode/logs/index_runs/",
-)
-
-_HUMAN_MAINTAINED = (
-    ".vibecode/project.yaml",
-    ".vibecode/architecture/OVERVIEW.md",
-    ".vibecode/architecture/INVARIANTS.md",
-    ".vibecode/architecture/STRUCTURE.md",
-    ".vibecode/architecture/MODULE_BOUNDARIES.md",
-    ".vibecode/architecture/PROTECTED_AREAS.md",
-    ".vibecode/architecture/DATA_FLOW.md",
-    ".vibecode/checks/required_checks.yaml",
-    ".vibecode/handoff/NOW.md",
-    ".vibecode/handoff/NEXT.md",
-    ".vibecode/handoff/BLOCKERS.md",
-    ".vibecode/history/README.md",
 )
 
 _FORBIDDEN_INVENTORY_PARTS = {".git", "node_modules", ".venv", "venv"}
@@ -246,7 +227,7 @@ def _validate_write_rules(root: Path, items: list[ValidationItem]) -> None:
         if path.exists() and not rel.startswith(_GENERATED_PREFIXES):
             invalid_generated.append(rel)
 
-    missing_human = [rel for rel in _HUMAN_MAINTAINED if not (root / Path(rel)).exists()]
+    missing_human = [rel for rel in sorted(_HUMAN_MAINTAINED_SET) if not (root / Path(rel)).exists()]
 
     if invalid_generated:
         items.append(_error("generated artifacts are outside generated directories: " + ", ".join(invalid_generated)))

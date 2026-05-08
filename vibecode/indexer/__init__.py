@@ -80,6 +80,8 @@ def cmd_index(args) -> int:
         except Exception as exc:  # noqa: BLE001
             print(f"Warning: could not load project.yaml: {exc}", file=sys.stderr)
 
+    _guard_index_paths(vibecode_dir, repo_root)
+
     print(f"Indexing {repo_root}", file=sys.stderr)
     files = scan(repo_root, include=include, exclude=exclude)
 
@@ -194,6 +196,32 @@ def cmd_index(args) -> int:
     print(f"  run record written to {run_path.relative_to(repo_root).as_posix()}", file=sys.stderr)
 
     return 1 if errors else 0
+
+
+def _guard_index_paths(vibecode_dir: Path, repo_root: Path) -> None:
+    """Raise RuntimeError if any index output path would overwrite a human-maintained file.
+
+    This guard makes the write rules explicit and prevents accidental regressions
+    if output paths are ever changed.
+    """
+    from vibecode.write_rules import is_human_maintained
+
+    output_paths = [
+        vibecode_dir / "index" / "file_inventory.json",
+        vibecode_dir / "index" / "risky_files.md",
+        vibecode_dir / "index" / "symbol_map.json",
+        vibecode_dir / "index" / "dependency_map.json",
+        vibecode_dir / "index" / "test_map.json",
+        vibecode_dir / "index" / "entrypoints.md",
+        vibecode_dir / "index" / "repo_tree.generated.md",
+        vibecode_dir / "current" / "last_index.json",
+        vibecode_dir / "current" / "validation.json",
+    ]
+    for path in output_paths:
+        if is_human_maintained(path, repo_root):
+            raise RuntimeError(
+                f"BUG: index output path overlaps with human-maintained file: {path}"
+            )
 
 
 def _warn_unfilled_architecture_templates(repo_root: Path, run_log: list[str]) -> None:

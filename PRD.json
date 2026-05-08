@@ -125,7 +125,7 @@
     {
       "title": "25 - Enforce the human-maintained vs generated file boundary",
       "description": "Introduce clear write rules.\n\nHuman-maintained:\n- .vibecode/project.yaml,\n- .vibecode/architecture/INVARIANTS.md,\n- .vibecode/architecture/MODULE_BOUNDARIES.md,\n- .vibecode/architecture/PROTECTED_AREAS.md,\n- .vibecode/handoff/NOW.md,\n- .vibecode/handoff/NEXT.md,\n- .vibecode/handoff/BLOCKERS.md.\n\nGenerated:\n- .vibecode/index/*.json,\n- .vibecode/index/*.md,\n- .vibecode/current/context_pack.md,\n- .vibecode/current/opencode_prompt.md,\n- .vibecode/current/last_index.json,\n- .vibecode/logs/index_runs/*.json.\n\nAcceptance criteria:\n- index never overwrites human-maintained files,\n- init never overwrites human-maintained files without force,\n- generated files may be safely overwritten,\n- README/AGENTS export uses markers or a safe no-overwrite strategy.\n\nVerification:\n- test that manually edited INVARIANTS.md remains unchanged after index.",
-      "completed": false
+      "completed": true
     },
     {
       "title": "26 - Add fixture repositories for indexer tests",
