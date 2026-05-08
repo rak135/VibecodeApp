@@ -65,7 +65,7 @@
     {
       "title": "13 - Implement test discovery and test_map.json",
       "description": "Implement test discovery and rough mapping from source files to tests.\n\nDetection:\n- Python: `tests/**`, `test_*.py`, `*_test.py`, files containing pytest/unittest patterns,\n- TS/React: `*.test.ts`, `*.test.tsx`, `*.spec.ts`, `*.spec.tsx`, Playwright, Cypress when present.\n\nMapping:\n- `foo.py` -> `test_foo.py`, `foo_test.py`, tests importing foo,\n- `component.tsx` -> `component.test.tsx`, `component.spec.tsx`, related screen tests by name,\n- manual required_checks from project.yaml take precedence.\n\nOutput `test_map.json`:\n- schema marker,\n- generated_at,\n- tests[],\n- rules[] with path_pattern, required_checks, and reason.\n\nAcceptance criteria:\n- test_map is valid JSON,\n- a known source file has a recommended test when the fixture contains a matching test,\n- required_checks from config are carried through,\n- if no tests are found, output contains an empty list and a warning instead of crashing.\n\nVerification:\n- unit test for a Python source/test pair,\n- unit test for a TSX source/test pair,\n- test for config-level required_checks.",
-      "completed": false
+      "completed": true
     },
     {
       "title": "14 - Generate entrypoints.md from configs and heuristics",

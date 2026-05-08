@@ -18,6 +18,7 @@ from vibecode.indexer.scanner import (
 from vibecode.indexer.dependency_map import build_dependency_map, write_dependency_map
 from vibecode.indexer.repo_tree import render_repo_tree, write_repo_tree
 from vibecode.indexer.symbol_map import build_symbol_map, write_symbol_map
+from vibecode.indexer.test_map import build_test_map, write_test_map
 
 __all__ = [
     "scan",
@@ -34,6 +35,8 @@ __all__ = [
     "write_symbol_map",
     "build_dependency_map",
     "write_dependency_map",
+    "build_test_map",
+    "write_test_map",
 ]
 
 
@@ -74,6 +77,19 @@ def cmd_index(args) -> int:
     dependency_map_path = vibecode_dir / "index" / "dependency_map.json"
     write_dependency_map(repo_root, files, dependency_map_path, run_log=run_log)
     print(f"  dependency map written to {dependency_map_path.relative_to(repo_root).as_posix()}", file=sys.stderr)
+
+    required_checks: list[str] | None = None
+    if (vibecode_dir / "project.yaml").exists():
+        try:
+            from vibecode.config import load_config as _load_config
+
+            required_checks = _load_config(vibecode_dir).required_checks or None
+        except Exception:  # noqa: BLE001
+            pass
+
+    test_map_path = vibecode_dir / "index" / "test_map.json"
+    write_test_map(repo_root, files, test_map_path, required_checks=required_checks)
+    print(f"  test map written to {test_map_path.relative_to(repo_root).as_posix()}", file=sys.stderr)
 
     if run_log:
         ts = datetime.now(tz=timezone.utc).strftime("%Y%m%dT%H%M%SZ")
