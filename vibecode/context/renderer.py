@@ -18,6 +18,9 @@ INDEX_DIR = Path(".vibecode") / "index"
 # ~6 400 words at five chars/word; prevents unbounded context packs.
 DEFAULT_CHAR_LIMIT = 32_000
 
+# Maximum symbol names shown per file; keeps entries brief and agent-friendly.
+_MAX_SYMBOLS_PER_FILE = 5
+
 
 class _Section(NamedTuple):
     name: str
@@ -188,6 +191,32 @@ def _architecture_summary(repo_root: Path) -> list[str]:
     return lines or ["- No architecture summary docs found beyond invariants."]
 
 
+def _load_symbol_map(repo_root: Path) -> dict[str, list[str]]:
+    """Return {path: [symbol_name, ...]} from symbol_map.json.
+
+    Only symbol *names* are surfaced — never file content.  Returns an empty
+    dict if the index file is absent or unreadable.
+    """
+    symbol_map_path = repo_root / INDEX_DIR / "symbol_map.json"
+    if not symbol_map_path.is_file():
+        return {}
+    try:
+        data = json.loads(symbol_map_path.read_text(encoding="utf-8"))
+    except (OSError, json.JSONDecodeError):
+        return {}
+    result: dict[str, list[str]] = {}
+    for entry in data.get("files") or []:
+        path = entry.get("path", "")
+        names = [
+            s["name"]
+            for s in (entry.get("symbols") or [])
+            if isinstance(s, dict) and s.get("name")
+        ]
+        if path and names:
+            result[path] = names
+    return result
+
+
 def _relevant_files(repo_root: Path, task: str) -> list[str]:
     scored = score_relevant_files(repo_root, task, limit=16)
     by_path = {item["path"]: item for item in scored}
@@ -200,6 +229,7 @@ def _relevant_files(repo_root: Path, task: str) -> list[str]:
     if not ordered_paths:
         return ["- No relevant files scored. Run `vibecode index` and retry."]
 
+    symbol_map = _load_symbol_map(repo_root)
     lines = ["Do not paste full source into follow-up prompts; use these paths as navigation targets."]
     for rel in ordered_paths[:24]:
         item = by_path.get(rel)
@@ -211,6 +241,16 @@ def _relevant_files(repo_root: Path, task: str) -> list[str]:
             lines.append(f"- `{rel}` (score {item['score']}{risk_note}{confirm}): {reason}")
         else:
             lines.append(f"- `{rel}` (included for context-pack workflow coverage)")
+
+        # Append a bounded symbol list for navigation; never embed file content.
+        all_symbols = symbol_map.get(rel, [])
+        if all_symbols:
+            shown = all_symbols[:_MAX_SYMBOLS_PER_FILE]
+            remainder = len(all_symbols) - len(shown)
+            suffix = f" +{remainder} more" if remainder > 0 else ""
+            lines.append(
+                f"  symbols: {', '.join(f'`{s}`' for s in shown)}{suffix}"
+            )
     return lines
 
 

@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import json
 from pathlib import Path
 
 from vibecode.cli import main
@@ -242,3 +243,70 @@ def test_context_pack_no_warning_when_invariants_filled(tmp_path):
 
     assert "no confirmed invariants" not in content
     assert "- No package may import from a sibling package." in content
+
+
+# ---------------------------------------------------------------------------
+# Symbol navigation tests
+# ---------------------------------------------------------------------------
+
+
+def test_long_file_path_and_symbols_appear_not_full_content(tmp_path):
+    """A long source file must appear as a path with symbol names, not full content.
+
+    Acceptance criteria (from PRD):
+    - path/symbols appear in the context pack as navigation targets,
+    - full file content is never embedded.
+    """
+    long_file_lines = (
+        "def alpha_function():\n    pass\n\n"
+        "def beta_function():\n    pass\n\n"
+        "class GammaClass:\n    pass\n\n"
+    ) + "\n".join(
+        f"# implementation detail line {i}: " + "x" * 40
+        for i in range(200)
+    )
+    _write(tmp_path / "vibecode" / "context" / "long_module.py", long_file_lines)
+
+    # Register file in inventory so the scorer considers it.
+    _write(
+        tmp_path / ".vibecode" / "index" / "file_inventory.json",
+        json.dumps({"files": [{"path": "vibecode/context/long_module.py"}]}) + "\n",
+    )
+
+    # Provide symbol names only — symbol_map never stores file content.
+    _write(
+        tmp_path / ".vibecode" / "index" / "symbol_map.json",
+        json.dumps({
+            "$schema": "vibecode/symbol-map/v1",
+            "files": [
+                {
+                    "path": "vibecode/context/long_module.py",
+                    "language": "python",
+                    "symbols": [
+                        {"name": "alpha_function", "kind": "function", "line_start": 1},
+                        {"name": "beta_function", "kind": "function", "line_start": 4},
+                        {"name": "GammaClass", "kind": "class", "line_start": 7},
+                    ],
+                }
+            ],
+        }) + "\n",
+    )
+
+    _write(
+        tmp_path / ".vibecode" / "architecture" / "INVARIANTS.md",
+        "# Invariants\n\n- No full source file content in context packs.\n",
+    )
+
+    content = render_context_pack(tmp_path, "context pack navigation for long module")
+
+    # The file path must appear as a navigation target.
+    assert "vibecode/context/long_module.py" in content
+
+    # Short symbol names must be present (navigation hints, not file content).
+    assert "alpha_function" in content
+    assert "beta_function" in content
+    assert "GammaClass" in content
+
+    # Full file content must NOT be embedded — check unique identifiable lines.
+    assert "implementation detail line 100" not in content
+    assert "implementation detail line 199" not in content

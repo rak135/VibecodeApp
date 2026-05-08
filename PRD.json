@@ -160,7 +160,7 @@
     {
       "title": "32 - Prevent whole-file dumps in context packs",
       "description": "The context pack must map and navigate; it must not push the entire repository into a prompt.\n\nRequirements:\n- context pack may list relevant files and short symbols,\n- it must not paste full contents of long source files by default,\n- any future excerpt must be short, explicitly labeled, and bounded by a limit,\n- generated summaries must be truncated.\n\nAcceptance criteria:\n- no normal source file is fully embedded in context_pack.md,\n- a test with a long file proves that the path/symbols appear, not the entire content,\n- context pack remains agent-friendly.\n\nVerification:\n- unit or E2E test with a long fixture file and an assertion that the full content was not included.",
-      "completed": false
+      "completed": true
     },
     {
       "title": "33 - Add clear user-facing errors without noisy stack traces",
