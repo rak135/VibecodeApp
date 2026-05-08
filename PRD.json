@@ -15,7 +15,7 @@
     {
       "title": "03 - Implement init and create the .vibecode structure",
       "description": "Implement `vibecode init <repo_root> --id <project_id> --name <project_name>`.\n\nThe command creates this minimum structure in the target repository:\n- .vibecode/project.yaml\n- .vibecode/index/\n- .vibecode/architecture/INVARIANTS.md\n- .vibecode/architecture/STRUCTURE.md\n- .vibecode/architecture/MODULE_BOUNDARIES.md\n- .vibecode/architecture/PROTECTED_AREAS.md\n- .vibecode/current/\n- .vibecode/handoff/NOW.md\n- .vibecode/handoff/NEXT.md\n- .vibecode/handoff/BLOCKERS.md\n- .vibecode/history/README.md\n- .vibecode/logs/index_runs/\n\nproject.yaml must contain at least:\n- config schema marker,\n- project.id,\n- project.name,\n- project.root,\n- indexing.include,\n- indexing.exclude,\n- protected_paths,\n- risk_rules,\n- required_checks.\n\nAcceptance criteria:\n- init is idempotent: repeated runs do not damage existing human-maintained files,\n- if a file exists, do not overwrite it without explicit `--force`,\n- generated directories may be created empty,\n- paths work on Windows and Unix-like systems.\n\nVerification:\n- run init on a temporary test repository,\n- verify all required files and directories exist,\n- run init a second time and verify a manually edited INVARIANTS.md was not overwritten.",
-      "completed": false
+      "completed": true
     },
     {
       "title": "04 - Implement loading and validation for project.yaml",
