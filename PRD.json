@@ -175,7 +175,7 @@
     {
       "title": "35 - Final validation checklist for the initial implementation",
       "description": "Perform the final validation pass.\n\nChecklist:\n- init works,\n- index works,\n- file_inventory.json is valid,\n- repo_tree.md is readable,\n- symbol_map.json is valid,\n- dependency_map.json is valid,\n- test_map.json is valid,\n- entrypoints.md is created,\n- risky_files.md is created,\n- context_pack.md is created,\n- opencode_prompt.md export works,\n- human-maintained files are not overwritten,\n- test suite passes,\n- documentation is current,\n- non-goals are not violated.\n\nAcceptance criteria:\n- final report lists changed files,\n- it lists commands that were run,\n- it lists warnings/limitations of the initial implementation,\n- anything unfinished is named explicitly.\n\nVerification:\n- run the test suite,\n- run the manual quickstart on a fixture repository,\n- open generated artifacts and verify they make sense for an agent.",
-      "completed": false
+      "completed": true
     }
   ]
 }

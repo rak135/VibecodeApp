@@ -34,3 +34,4 @@
 - [✓] 2026-05-08 16:27 - 32 - Prevent whole-file dumps in context packs
 - [✓] 2026-05-08 16:36 - 33 - Add clear user-facing errors without noisy stack traces
 - [✓] 2026-05-08 16:40 - 34 - Prepare extension points for future OpenCode and Serena support without runtime implementation
+- [✓] 2026-05-08 16:43 - 35 - Final validation checklist for the initial implementation
