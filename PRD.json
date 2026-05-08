@@ -60,7 +60,7 @@
     {
       "title": "12 - Implement initial import and dependency extraction",
       "description": "Implement a simple import map for Python and TypeScript/JavaScript.\n\nPython:\n- `import x`,\n- `from x import y`.\n\nTS/JS:\n- `import ... from '...'`,\n- `import '...'`,\n- optional `require('...')`.\n\nThe goal is not a complete resolver. The goal is an edge map showing that file A depends on module/import B.\n\nOutput `dependency_map.json`:\n- schema marker,\n- generated_at,\n- edges[] with from, to or import_target, type, and resolved_path when it can be safely resolved inside the repository.\n\nAcceptance criteria:\n- import extraction does not crash on unknown imports,\n- relative TS/Python imports attempt to resolve to repository paths,\n- external dependencies are marked external/unresolved,\n- output is valid JSON.\n\nVerification:\n- unit test for Python import,\n- unit test for relative TS import,\n- unit test for external import.",
-      "completed": false
+      "completed": true
     },
     {
       "title": "13 - Implement test discovery and test_map.json",
