@@ -12,6 +12,19 @@ _GENERATED_DIRS = [
     ".vibecode/logs/index_runs",
 ]
 
+# Sentinel embedded in unfilled architecture templates.
+# The indexer checks for this marker to emit a validation warning.
+# Users should remove this line once they have filled in the file.
+TEMPLATE_UNFILLED_MARKER = "<!-- vibecode:unfilled -->"
+
+# Human-maintained architecture files (relative to repo root).
+ARCHITECTURE_FILES = [
+    ".vibecode/architecture/INVARIANTS.md",
+    ".vibecode/architecture/STRUCTURE.md",
+    ".vibecode/architecture/MODULE_BOUNDARIES.md",
+    ".vibecode/architecture/PROTECTED_AREAS.md",
+]
+
 
 def _project_yaml(project_id: str, project_name: str) -> str:
     return (
@@ -50,24 +63,51 @@ def _project_yaml(project_id: str, project_name: str) -> str:
     )
 
 
-def _file_templates(project_id: str, project_name: str) -> dict[str, str]:
+def _file_templates(project_id: str, project_name: str) -> dict[str, str]:  # noqa: ARG001
+    marker = TEMPLATE_UNFILLED_MARKER
     return {
         ".vibecode/project.yaml": _project_yaml(project_id, project_name),
         ".vibecode/architecture/INVARIANTS.md": (
             f"# {project_name} \u2013 Architectural Invariants\n\n"
-            "<!-- Document non-negotiable constraints here. -->\n"
+            f"{marker}\n\n"
+            "> **TODO:** Replace this template with the non-negotiable rules for this\n"
+            "> project. Remove the `<!-- vibecode:unfilled -->` line above when done.\n\n"
+            "## Invariants\n\n"
+            "<!-- Add one rule per bullet. Each rule should be verifiable.\n"
+            "     Example: '- No package may import from a sibling package.' -->\n\n"
+            "- \n"
         ),
         ".vibecode/architecture/STRUCTURE.md": (
             f"# {project_name} \u2013 Repository Structure\n\n"
-            "<!-- Document the top-level directory layout and conventions here. -->\n"
+            f"{marker}\n\n"
+            "> **TODO:** Document the top-level layout and directory conventions.\n"
+            "> Remove the `<!-- vibecode:unfilled -->` line above when done.\n\n"
+            "## Top-Level Directories\n\n"
+            "<!-- Describe each top-level directory and its purpose.\n"
+            "     Example: '- `src/` – Application source code.' -->\n\n"
+            "## Conventions\n\n"
+            "<!-- Describe naming, file-placement, and structural conventions. -->\n"
         ),
         ".vibecode/architecture/MODULE_BOUNDARIES.md": (
             f"# {project_name} \u2013 Module Boundaries\n\n"
-            "<!-- Define module ownership and allowed dependencies here. -->\n"
+            f"{marker}\n\n"
+            "> **TODO:** Define each module's responsibility and the allowed dependency\n"
+            "> directions between them. Remove the `<!-- vibecode:unfilled -->` line above when done.\n\n"
+            "## Modules\n\n"
+            "<!-- List each module/package and its single responsibility.\n"
+            "     Example: '- `auth` – Handles authentication and token management.' -->\n\n"
+            "## Allowed Dependencies\n\n"
+            "<!-- Describe which modules may depend on which others.\n"
+            "     Example: '- `api` may import from `auth` and `db`.' -->\n"
         ),
         ".vibecode/architecture/PROTECTED_AREAS.md": (
             f"# {project_name} \u2013 Protected Areas\n\n"
-            "<!-- List paths that require extra review before modification. -->\n"
+            f"{marker}\n\n"
+            "> **TODO:** List paths that require extra review before modification.\n"
+            "> Remove the `<!-- vibecode:unfilled -->` line above when done.\n\n"
+            "## Protected Paths\n\n"
+            "<!-- List protected paths and the reason each one is sensitive.\n"
+            "     Example: '- `.vibecode/architecture/` – Human-maintained architecture rules.' -->\n"
         ),
         ".vibecode/handoff/NOW.md": (
             "# Now\n\n<!-- What is being worked on right now. -->\n"

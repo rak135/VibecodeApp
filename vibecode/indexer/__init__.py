@@ -120,6 +120,8 @@ def cmd_index(args) -> int:
     write_entrypoints(repo_root, entrypoints_path)
     print(f"  entrypoints written to {entrypoints_path.relative_to(repo_root).as_posix()}", file=sys.stderr)
 
+    _warn_unfilled_architecture_templates(repo_root, run_log)
+
     if run_log:
         ts = datetime.now(tz=timezone.utc).strftime("%Y%m%dT%H%M%SZ")
         log_path = vibecode_dir / "logs" / "index_runs" / f"{ts}.log"
@@ -132,3 +134,14 @@ def cmd_index(args) -> int:
         )
 
     return 0
+
+
+def _warn_unfilled_architecture_templates(repo_root: Path, run_log: list[str]) -> None:
+    from vibecode.project import ARCHITECTURE_FILES, TEMPLATE_UNFILLED_MARKER
+
+    for rel in ARCHITECTURE_FILES:
+        path = repo_root / Path(rel)
+        if path.exists() and TEMPLATE_UNFILLED_MARKER in path.read_text(encoding="utf-8"):
+            msg = f"Warning: {rel} still contains unfilled template content."
+            print(f"  {msg}", file=sys.stderr)
+            run_log.append(msg)

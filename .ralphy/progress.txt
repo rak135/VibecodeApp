@@ -15,3 +15,4 @@
 - [✓] 2026-05-08 13:39 - 13 - Implement test discovery and test_map.json
 - [✓] 2026-05-08 13:43 - 14 - Generate entrypoints.md from configs and heuristics
 - [✓] 2026-05-08 13:50 - 15 - Implement risk and protected-area mapping
+- [✓] 2026-05-08 13:53 - 16 - Create human-maintained architecture templates without destructive overwrite
