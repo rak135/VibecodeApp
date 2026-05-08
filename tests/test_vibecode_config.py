@@ -32,6 +32,17 @@ required_checks:
   - tests
 """
 
+_CHECKS_YAML = """\
+checks:
+  - name: unit tests
+    command: python -m pytest
+    required: true
+
+  - name: optional docs
+    command: python -m markdownlint README.md
+    required: false
+"""
+
 
 def test_project_config_defaults():
     cfg = ProjectConfig(project_id="myapp", project_name="MyApp", root=Path("/tmp/myapp"))
@@ -62,6 +73,33 @@ def test_load_config_valid(tmp_path):
     assert ".vibecode/architecture/**" in cfg.protected_paths
     assert cfg.risk_rules == []
     assert cfg.required_checks == ["lint", "tests"]
+
+
+def test_load_config_prefers_required_checks_yaml(tmp_path):
+    vibecode_dir = tmp_path / ".vibecode"
+    vibecode_dir.mkdir()
+    (vibecode_dir / "project.yaml").write_text(_VALID_YAML, encoding="utf-8")
+    (vibecode_dir / "checks").mkdir()
+    (vibecode_dir / "checks" / "required_checks.yaml").write_text(
+        _CHECKS_YAML,
+        encoding="utf-8",
+    )
+
+    cfg = load_config(vibecode_dir)
+
+    assert cfg.required_checks == ["python -m pytest"]
+    assert cfg.required_check_records == [
+        {
+            "name": "unit tests",
+            "command": "python -m pytest",
+            "required": True,
+        },
+        {
+            "name": "optional docs",
+            "command": "python -m markdownlint README.md",
+            "required": False,
+        },
+    ]
 
 
 def test_load_config_missing_project_id(tmp_path):

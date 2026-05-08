@@ -43,6 +43,25 @@ def test_validate_help_exits_zero():
     assert exc_info.value.code == 0
 
 
+def test_map_reads_generated_repo_tree(tmp_path, capsys):
+    tree = tmp_path / ".vibecode" / "index" / "repo_tree.generated.md"
+    tree.parent.mkdir(parents=True)
+    tree.write_text("# Repository Tree\n\nfrom generated index\n", encoding="utf-8")
+
+    assert main(["map", str(tmp_path)]) == 0
+    captured = capsys.readouterr()
+
+    assert "from generated index" in captured.out
+    assert not (tmp_path / ".vibecode" / "current" / "repo_tree.md").exists()
+
+
+def test_map_without_generated_repo_tree_exits_nonzero(tmp_path, capsys):
+    assert main(["map", str(tmp_path)]) == 1
+    captured = capsys.readouterr()
+
+    assert "Run `vibecode index` first" in captured.err
+
+
 def test_no_command_returns_zero():
     assert main([]) == 0
 

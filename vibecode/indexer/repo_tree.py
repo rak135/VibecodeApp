@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+from datetime import datetime, timezone
 from pathlib import Path, PurePosixPath
 from typing import Iterator
 
@@ -45,7 +46,36 @@ _IMPORTANT_ROLES: frozenset[str] = frozenset({
 # These top-level directory names are generated artifacts and are always hidden.
 _EXCLUDED_TOP_DIRS: frozenset[str] = frozenset({
     "vibecode.egg-info",
+    ".git",
+    ".venv",
+    "venv",
+    "node_modules",
+    "dist",
+    "build",
+    "coverage",
 })
+
+_EXCLUDED_PARTS: frozenset[str] = frozenset({
+    ".git",
+    "node_modules",
+    ".venv",
+    "venv",
+    "__pycache__",
+    "dist",
+    "build",
+    "coverage",
+    ".pytest_cache",
+    ".mypy_cache",
+    ".ruff_cache",
+})
+
+_EXCLUDED_PREFIXES: tuple[str, ...] = (
+    ".vibecode/current/",
+    ".vibecode/runs/",
+    ".vibecode/cache/",
+    ".vibecode/tmp/",
+    ".vibecode/logs/",
+)
 
 
 class _DirNode:
@@ -81,6 +111,8 @@ def _build_tree(records: list[FileRecord]) -> _DirNode:
     """Build an in-memory tree from a flat list of :class:`FileRecord` objects."""
     root = _DirNode("")
     for rec in records:
+        if _is_excluded_from_tree(rec.path):
+            continue
         parts = PurePosixPath(rec.path).parts
         node = root
         for part in parts[:-1]:
@@ -89,6 +121,12 @@ def _build_tree(records: list[FileRecord]) -> _DirNode:
             node = node.dirs[part]
         node.files.append(rec)
     return root
+
+
+def _is_excluded_from_tree(path: str) -> bool:
+    if any(path.startswith(prefix) for prefix in _EXCLUDED_PREFIXES):
+        return True
+    return any(part in _EXCLUDED_PARTS for part in PurePosixPath(path).parts[:-1])
 
 
 def _render_children(
@@ -157,6 +195,8 @@ def render_repo_tree(
     records: list[FileRecord],
     *,
     max_depth: int = 3,
+    generated_at: datetime | None = None,
+    git_commit: str | None = None,
 ) -> str:
     """Return a Markdown string representing a compact repository tree.
 
@@ -170,10 +210,17 @@ def render_repo_tree(
     """
     tree = _build_tree(records)
 
+    if generated_at is None:
+        generated_at = datetime.now(tz=timezone.utc)
+
     lines: list[str] = [
-        "# Repo tree",
+        "# Repository Tree",
         "",
-        f"Root: `{root.name}`",
+        f"Generated: `{generated_at.isoformat()}`",
+        f"Repo root: `{root.as_posix()}`",
+        f"Git commit: `{git_commit or 'unknown'}`",
+        "",
+        "## Tree",
         "",
         f"{root.name}/",
     ]
@@ -190,8 +237,16 @@ def write_repo_tree(
     output_path: Path,
     *,
     max_depth: int = 3,
+    generated_at: datetime | None = None,
+    git_commit: str | None = None,
 ) -> None:
     """Render and write ``repo_tree.md`` to *output_path*, creating parents as needed."""
     output_path.parent.mkdir(parents=True, exist_ok=True)
-    content = render_repo_tree(root, records, max_depth=max_depth)
+    content = render_repo_tree(
+        root,
+        records,
+        max_depth=max_depth,
+        generated_at=generated_at,
+        git_commit=git_commit,
+    )
     output_path.write_text(content, encoding="utf-8")

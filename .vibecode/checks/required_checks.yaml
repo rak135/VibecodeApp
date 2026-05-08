@@ -1,0 +1,20 @@
+# vibecode required checks
+# schema: vibecode/required-checks/v1
+
+checks:
+  - name: unit tests
+    command: python -m pytest
+    required: true
+
+  - name: cli help
+    command: python -m vibecode.cli --help
+    required: true
+
+  - name: index command help
+    command: python -m vibecode.cli index --help
+    required: true
+
+  - name: context command help
+    command: python -m vibecode.cli context --help
+    required: true
+

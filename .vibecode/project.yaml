@@ -8,16 +8,57 @@ project:
 
 indexing:
   include:
-    - "**/*.py"
-    - "**/*.md"
-    - "**/*.yaml"
-    - "**/*.json"
+    - "*.py"
+    - "*.js"
+    - "*.jsx"
+    - "*.ts"
+    - "*.tsx"
+    - "*.json"
+    - "*.toml"
+    - "*.yaml"
+    - "*.yml"
+    - "*.md"
+    - "*.mdx"
+    - "*.ini"
+    - "*.cfg"
+    - "*.env.example"
+    - "Dockerfile"
+    - "docker-compose.yml"
+    - "Makefile"
+    - "README*"
+    - "AGENTS.md"
+    - "package.json"
+    - "package-lock.json"
+    - "pnpm-lock.yaml"
+    - "yarn.lock"
+    - "bun.lockb"
+    - "pyproject.toml"
+    - "requirements*.txt"
+    - "setup.cfg"
+    - "setup.py"
+    - "tsconfig*.json"
+    - "vite.config.*"
+    - "next.config.*"
+    - "tailwind.config.*"
+    - "postcss.config.*"
+    - "eslint.config.*"
+    - "prettier.config.*"
   exclude:
     - ".git/**"
+    - "node_modules/**"
+    - ".venv/**"
+    - "venv/**"
     - "__pycache__/**"
-    - "*.pyc"
-    - ".vibecode/index/**"
+    - "dist/**"
+    - "build/**"
+    - "coverage/**"
+    - ".pytest_cache/**"
+    - ".mypy_cache/**"
+    - ".ruff_cache/**"
     - ".vibecode/current/**"
+    - ".vibecode/runs/**"
+    - ".vibecode/tmp/**"
+    - ".vibecode/cache/**"
     - ".vibecode/logs/**"
 
 protected_paths:
@@ -26,7 +67,3 @@ protected_paths:
   - ".vibecode/history/**"
 
 risk_rules: []
-
-required_checks:
-  - lint
-  - tests

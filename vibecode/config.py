@@ -19,6 +19,7 @@ class ProjectConfig:
     protected_paths: List[str] = field(default_factory=list)
     risk_rules: List[str] = field(default_factory=list)
     required_checks: List[str] = field(default_factory=list)
+    required_check_records: List[dict] = field(default_factory=list)
 
 
 def load_config(vibecode_dir: Path) -> ProjectConfig:
@@ -59,6 +60,11 @@ def load_config(vibecode_dir: Path) -> ProjectConfig:
         raise FileNotFoundError(f"project root does not exist: {root_path}")
 
     indexing = raw.get("indexing") or {}
+    check_records = _load_required_check_records(vibecode_dir)
+    legacy_checks = _legacy_required_checks(raw.get("required_checks") or [])
+    required_checks = [str(check["command"]) for check in check_records if check.get("required")]
+    if not required_checks:
+        required_checks = legacy_checks
     return ProjectConfig(
         project_id=str(project_id),
         project_name=project_name,
@@ -67,5 +73,48 @@ def load_config(vibecode_dir: Path) -> ProjectConfig:
         exclude=list(indexing.get("exclude") or []),
         protected_paths=list(raw.get("protected_paths") or []),
         risk_rules=list(raw.get("risk_rules") or []),
-        required_checks=list(raw.get("required_checks") or []),
+        required_checks=required_checks,
+        required_check_records=check_records,
     )
+
+
+def _legacy_required_checks(raw_checks: list) -> list[str]:
+    checks: list[str] = []
+    for item in raw_checks:
+        if isinstance(item, str):
+            checks.append(item)
+        elif isinstance(item, dict) and item.get("command"):
+            checks.append(str(item["command"]))
+    return checks
+
+
+def _load_required_check_records(vibecode_dir: Path) -> list[dict]:
+    path = vibecode_dir / "checks" / "required_checks.yaml"
+    if not path.exists():
+        return []
+    try:
+        raw = yaml.safe_load(path.read_text(encoding="utf-8"))
+    except yaml.YAMLError as exc:
+        raise ValueError(f"required_checks.yaml is not valid YAML: {exc}") from exc
+    if raw is None:
+        return []
+    if not isinstance(raw, dict):
+        raise ValueError("required_checks.yaml must be a YAML mapping at the top level")
+    records = raw.get("checks") or []
+    if not isinstance(records, list):
+        raise ValueError("required_checks.yaml: 'checks' must be a list")
+
+    normalized: list[dict] = []
+    for index, record in enumerate(records, start=1):
+        if not isinstance(record, dict):
+            raise ValueError(f"required_checks.yaml: check #{index} must be a mapping")
+        name = record.get("name")
+        command = record.get("command")
+        if not name or not command:
+            raise ValueError(f"required_checks.yaml: check #{index} requires name and command")
+        normalized.append({
+            "name": str(name),
+            "command": str(command),
+            "required": bool(record.get("required", True)),
+        })
+    return normalized

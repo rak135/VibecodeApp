@@ -10,6 +10,7 @@ _GENERATED_DIRS = [
     ".vibecode/index",
     ".vibecode/current",
     ".vibecode/logs/index_runs",
+    ".vibecode/checks",
 ]
 
 # Sentinel embedded in unfilled architecture templates.
@@ -19,14 +20,75 @@ TEMPLATE_UNFILLED_MARKER = "<!-- vibecode:unfilled -->"
 
 # Human-maintained architecture files (relative to repo root).
 ARCHITECTURE_FILES = [
+    ".vibecode/architecture/OVERVIEW.md",
     ".vibecode/architecture/INVARIANTS.md",
     ".vibecode/architecture/STRUCTURE.md",
     ".vibecode/architecture/MODULE_BOUNDARIES.md",
     ".vibecode/architecture/PROTECTED_AREAS.md",
+    ".vibecode/architecture/DATA_FLOW.md",
+]
+
+DEFAULT_INCLUDE_PATTERNS = [
+    "*.py",
+    "*.js",
+    "*.jsx",
+    "*.ts",
+    "*.tsx",
+    "*.json",
+    "*.toml",
+    "*.yaml",
+    "*.yml",
+    "*.md",
+    "*.mdx",
+    "*.ini",
+    "*.cfg",
+    "*.env.example",
+    "Dockerfile",
+    "docker-compose.yml",
+    "Makefile",
+    "README*",
+    "AGENTS.md",
+    "package.json",
+    "package-lock.json",
+    "pnpm-lock.yaml",
+    "yarn.lock",
+    "bun.lockb",
+    "pyproject.toml",
+    "requirements*.txt",
+    "setup.cfg",
+    "setup.py",
+    "tsconfig*.json",
+    "vite.config.*",
+    "next.config.*",
+    "tailwind.config.*",
+    "postcss.config.*",
+    "eslint.config.*",
+    "prettier.config.*",
+]
+
+DEFAULT_EXCLUDE_PATTERNS = [
+    ".git/**",
+    "node_modules/**",
+    ".venv/**",
+    "venv/**",
+    "__pycache__/**",
+    "dist/**",
+    "build/**",
+    "coverage/**",
+    ".pytest_cache/**",
+    ".mypy_cache/**",
+    ".ruff_cache/**",
+    ".vibecode/current/**",
+    ".vibecode/runs/**",
+    ".vibecode/tmp/**",
+    ".vibecode/cache/**",
+    ".vibecode/logs/**",
 ]
 
 
 def _project_yaml(project_id: str, project_name: str) -> str:
+    include = "\n".join(f'    - "{pattern}"' for pattern in DEFAULT_INCLUDE_PATTERNS)
+    exclude = "\n".join(f'    - "{pattern}"' for pattern in DEFAULT_EXCLUDE_PATTERNS)
     return (
         "# vibecode project configuration\n"
         "# schema: vibecode/project/v1\n"
@@ -38,17 +100,9 @@ def _project_yaml(project_id: str, project_name: str) -> str:
         "\n"
         "indexing:\n"
         "  include:\n"
-        '    - "**/*.py"\n'
-        '    - "**/*.md"\n'
-        '    - "**/*.yaml"\n'
-        '    - "**/*.json"\n'
+        f"{include}\n"
         "  exclude:\n"
-        '    - ".git/**"\n'
-        '    - "__pycache__/**"\n'
-        '    - "*.pyc"\n'
-        '    - ".vibecode/index/**"\n'
-        '    - ".vibecode/current/**"\n'
-        '    - ".vibecode/logs/**"\n'
+        f"{exclude}\n"
         "\n"
         "protected_paths:\n"
         '  - ".vibecode/architecture/**"\n'
@@ -56,10 +110,30 @@ def _project_yaml(project_id: str, project_name: str) -> str:
         '  - ".vibecode/history/**"\n'
         "\n"
         "risk_rules: []\n"
+    )
+
+
+def _required_checks_yaml() -> str:
+    return (
+        "# vibecode required checks\n"
+        "# schema: vibecode/required-checks/v1\n"
         "\n"
-        "required_checks:\n"
-        "  - lint\n"
-        "  - tests\n"
+        "checks:\n"
+        "  - name: unit tests\n"
+        "    command: python -m pytest\n"
+        "    required: true\n"
+        "\n"
+        "  - name: cli help\n"
+        "    command: python -m vibecode.cli --help\n"
+        "    required: true\n"
+        "\n"
+        "  - name: index command help\n"
+        "    command: python -m vibecode.cli index --help\n"
+        "    required: true\n"
+        "\n"
+        "  - name: context command help\n"
+        "    command: python -m vibecode.cli context --help\n"
+        "    required: true\n"
     )
 
 
@@ -67,6 +141,15 @@ def _file_templates(project_id: str, project_name: str) -> dict[str, str]:  # no
     marker = TEMPLATE_UNFILLED_MARKER
     return {
         ".vibecode/project.yaml": _project_yaml(project_id, project_name),
+        ".vibecode/checks/required_checks.yaml": _required_checks_yaml(),
+        ".vibecode/architecture/OVERVIEW.md": (
+            f"# {project_name} Architecture Overview\n\n"
+            f"{marker}\n\n"
+            "> **TODO:** Replace this template with project-specific architecture facts.\n"
+            "> Remove the unfilled marker when the overview contains project-specific facts.\n\n"
+            "## Control layer role\n\n"
+            "- Define what this project is and what Vibecode controls.\n"
+        ),
         ".vibecode/architecture/INVARIANTS.md": (
             f"# {project_name} \u2013 Architectural Invariants\n\n"
             f"{marker}\n\n"
@@ -103,11 +186,19 @@ def _file_templates(project_id: str, project_name: str) -> dict[str, str]:  # no
         ".vibecode/architecture/PROTECTED_AREAS.md": (
             f"# {project_name} \u2013 Protected Areas\n\n"
             f"{marker}\n\n"
-            "> **TODO:** List paths that require extra review before modification.\n"
-            "> Remove the `<!-- vibecode:unfilled -->` line above when done.\n\n"
+            "> **TODO:** List concrete files and directories that require extra review\n"
+            "> before modification. Remove the `<!-- vibecode:unfilled -->` line above when done.\n\n"
             "## Protected Paths\n\n"
-            "<!-- List protected paths and the reason each one is sensitive.\n"
-            "     Example: '- `.vibecode/architecture/` – Human-maintained architecture rules.' -->\n"
+            "<!-- Add project-specific protected paths and why each one is sensitive. -->\n"
+        ),
+        ".vibecode/architecture/DATA_FLOW.md": (
+            f"# {project_name} \u2013 Data Flow\n\n"
+            f"{marker}\n\n"
+            "> **TODO:** Document how data moves between source code, generated indexes,\n"
+            "> context packs, and runtime state.\n"
+            "> Remove the `<!-- vibecode:unfilled -->` line above when done.\n\n"
+            "## Flows\n\n"
+            "<!-- List concrete flows. Example: 'index reads source files and writes generated indexes.' -->\n"
         ),
         ".vibecode/handoff/NOW.md": (
             "# Now\n\n<!-- What is being worked on right now. -->\n"
@@ -165,34 +256,16 @@ def cmd_map(args) -> int:
     repo_root = Path(args.repo_root).resolve()
     print(f"Repository map for {repo_root}", file=sys.stderr)
 
-    include: list[str] = []
-    exclude: list[str] = []
     vibecode_dir = repo_root / ".vibecode"
+    output_path = vibecode_dir / "index" / "repo_tree.generated.md"
 
-    if (vibecode_dir / "project.yaml").exists():
-        try:
-            from vibecode.config import load_config
-
-            cfg = load_config(vibecode_dir)
-            include = cfg.include
-            exclude = cfg.exclude
-        except Exception as exc:  # noqa: BLE001
-            print(f"Warning: could not load project.yaml: {exc}", file=sys.stderr)
-
-    from vibecode.indexer import scan
-    from vibecode.indexer.classifier import classify
-    from vibecode.indexer.repo_tree import write_repo_tree
-
-    files = scan(repo_root, include=include, exclude=exclude)
-    records = [classify(f.path, f.size) for f in files]
-
-    output_path = vibecode_dir / "current" / "repo_tree.md"
-    write_repo_tree(repo_root, records, output_path)
+    if not output_path.exists():
+        print(
+            "No generated repo tree found. Run `vibecode index` first.",
+            file=sys.stderr,
+        )
+        return 1
 
     tree_content = output_path.read_text(encoding="utf-8")
     print(tree_content)
-    print(
-        f"  repo_tree.md written to {output_path.relative_to(repo_root).as_posix()}",
-        file=sys.stderr,
-    )
     return 0

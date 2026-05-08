@@ -35,10 +35,13 @@ _GENERATED_PREFIXES = (
 
 _HUMAN_MAINTAINED = (
     ".vibecode/project.yaml",
+    ".vibecode/architecture/OVERVIEW.md",
     ".vibecode/architecture/INVARIANTS.md",
     ".vibecode/architecture/STRUCTURE.md",
     ".vibecode/architecture/MODULE_BOUNDARIES.md",
     ".vibecode/architecture/PROTECTED_AREAS.md",
+    ".vibecode/architecture/DATA_FLOW.md",
+    ".vibecode/checks/required_checks.yaml",
     ".vibecode/handoff/NOW.md",
     ".vibecode/handoff/NEXT.md",
     ".vibecode/handoff/BLOCKERS.md",

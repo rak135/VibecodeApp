@@ -1,0 +1,25 @@
+{
+  "$schema": "vibecode/index-policy/v1",
+  "committed": [
+    ".vibecode/index/README.md",
+    ".vibecode/index/schema.json"
+  ],
+  "generated_patterns": [
+    ".vibecode/index/*.generated.*",
+    ".vibecode/index/*.cache.*",
+    ".vibecode/index/*.tmp.*"
+  ],
+  "legacy_generated_outputs": [
+    ".vibecode/index/file_inventory.json",
+    ".vibecode/index/repo_tree.md",
+    ".vibecode/index/repo_tree.generated.md",
+    ".vibecode/index/symbol_map.json",
+    ".vibecode/index/test_map.json",
+    ".vibecode/index/entrypoints.md",
+    ".vibecode/index/dependency_map.json",
+    ".vibecode/index/dependency_graph.json",
+    ".vibecode/index/risky_files.md"
+  ],
+  "rule": "Generated indexes are derived artifacts and must not be treated as canonical project truth."
+}
+

@@ -5,6 +5,7 @@ from __future__ import annotations
 from pathlib import Path
 
 from vibecode.cli import main
+from vibecode.config import load_config
 
 
 def test_init_creates_all_required_paths(tmp_path):
@@ -15,13 +16,17 @@ def test_init_creates_all_required_paths(tmp_path):
     assert (tmp_path / ".vibecode" / "index").is_dir()
     assert (tmp_path / ".vibecode" / "current").is_dir()
     assert (tmp_path / ".vibecode" / "logs" / "index_runs").is_dir()
+    assert (tmp_path / ".vibecode" / "checks").is_dir()
 
     # Human-maintained files
     assert (tmp_path / ".vibecode" / "project.yaml").is_file()
+    assert (tmp_path / ".vibecode" / "checks" / "required_checks.yaml").is_file()
+    assert (tmp_path / ".vibecode" / "architecture" / "OVERVIEW.md").is_file()
     assert (tmp_path / ".vibecode" / "architecture" / "INVARIANTS.md").is_file()
     assert (tmp_path / ".vibecode" / "architecture" / "STRUCTURE.md").is_file()
     assert (tmp_path / ".vibecode" / "architecture" / "MODULE_BOUNDARIES.md").is_file()
     assert (tmp_path / ".vibecode" / "architecture" / "PROTECTED_AREAS.md").is_file()
+    assert (tmp_path / ".vibecode" / "architecture" / "DATA_FLOW.md").is_file()
     assert (tmp_path / ".vibecode" / "handoff" / "NOW.md").is_file()
     assert (tmp_path / ".vibecode" / "handoff" / "NEXT.md").is_file()
     assert (tmp_path / ".vibecode" / "handoff" / "BLOCKERS.md").is_file()
@@ -40,7 +45,74 @@ def test_init_project_yaml_contains_required_fields(tmp_path):
     assert "exclude:" in content
     assert "protected_paths:" in content
     assert "risk_rules:" in content
-    assert "required_checks:" in content
+    assert "required_checks:" not in content
+    checks = (tmp_path / ".vibecode" / "checks" / "required_checks.yaml").read_text(
+        encoding="utf-8"
+    )
+    assert "command: python -m pytest" in checks
+    assert "command: python -m vibecode.cli --help" in checks
+
+
+def test_init_project_yaml_default_indexing_covers_python_js_ts_and_config(tmp_path):
+    main(["init", str(tmp_path), "--id", "myapp", "--name", "My App"])
+
+    cfg = load_config(tmp_path / ".vibecode")
+
+    assert cfg.include == [
+        "*.py",
+        "*.js",
+        "*.jsx",
+        "*.ts",
+        "*.tsx",
+        "*.json",
+        "*.toml",
+        "*.yaml",
+        "*.yml",
+        "*.md",
+        "*.mdx",
+        "*.ini",
+        "*.cfg",
+        "*.env.example",
+        "Dockerfile",
+        "docker-compose.yml",
+        "Makefile",
+        "README*",
+        "AGENTS.md",
+        "package.json",
+        "package-lock.json",
+        "pnpm-lock.yaml",
+        "yarn.lock",
+        "bun.lockb",
+        "pyproject.toml",
+        "requirements*.txt",
+        "setup.cfg",
+        "setup.py",
+        "tsconfig*.json",
+        "vite.config.*",
+        "next.config.*",
+        "tailwind.config.*",
+        "postcss.config.*",
+        "eslint.config.*",
+        "prettier.config.*",
+    ]
+    assert cfg.exclude == [
+        ".git/**",
+        "node_modules/**",
+        ".venv/**",
+        "venv/**",
+        "__pycache__/**",
+        "dist/**",
+        "build/**",
+        "coverage/**",
+        ".pytest_cache/**",
+        ".mypy_cache/**",
+        ".ruff_cache/**",
+        ".vibecode/current/**",
+        ".vibecode/runs/**",
+        ".vibecode/tmp/**",
+        ".vibecode/cache/**",
+        ".vibecode/logs/**",
+    ]
 
 
 def test_init_idempotent_does_not_overwrite_human_files(tmp_path):
@@ -60,10 +132,13 @@ def test_init_idempotent_preserves_all_human_files(tmp_path):
 
     human_files = [
         ".vibecode/project.yaml",
+        ".vibecode/checks/required_checks.yaml",
+        ".vibecode/architecture/OVERVIEW.md",
         ".vibecode/architecture/INVARIANTS.md",
         ".vibecode/architecture/STRUCTURE.md",
         ".vibecode/architecture/MODULE_BOUNDARIES.md",
         ".vibecode/architecture/PROTECTED_AREAS.md",
+        ".vibecode/architecture/DATA_FLOW.md",
         ".vibecode/handoff/NOW.md",
         ".vibecode/handoff/NEXT.md",
         ".vibecode/handoff/BLOCKERS.md",

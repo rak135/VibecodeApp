@@ -85,34 +85,40 @@ python -m pytest -p no:cacheprovider
 Initialize a target repository:
 
 ```powershell
-python -m vibecode.cli init C:\DATA\PROJECTS\STOCKS --id stocks --name STOCKS
+python -m vibecode.cli init C:\path\to\example-repo --id example_repo --name ExampleRepo
 ```
 
 Index a repository:
 
 ```powershell
-python -m vibecode.cli index C:\DATA\PROJECTS\STOCKS
+python -m vibecode.cli index C:\path\to\example-repo
 ```
 
 Validate Vibecode artifacts:
 
 ```powershell
-python -m vibecode.cli validate C:\DATA\PROJECTS\STOCKS
+python -m vibecode.cli validate C:\path\to\example-repo
 ```
 
 Print a compact repository map:
 
 ```powershell
-python -m vibecode.cli map C:\DATA\PROJECTS\STOCKS
+python -m vibecode.cli map C:\path\to\example-repo
 ```
 
 Run the current context command:
 
 ```powershell
-python -m vibecode.cli context "Fix Tax Years UI copy" --repo C:\DATA\PROJECTS\STOCKS
+python -m vibecode.cli context "Update context panel copy" --repo C:\path\to\example-repo
 ```
 
-Important: `context` is still a stub until the relevant-file scorer and context-pack renderer are implemented. It does not yet write `.vibecode/current/context_pack.md`.
+The PRD-style form is also supported:
+
+```powershell
+python -m vibecode.cli context C:\path\to\example-repo --task "Update context panel copy"
+```
+
+`context` writes `.vibecode/current/context_pack.md`, a derived runtime artifact for the current task.
 
 Generated files live under `.vibecode/index/`, `.vibecode/current/`, and `.vibecode/logs/`. Human-maintained project rules live under `.vibecode/project.yaml`, `.vibecode/architecture/`, `.vibecode/handoff/`, and `.vibecode/history/`.
 
@@ -160,4 +166,3 @@ No license file is currently present in this repository.
 - README structure inspired by [othneildrew/Best-README-Template](https://github.com/othneildrew/Best-README-Template).
 
 <p align="right">(<a href="#readme-top">back to top</a>)</p>
-

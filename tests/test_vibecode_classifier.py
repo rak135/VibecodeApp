@@ -148,7 +148,7 @@ class TestGuessRole:
     # -- backend engine ------------------------------------------------------
 
     def test_engine_path(self):
-        assert guess_role("stock_tax_app/engine/calculator.py") == "backend_engine"
+        assert guess_role("sample_app/engine/calculator.py") == "backend_engine"
 
     def test_engine_nested(self):
         assert guess_role("app/engine/rules/validator.py") == "backend_engine"
@@ -249,9 +249,9 @@ class TestComputeRiskLevel:
 
 class TestClassify:
     def test_python_source_file(self):
-        rec = classify("stock_tax_app/engine/calculator.py", 1024)
+        rec = classify("sample_app/engine/calculator.py", 1024)
         assert isinstance(rec, FileRecord)
-        assert rec.path == "stock_tax_app/engine/calculator.py"
+        assert rec.path == "sample_app/engine/calculator.py"
         assert rec.language == "python"
         assert rec.size_bytes == 1024
         assert rec.role_guess == "backend_engine"

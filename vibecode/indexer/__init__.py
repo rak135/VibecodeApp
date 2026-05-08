@@ -4,6 +4,7 @@ from __future__ import annotations
 
 import sys
 import json
+import subprocess
 from datetime import datetime, timezone
 from pathlib import Path
 
@@ -128,6 +129,16 @@ def cmd_index(args) -> int:
     write_entrypoints(repo_root, entrypoints_path)
     print(f"  entrypoints written to {entrypoints_path.relative_to(repo_root).as_posix()}", file=sys.stderr)
 
+    repo_tree_path = vibecode_dir / "index" / "repo_tree.generated.md"
+    write_repo_tree(
+        repo_root,
+        records,
+        repo_tree_path,
+        generated_at=started_at,
+        git_commit=_git_commit(repo_root),
+    )
+    print(f"  repo tree written to {repo_tree_path.relative_to(repo_root).as_posix()}", file=sys.stderr)
+
     _warn_unfilled_architecture_templates(repo_root, run_log)
 
     timestamp = started_at.strftime("%Y%m%dT%H%M%S%fZ")
@@ -238,3 +249,20 @@ def _print_validation_summary(report: dict) -> None:
         f" {summary.get('errors', 0)} ERROR",
         file=sys.stderr,
     )
+
+
+def _git_commit(repo_root: Path) -> str:
+    try:
+        result = subprocess.run(
+            ["git", "rev-parse", "--short", "HEAD"],
+            cwd=repo_root,
+            capture_output=True,
+            text=True,
+            timeout=5,
+            check=False,
+        )
+    except (OSError, subprocess.SubprocessError):
+        return "unknown"
+    if result.returncode != 0:
+        return "unknown"
+    return result.stdout.strip() or "unknown"

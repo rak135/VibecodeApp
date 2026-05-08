@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+from datetime import datetime, timezone
 from pathlib import Path
 
 import pytest
@@ -37,6 +38,9 @@ def _make_fixture_records() -> list[FileRecord]:
     ]
 
 
+_FIXED_TIME = datetime(2026, 5, 8, 12, 0, tzinfo=timezone.utc)
+
+
 # ---------------------------------------------------------------------------
 # render_repo_tree
 # ---------------------------------------------------------------------------
@@ -45,12 +49,19 @@ def _make_fixture_records() -> list[FileRecord]:
 class TestRenderRepoTree:
     def test_heading_present(self, tmp_path):
         output = render_repo_tree(tmp_path, [])
-        assert output.startswith("# Repo tree")
+        assert output.startswith("# Repository Tree")
 
     def test_root_name_in_output(self, tmp_path):
         records = _make_fixture_records()
         output = render_repo_tree(tmp_path, records)
         assert tmp_path.name in output
+
+    def test_generated_metadata_present(self, tmp_path):
+        output = render_repo_tree(tmp_path, [])
+        assert "Generated:" in output
+        assert "Repo root:" in output
+        assert "Git commit:" in output
+        assert "## Tree" in output
 
     def test_high_risk_files_marked(self, tmp_path):
         records = _make_fixture_records()
@@ -121,6 +132,34 @@ class TestRenderRepoTree:
         output = render_repo_tree(tmp_path, records)
         assert "vibecode.egg-info" not in output
 
+    def test_excluded_runtime_and_cache_dirs_hidden(self, tmp_path):
+        records = [
+            _rec("__pycache__/module.pyc"),
+            _rec("node_modules/pkg/index.js"),
+            _rec(".venv/lib/site.py"),
+            _rec("dist/bundle.js"),
+            _rec("build/out.js"),
+            _rec(".git/config"),
+            _rec(".vibecode/current/context_pack.md"),
+            _rec(".vibecode/cache/state.json"),
+            _rec("src/main.py"),
+        ]
+        output = render_repo_tree(tmp_path, records)
+
+        forbidden = [
+            "__pycache__",
+            "node_modules",
+            ".venv",
+            "dist",
+            "build",
+            ".git",
+            ".vibecode/current",
+            ".vibecode/cache",
+        ]
+        for text in forbidden:
+            assert text not in output
+        assert "src/" in output
+
     def test_tree_connectors_present(self, tmp_path):
         records = _make_fixture_records()
         output = render_repo_tree(tmp_path, records)
@@ -137,7 +176,7 @@ class TestRenderRepoTree:
 
     def test_empty_records_produces_valid_output(self, tmp_path):
         output = render_repo_tree(tmp_path, [])
-        assert "# Repo tree" in output
+        assert "# Repository Tree" in output
         assert tmp_path.name in output
 
     def test_max_depth_limits_expansion(self, tmp_path):
@@ -211,7 +250,7 @@ class TestRenderRepoTree:
 
 class TestWriteRepoTree:
     def test_creates_file(self, tmp_path):
-        out = tmp_path / ".vibecode" / "current" / "repo_tree.md"
+        out = tmp_path / ".vibecode" / "index" / "repo_tree.generated.md"
         write_repo_tree(tmp_path, _make_fixture_records(), out)
         assert out.exists()
 
@@ -223,8 +262,8 @@ class TestWriteRepoTree:
     def test_file_content_matches_render(self, tmp_path):
         out = tmp_path / "repo_tree.md"
         records = _make_fixture_records()
-        write_repo_tree(tmp_path, records, out)
-        expected = render_repo_tree(tmp_path, records)
+        write_repo_tree(tmp_path, records, out, generated_at=_FIXED_TIME, git_commit="abc123")
+        expected = render_repo_tree(tmp_path, records, generated_at=_FIXED_TIME, git_commit="abc123")
         assert out.read_text(encoding="utf-8") == expected
 
     def test_repeated_write_overwrites(self, tmp_path):
@@ -243,7 +282,7 @@ class TestWriteRepoTree:
         human.write_text("# Custom\n", encoding="utf-8")
         mtime = human.stat().st_mtime
 
-        out = tmp_path / ".vibecode" / "current" / "repo_tree.md"
+        out = tmp_path / ".vibecode" / "index" / "repo_tree.generated.md"
         write_repo_tree(tmp_path, _make_fixture_records(), out)
 
         assert human.stat().st_mtime == mtime

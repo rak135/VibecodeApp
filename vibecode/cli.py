@@ -42,10 +42,16 @@ def create_parser() -> argparse.ArgumentParser:
 
     # context
     context_parser = subparsers.add_parser("context", help="Generate a context pack for a task.")
-    context_parser.add_argument("task", nargs="?", default=None, help="Task description.")
+    context_parser.add_argument(
+        "context_arg",
+        nargs="?",
+        default=None,
+        help="Task description, or repository root when --task is used.",
+    )
+    context_parser.add_argument("--task", dest="task_option", default=None, help="Task description.")
     context_parser.add_argument(
         "--repo",
-        default=".",
+        default=None,
         help="Repository root directory (default: current directory).",
     )
 
