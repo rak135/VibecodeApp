@@ -10,3 +10,4 @@
 - [✓] 2026-05-08 13:19 - 08 - Generate compact .vibecode/index/repo_tree.md
 - [✓] 2026-05-08 13:21 - 09 - Implement Python symbol extraction through ast
 - [✓] 2026-05-08 13:24 - 10 - Implement heuristic TypeScript and TSX symbol extraction
+- [✓] 2026-05-08 13:28 - 11 - Generate .vibecode/index/symbol_map.json

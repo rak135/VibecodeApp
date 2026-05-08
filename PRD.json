@@ -55,7 +55,7 @@
     {
       "title": "11 - Generate .vibecode/index/symbol_map.json",
       "description": "Combine the Python and TypeScript/TSX extractors into `symbol_map.json`.\n\nFormat:\n- schema marker,\n- generated_at,\n- files[] with path, language, and symbols[].\n\nAcceptance criteria:\n- output is valid JSON,\n- Python symbols are available,\n- TS/TSX symbols are available at least heuristically,\n- files without symbols are either omitted or included with an empty list according to a documented strategy,\n- parsing errors are logged into the index run log instead of being hidden.\n\nVerification:\n- `python -m json.tool .vibecode/index/symbol_map.json` succeeds,\n- a fixture test includes Python and TSX files and both appear in the output.",
-      "completed": false
+      "completed": true
     },
     {
       "title": "12 - Implement initial import and dependency extraction",

@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import sys
+from datetime import datetime, timezone
 from pathlib import Path
 
 from vibecode.indexer.classifier import FileRecord, classify
@@ -15,6 +16,7 @@ from vibecode.indexer.scanner import (
 )
 
 from vibecode.indexer.repo_tree import render_repo_tree, write_repo_tree
+from vibecode.indexer.symbol_map import build_symbol_map, write_symbol_map
 
 __all__ = [
     "scan",
@@ -27,6 +29,8 @@ __all__ = [
     "write_inventory",
     "render_repo_tree",
     "write_repo_tree",
+    "build_symbol_map",
+    "write_symbol_map",
 ]
 
 
@@ -58,4 +62,21 @@ def cmd_index(args) -> int:
     write_inventory(project_id, repo_root, files, inventory_path)
     print(f"  {len(files)} file(s) indexed", file=sys.stderr)
     print(f"  inventory written to {inventory_path.relative_to(repo_root).as_posix()}", file=sys.stderr)
+
+    run_log: list[str] = []
+    symbol_map_path = vibecode_dir / "index" / "symbol_map.json"
+    write_symbol_map(repo_root, files, symbol_map_path, run_log=run_log)
+    print(f"  symbol map written to {symbol_map_path.relative_to(repo_root).as_posix()}", file=sys.stderr)
+
+    if run_log:
+        ts = datetime.now(tz=timezone.utc).strftime("%Y%m%dT%H%M%SZ")
+        log_path = vibecode_dir / "logs" / "index_runs" / f"{ts}.log"
+        log_path.parent.mkdir(parents=True, exist_ok=True)
+        log_path.write_text("\n".join(run_log) + "\n", encoding="utf-8")
+        print(
+            f"  {len(run_log)} warning(s) logged to"
+            f" {log_path.relative_to(repo_root).as_posix()}",
+            file=sys.stderr,
+        )
+
     return 0

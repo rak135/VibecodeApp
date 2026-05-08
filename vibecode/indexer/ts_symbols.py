@@ -7,6 +7,7 @@ symbols from ``.ts``, ``.tsx``, ``.js``, and ``.jsx`` files.
 from __future__ import annotations
 
 import re
+import warnings
 from pathlib import Path
 
 from .symbols import Symbol
@@ -52,7 +53,8 @@ def extract_ts_symbols(path: str | Path) -> list[Symbol]:
 
     try:
         source = p.read_text(encoding="utf-8", errors="replace")
-    except OSError:
+    except OSError as exc:
+        warnings.warn(f"Skipping {posix}: cannot read file: {exc}", UserWarning, stacklevel=2)
         return []
 
     posix = p.as_posix()
