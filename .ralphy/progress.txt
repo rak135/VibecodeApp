@@ -1,2 +1,3 @@
 # Ralphy Progress Log
 
+- [✓] 2026-05-08 12:52 - 01 - Lock the implementation scope and non-goals

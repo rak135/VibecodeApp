@@ -5,7 +5,7 @@
     {
       "title": "01 - Lock the implementation scope and non-goals",
       "description": "Create a clear implementation boundary document for the initial architecture-map scope.\n\nScope:\n- implement only the Vibecode architecture map and context engine,\n- do not implement a custom coding agent,\n- do not implement a GUI,\n- do not implement an MCP server,\n- do not implement an OpenCode run adapter,\n- do not implement auto-commit or auto-approve behavior.\n\nRequired artifacts:\n- docs/PRD_VIBECODE_ARCHITECTURE_MAP.md or a similarly named document,\n- a short Non-goals section in the README or developer documentation if a README already exists.\n\nAcceptance criteria:\n- the document clearly says this initial scope ends at indexing, mapping, context-pack generation, and OpenCode prompt export,\n- the document warns that agent runtime work comes only after the map is working,\n- no code in this phase launches OpenCode or any other agent.\n\nVerification:\n- the document contains these sections: Scope, Non-goals, Generated vs human-maintained files, Acceptance criteria.",
-      "completed": false
+      "completed": true
     },
     {
       "title": "02 - Create the base Python package skeleton for the vibecode CLI",
