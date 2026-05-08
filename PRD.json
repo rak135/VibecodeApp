@@ -120,7 +120,7 @@
     {
       "title": "24 - Implement map/inspect CLI output for quick project review",
       "description": "Implement `vibecode map <repo_root>` or `vibecode inspect <repo_root>`.\n\nConsole output:\n- Project id/name/root,\n- detected languages,\n- file count,\n- symbol count,\n- test count,\n- high-risk file count,\n- entrypoint count,\n- last index timestamp,\n- warnings from the latest index.\n\nAcceptance criteria:\n- output is short and readable,\n- it does not dump huge JSON,\n- when no index exists yet, it suggests running `vibecode index` without a stack trace,\n- it works in a Windows terminal.\n\nVerification:\n- test after index,\n- test without index.",
-      "completed": false
+      "completed": true
     },
     {
       "title": "25 - Enforce the human-maintained vs generated file boundary",

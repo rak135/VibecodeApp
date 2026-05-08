@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import json
 import sys
 from pathlib import Path
 
@@ -254,18 +255,82 @@ def cmd_init(args) -> int:
 
 def cmd_map(args) -> int:
     repo_root = Path(args.repo_root).resolve()
-    print(f"Repository map for {repo_root}", file=sys.stderr)
-
     vibecode_dir = repo_root / ".vibecode"
-    output_path = vibecode_dir / "index" / "repo_tree.generated.md"
+    last_index_path = vibecode_dir / "current" / "last_index.json"
 
-    if not output_path.exists():
+    if not last_index_path.exists():
         print(
-            "No generated repo tree found. Run `vibecode index` first.",
+            "No index found. Run `vibecode index` first.",
             file=sys.stderr,
         )
         return 1
 
-    tree_content = output_path.read_text(encoding="utf-8")
-    print(tree_content)
+    try:
+        record = json.loads(last_index_path.read_text(encoding="utf-8"))
+    except (json.JSONDecodeError, OSError) as exc:
+        print(f"Error reading index: {exc}", file=sys.stderr)
+        return 1
+
+    counts = record.get("counts", {})
+    warnings = record.get("warnings", [])
+    project_id = record.get("project_id", repo_root.name)
+    root = record.get("root", str(repo_root))
+    started_at = record.get("started_at", "")
+
+    project_name = project_id
+    project_yaml = vibecode_dir / "project.yaml"
+    if project_yaml.exists():
+        try:
+            from vibecode.config import load_config
+            cfg = load_config(vibecode_dir)
+            project_name = cfg.project_name
+        except Exception:  # noqa: BLE001
+            pass
+
+    languages: list[str] = []
+    high_risk_count = 0
+    inventory_path = vibecode_dir / "index" / "file_inventory.json"
+    if inventory_path.exists():
+        try:
+            inv = json.loads(inventory_path.read_text(encoding="utf-8"))
+            lang_set: set[str] = set()
+            for f in inv.get("files", []):
+                lang = f.get("language", "unknown")
+                if lang not in ("unknown", ""):
+                    lang_set.add(lang)
+                if f.get("risk_level") == "high":
+                    high_risk_count += 1
+            languages = sorted(lang_set)
+        except (json.JSONDecodeError, OSError):
+            pass
+
+    entrypoint_count = 0
+    try:
+        from vibecode.indexer.entrypoints import detect_entrypoints
+        ep = detect_entrypoints(repo_root)
+        entrypoint_count = sum(
+            len(ep.get(k, []))
+            for k in ("backend", "frontend", "cli_scripts", "runtime_config")
+        )
+    except Exception:  # noqa: BLE001
+        pass
+
+    ts = started_at[:19].replace("T", " ") if started_at else "unknown"
+
+    print(f"Project:     {project_name}  (id: {project_id})")
+    print(f"Root:        {root}")
+    print(f"Languages:   {', '.join(languages) or 'none detected'}")
+    print(f"Files:       {counts.get('files', 0)}")
+    print(f"Symbols:     {counts.get('symbols', 0)}")
+    print(f"Tests:       {counts.get('tests', 0)}")
+    print(f"High-risk:   {high_risk_count}")
+    print(f"Entrypoints: {entrypoint_count}")
+    print(f"Indexed:     {ts} UTC")
+    if warnings:
+        print(f"Warnings ({len(warnings)}):")
+        for w in warnings:
+            print(f"  ! {w}")
+    else:
+        print("Warnings:    none")
+
     return 0

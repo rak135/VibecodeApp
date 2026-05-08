@@ -43,23 +43,52 @@ def test_validate_help_exits_zero():
     assert exc_info.value.code == 0
 
 
-def test_map_reads_generated_repo_tree(tmp_path, capsys):
-    tree = tmp_path / ".vibecode" / "index" / "repo_tree.generated.md"
-    tree.parent.mkdir(parents=True)
-    tree.write_text("# Repository Tree\n\nfrom generated index\n", encoding="utf-8")
+def test_map_shows_index_summary(tmp_path, capsys):
+    last_index = tmp_path / ".vibecode" / "current" / "last_index.json"
+    last_index.parent.mkdir(parents=True)
+    inventory = tmp_path / ".vibecode" / "index" / "file_inventory.json"
+    inventory.parent.mkdir(parents=True)
+
+    last_index.write_text(
+        __import__("json").dumps({
+            "project_id": "myproj",
+            "root": str(tmp_path),
+            "started_at": "2024-01-15T10:30:00+00:00",
+            "counts": {"files": 42, "symbols": 100, "tests": 8, "warnings": 1, "errors": 0},
+            "warnings": ["Warning: example unfilled template"],
+            "errors": [],
+        }),
+        encoding="utf-8",
+    )
+    inventory.write_text(
+        __import__("json").dumps({
+            "files": [
+                {"language": "python", "risk_level": "high"},
+                {"language": "python", "risk_level": "low"},
+                {"language": "markdown", "risk_level": "low"},
+            ]
+        }),
+        encoding="utf-8",
+    )
 
     assert main(["map", str(tmp_path)]) == 0
-    captured = capsys.readouterr()
+    out = capsys.readouterr().out
 
-    assert "from generated index" in captured.out
-    assert not (tmp_path / ".vibecode" / "current" / "repo_tree.md").exists()
+    assert "myproj" in out
+    assert "Files:       42" in out
+    assert "Symbols:     100" in out
+    assert "Tests:       8" in out
+    assert "High-risk:   1" in out
+    assert "2024-01-15 10:30:00 UTC" in out
+    assert "Warning: example unfilled template" in out
+    assert "python" in out
 
 
-def test_map_without_generated_repo_tree_exits_nonzero(tmp_path, capsys):
+def test_map_without_index_exits_nonzero_and_suggests_index(tmp_path, capsys):
     assert main(["map", str(tmp_path)]) == 1
-    captured = capsys.readouterr()
+    err = capsys.readouterr().err
 
-    assert "Run `vibecode index` first" in captured.err
+    assert "vibecode index" in err
 
 
 def test_no_command_returns_zero():
