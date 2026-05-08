@@ -50,7 +50,7 @@
     {
       "title": "10 - Implement heuristic TypeScript and TSX symbol extraction",
       "description": "Implement a rough but useful symbol extractor for .ts/.tsx/.js/.jsx without a heavy compiler integration.\n\nDetect at minimum:\n- `export function Name`,\n- `function Name`,\n- `export const Name =`,\n- `const Name =`,\n- `export interface Name`,\n- `interface Name`,\n- `export type Name =`,\n- `type Name =`,\n- React components heuristically as PascalCase function/const declarations in .tsx/.jsx.\n\nAcceptance criteria:\n- extractor does not crash on TSX JSX syntax,\n- it returns line_start and kind,\n- if line_end is not reliable, use null,\n- perfection is not expected; the goal is rough orientation for the initial implementation.\n\nVerification:\n- unit test with a TSX component,\n- unit test with a `useSomething` hook,\n- unit test with interface/type declarations,\n- unit test that plain CSS/JSON is not parsed as TypeScript symbols.",
-      "completed": false
+      "completed": true
     },
     {
       "title": "11 - Generate .vibecode/index/symbol_map.json",
