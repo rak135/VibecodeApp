@@ -45,7 +45,7 @@
     {
       "title": "09 - Implement Python symbol extraction through ast",
       "description": "Implement `extract_python_symbols(path)` using the standard Python `ast` module.\n\nDetect at minimum:\n- class definitions,\n- functions,\n- async functions,\n- methods as function/method based on parent class when practical,\n- FastAPI-like route handlers from decorators such as `@app.get`, `@router.post`, `@router.put`, `@router.delete`, and `@router.patch`.\n\nSymbol record:\n- path,\n- name,\n- kind,\n- line_start,\n- line_end when available.\n\nAcceptance criteria:\n- parser does not crash on normal Python files,\n- syntax errors in one file are written as warnings and do not stop the whole index,\n- route handlers are marked as `api_route` when a supported decorator is detected,\n- output is stable.\n\nVerification:\n- unit test for class/function/async function,\n- unit test for a FastAPI decorator,\n- unit test for a syntactically broken file that does not stop indexing.",
-      "completed": false
+      "completed": true
     },
     {
       "title": "10 - Implement heuristic TypeScript and TSX symbol extraction",
