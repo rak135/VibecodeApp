@@ -81,6 +81,22 @@ def create_parser() -> argparse.ArgumentParser:
         help="Repository root directory (default: current directory).",
     )
 
+    # export-agents
+    export_agents_parser = subparsers.add_parser(
+        "export-agents", help="Export agent instructions to AGENTS.md."
+    )
+    export_agents_parser.add_argument(
+        "repo_root",
+        nargs="?",
+        default=".",
+        help="Repository root directory (default: current directory).",
+    )
+    export_agents_parser.add_argument(
+        "--force",
+        action="store_true",
+        help="Overwrite AGENTS.md even if it is not Vibecode-managed.",
+    )
+
     return parser
 
 
@@ -111,6 +127,10 @@ def main(argv: list[str] | None = None) -> int:
     if args.command == "validate":
         from vibecode.validation import cmd_validate
         return cmd_validate(args)
+
+    if args.command == "export-agents":
+        from vibecode.context.agents_export import cmd_export_agents
+        return cmd_export_agents(args)
 
     parser.print_help()
     return 1

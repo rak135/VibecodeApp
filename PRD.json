@@ -115,7 +115,7 @@
     {
       "title": "23 - Implement AGENTS.md export as a generated artifact",
       "description": "Implement optional export of agent instructions.\n\nThe command may be:\n- `vibecode export-agents <repo_root>` or a flag on context/index.\n\nOutput:\n- `AGENTS.md` in the root or `.vibecode/generated/AGENTS.generated.md`, according to the safer strategy.\n\nContent:\n- the repository is controlled by VibecodeApp,\n- before work, read `.vibecode/current/context_pack.md`, `architecture/INVARIANTS.md`, `architecture/MODULE_BOUNDARIES.md`, and `handoff/NOW.md`,\n- do not perform unrelated refactors,\n- do not modify protected files without an explicit task,\n- do not update README outside marked generated blocks,\n- run required checks,\n- update handoff.\n\nSafety:\n- if AGENTS.md already exists and is not Vibecode-managed, do not overwrite it without `--force` or markers,\n- prefer marker blocks or a generated-file strategy.\n\nAcceptance criteria:\n- export is safe with an existing AGENTS.md,\n- generated text is short,\n- the main source of truth remains in `.vibecode/`, not AGENTS.md.\n\nVerification:\n- test without existing AGENTS.md,\n- test with an existing AGENTS.md without markers: do not overwrite.",
-      "completed": false
+      "completed": true
     },
     {
       "title": "24 - Implement map/inspect CLI output for quick project review",
