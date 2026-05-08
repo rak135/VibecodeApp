@@ -16,6 +16,7 @@ from vibecode.indexer.scanner import (
 )
 
 from vibecode.indexer.dependency_map import build_dependency_map, write_dependency_map
+from vibecode.indexer.entrypoints import detect_entrypoints, render_entrypoints, write_entrypoints
 from vibecode.indexer.repo_tree import render_repo_tree, write_repo_tree
 from vibecode.indexer.symbol_map import build_symbol_map, write_symbol_map
 from vibecode.indexer.test_map import build_test_map, write_test_map
@@ -37,6 +38,9 @@ __all__ = [
     "write_dependency_map",
     "build_test_map",
     "write_test_map",
+    "detect_entrypoints",
+    "render_entrypoints",
+    "write_entrypoints",
 ]
 
 
@@ -90,6 +94,10 @@ def cmd_index(args) -> int:
     test_map_path = vibecode_dir / "index" / "test_map.json"
     write_test_map(repo_root, files, test_map_path, required_checks=required_checks)
     print(f"  test map written to {test_map_path.relative_to(repo_root).as_posix()}", file=sys.stderr)
+
+    entrypoints_path = vibecode_dir / "index" / "entrypoints.md"
+    write_entrypoints(repo_root, entrypoints_path)
+    print(f"  entrypoints written to {entrypoints_path.relative_to(repo_root).as_posix()}", file=sys.stderr)
 
     if run_log:
         ts = datetime.now(tz=timezone.utc).strftime("%Y%m%dT%H%M%SZ")

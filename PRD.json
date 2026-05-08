@@ -70,7 +70,7 @@
     {
       "title": "14 - Generate entrypoints.md from configs and heuristics",
       "description": "Implement generation of `.vibecode/index/entrypoints.md`.\n\nDetect and describe at minimum:\n- Python entrypoints: main.py, app.py, cli.py, FastAPI app bootstrap, scripts,\n- frontend entrypoints: src/main.tsx, src/App.tsx, Vite config,\n- package scripts from package.json,\n- pyproject entrypoints/scripts when present,\n- Docker/Makefile entrypoints when present.\n\nAcceptance criteria:\n- entrypoints.md exists after indexing,\n- it contains sections for Backend, Frontend, CLI/Scripts, and Runtime/config according to available data,\n- if an entrypoint is not detected, the section says `not detected` instead of inventing information,\n- generated text does not claim anything unsupported by files/configs.\n\nVerification:\n- fixture with main.py and main.tsx,\n- fixture with package.json scripts,\n- test that nonexistent entrypoints are not hallucinated.",
-      "completed": false
+      "completed": true
     },
     {
       "title": "15 - Implement risk and protected-area mapping",

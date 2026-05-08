@@ -13,3 +13,4 @@
 - [✓] 2026-05-08 13:28 - 11 - Generate .vibecode/index/symbol_map.json
 - [✓] 2026-05-08 13:33 - 12 - Implement initial import and dependency extraction
 - [✓] 2026-05-08 13:39 - 13 - Implement test discovery and test_map.json
+- [✓] 2026-05-08 13:43 - 14 - Generate entrypoints.md from configs and heuristics
