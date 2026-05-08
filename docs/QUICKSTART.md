@@ -5,7 +5,7 @@ for any local repository, and inspecting the generated output.
 
 ---
 
-## What Vibecode can do (current scope)
+## What Vibecode can do
 
 - **`init`** — bootstrap a `.vibecode/` project layer in any repository
 - **`index`** — scan files; produce a file inventory, symbol map, dependency map, test map, entrypoints list, risk map, and a compact repo-tree
@@ -16,12 +16,12 @@ for any local repository, and inspecting the generated output.
 
 ## What Vibecode cannot do yet
 
-The following are **explicitly out of scope** for this release:
+The following are **explicitly out of scope** for the Architecture Map Core:
 
 | Not available yet | Why deferred |
 |---|---|
 | Launching OpenCode or any other coding agent | Agent runtime work begins after the map and context pack are verified |
-| Calling any LLM or AI API | This release is fully deterministic and offline |
+| Calling any LLM or AI API | Architecture Map Core is fully deterministic and offline |
 | MCP server | Depends on a stable index |
 | GUI | CLI-first by design |
 | Auto-commit or auto-approve | Dangerous without a validated, stable index |

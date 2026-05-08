@@ -12,7 +12,7 @@ This repository is intentionally CLI-first. It does not launch OpenCode, Codex, 
 2. [Built With](#built-with)
 3. [Getting Started](#getting-started)
 4. [Usage](#usage)
-5. [Roadmap](#roadmap)
+5. [Status](#status)
 6. [Contributing](#contributing)
 7. [License](#license)
 8. [Acknowledgments](#acknowledgments)
@@ -21,16 +21,16 @@ This repository is intentionally CLI-first. It does not launch OpenCode, Codex, 
 
 ## About The Project
 
-VibecodeApp is meant to become the project control layer around agentic coding work. The initial architecture-map scope focuses on:
+VibecodeApp is meant to become the project control layer around agentic coding work. The Architecture Map Core focuses on:
 
 - creating and maintaining `.vibecode/`
 - scanning repositories safely
 - generating file inventory, symbol, dependency, test, entrypoint, and risk maps
 - preserving human-maintained architecture and handoff files
 - validating generated artifacts
-- preparing for future context-pack and prompt export work
+- generating task-scoped context packs and prompt export files
 
-Current non-goals:
+Non-goals:
 
 - no custom coding agent
 - no GUI
@@ -39,7 +39,7 @@ Current non-goals:
 - no auto-commit or auto-approve behavior
 - no LLM API calls
 
-See `docs/PRD_VIBECODE_ARCHITECTURE_MAP.md` and `PRD.json` for the detailed product scope and task list.
+See `docs/ARCHITECTURE_MAP_PRD.md` for desired behavior and `docs/ARCHITECTURE_MAP_STATUS.md` for implementation status.
 
 <p align="right">(<a href="#readme-top">back to top</a>)</p>
 
@@ -125,7 +125,7 @@ Print a compact repository map:
 python -m vibecode.cli map C:\path\to\example-repo
 ```
 
-Run the current context command:
+Generate a context pack:
 
 ```powershell
 python -m vibecode.cli context "Update context panel copy" --repo C:\path\to\example-repo
@@ -139,28 +139,19 @@ python -m vibecode.cli context C:\path\to\example-repo --task "Update context pa
 
 `context` writes `.vibecode/current/context_pack.md`, a derived runtime artifact for the current task.
 
-Generated files live under `.vibecode/index/`, `.vibecode/current/`, and `.vibecode/logs/`. Human-maintained project rules live under `.vibecode/project.yaml`, `.vibecode/architecture/`, `.vibecode/handoff/`, and `.vibecode/history/`.
+Generated indexes and runtime/current files are not source of truth. Regenerate `.vibecode/index/*` and `.vibecode/current/*` before giving the context to another agent. Human-maintained project rules live under `.vibecode/project.yaml`, `.vibecode/architecture/`, `.vibecode/checks/`, `.vibecode/handoff/`, and `.vibecode/history/`.
 
 <p align="right">(<a href="#readme-top">back to top</a>)</p>
 
-## Roadmap
+## Status
 
-- [x] CLI skeleton
-- [x] `.vibecode/` init
-- [x] repository scanning and file inventory
-- [x] symbol, dependency, test, entrypoint, and risk maps
-- [x] index run records and validation
-- [ ] relevant-file scoring
-- [ ] context-pack renderer
-- [ ] context-pack length limits
-- [ ] OpenCode prompt export without launching OpenCode
-- [ ] generated agent instructions
+The README is not the task tracker. Use `docs/ARCHITECTURE_MAP_STATUS.md` for the current Architecture Map Status and `docs/ARCHITECTURE_MAP_PRD.md` for the Architecture Map PRD.
 
 <p align="right">(<a href="#readme-top">back to top</a>)</p>
 
 ## Contributing
 
-Keep changes narrow and task-relevant. Before implementing agent runtime features, make sure the architecture map and context-pack core are truthful, deterministic, and tested.
+Keep changes narrow and task-relevant. Before implementing agent runtime features, make sure the Architecture Map Core is truthful, deterministic, and tested.
 
 Recommended local loop:
 

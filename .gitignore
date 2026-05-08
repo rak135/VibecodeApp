@@ -40,10 +40,14 @@ tmp/
 temp/
 
 # Local Ralph/Ralphy runtime state
-.ralphy/deferred.json
+.ralph/
+.ralphy/
+.ralphy-worktrees/
+.ralphy-sandboxes/
 
 # Vibecode generated/runtime artifacts
 .vibecode/current/
+.vibecode/generated/
 .vibecode/runs/
 .vibecode/tmp/
 .vibecode/cache/

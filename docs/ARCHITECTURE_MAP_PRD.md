@@ -1,6 +1,6 @@
 # PRD — Vibecode Architecture Map
 
-> This document defines the implementation boundary for the initial Vibecode scope.
+> This document defines the implementation boundary for the Architecture Map Core.
 > It is a reference for contributors and automated loops to prevent scope creep
 > before the architecture map and context engine are working.
 
@@ -8,7 +8,7 @@
 
 ## Scope
 
-This phase implements **only** the Vibecode architecture map and context engine:
+This capability implements **only** the Vibecode architecture map and context engine:
 
 - `vibecode init` — create the `.vibecode/` project layer in a target repository
 - File scanning — collect the repository file list via `git ls-files` with a filesystem fallback
@@ -17,11 +17,11 @@ This phase implements **only** the Vibecode architecture map and context engine:
 - Import and dependency map — lightweight edge map (`dependency_map.json`)
 - Test discovery — map source files to their tests (`test_map.json`)
 - Risk and protected-area mapping — mark risky and protected files
-- Index generation — write `file_inventory.json`, `symbol_map.json`, `repo_tree.md`, `entrypoints.md`, `risky_files.md` under `.vibecode/index/`
+- Index generation — write `file_inventory.json`, `symbol_map.json`, `repo_tree.generated.md`, `entrypoints.md`, `risky_files.md` under `.vibecode/index/`
 - Context pack generation — assemble a short, task-scoped context pack from the index
 - OpenCode prompt export — write the context pack to a file that can be passed to an external agent as a prompt
 
-**This phase ends at prompt export.** No code in this phase launches OpenCode, calls an AI model, or executes any external agent.
+**This capability ends at prompt export.** No code in this capability launches OpenCode, calls an AI model, or executes any external agent.
 
 ---
 
@@ -71,7 +71,7 @@ These files are produced by `vibecode index` and must not be manually edited:
 .vibecode/index/symbol_map.json
 .vibecode/index/dependency_map.json
 .vibecode/index/test_map.json
-.vibecode/index/repo_tree.md
+.vibecode/index/repo_tree.generated.md
 .vibecode/index/entrypoints.md
 .vibecode/index/risky_files.md
 .vibecode/current/          (context pack output)
@@ -87,7 +87,7 @@ must not overwrite human-maintained files unless `--force` is given.
 
 - [ ] `vibecode init` creates the `.vibecode/` structure without overwriting human-maintained files on repeated runs.
 - [ ] `vibecode index` produces valid JSON for `file_inventory.json`, `symbol_map.json`, `dependency_map.json`, and `test_map.json`.
-- [ ] `vibecode map` renders `repo_tree.md` that is compact and human-readable.
+- [ ] `vibecode map` renders `repo_tree.generated.md` that is compact and human-readable.
 - [ ] `vibecode context` assembles a context pack scoped to a named task.
 - [ ] The context pack can be exported as a plain text prompt file for use with OpenCode or any other external agent.
 - [ ] No CLI command in this phase starts a subprocess that calls an AI model or launches OpenCode.

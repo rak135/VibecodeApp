@@ -8,7 +8,7 @@
 
 ## Implementation scope
 
-- v0.1 implements architecture-map/index generation only.
+- Architecture Map Core implements architecture-map/index generation only.
 - No UI work before architecture-map core is stable.
 - No OpenCode runtime integration before context pack generation is verified.
 

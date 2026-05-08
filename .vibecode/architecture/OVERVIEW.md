@@ -1,7 +1,7 @@
 # Architecture Overview
 
 VibecodeApp is a local CLI for building repository architecture maps before coding agents edit a project.
-The initial implementation is intentionally deterministic and filesystem-based.
+The Architecture Map Core is intentionally deterministic and filesystem-based.
 
 ## Control layer role
 
@@ -24,4 +24,3 @@ The initial implementation is intentionally deterministic and filesystem-based.
 - MCP server integration
 - automatic commits
 - autonomous agent orchestration
-
