@@ -35,7 +35,7 @@
     {
       "title": "07 - Generate .vibecode/index/file_inventory.json",
       "description": "Generate `file_inventory.json` from file scanning and metadata detection.\n\nThe JSON format must include:\n- schema marker,\n- project_id,\n- generated_at ISO timestamp,\n- root,\n- files[].\n\nEach file record includes:\n- path,\n- language,\n- size_bytes,\n- role_guess,\n- is_test,\n- is_config,\n- is_doc,\n- risk_level,\n- tracked when the information is available.\n\nAcceptance criteria:\n- the file is valid JSON,\n- generated_at uses a timezone-aware timestamp or explicit UTC ISO format,\n- paths are relative and stable,\n- repeated indexing updates generated files without touching human-maintained files.\n\nVerification:\n- `python -m json.tool .vibecode/index/file_inventory.json` succeeds,\n- a test checks at least two files of different types.",
-      "completed": false
+      "completed": true
     },
     {
       "title": "08 - Generate compact .vibecode/index/repo_tree.md",

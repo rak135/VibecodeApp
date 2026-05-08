@@ -1,0 +1,32 @@
+# vibecode project configuration
+# schema: vibecode/project/v1
+
+project:
+  id: vibecodeapp
+  name: VibecodeApp
+  root: .
+
+indexing:
+  include:
+    - "**/*.py"
+    - "**/*.md"
+    - "**/*.yaml"
+    - "**/*.json"
+  exclude:
+    - ".git/**"
+    - "__pycache__/**"
+    - "*.pyc"
+    - ".vibecode/index/**"
+    - ".vibecode/current/**"
+    - ".vibecode/logs/**"
+
+protected_paths:
+  - ".vibecode/architecture/**"
+  - ".vibecode/handoff/**"
+  - ".vibecode/history/**"
+
+risk_rules: []
+
+required_checks:
+  - lint
+  - tests
