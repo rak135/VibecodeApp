@@ -10,7 +10,7 @@
     {
       "title": "02 - Create the base Python package skeleton for the vibecode CLI",
       "description": "Create a minimal Python package for a CLI tool named `vibecode`.\n\nRequired structure:\n- vibecode/__init__.py\n- vibecode/cli.py\n- vibecode/project.py\n- vibecode/config.py\n- vibecode/indexer/__init__.py\n- vibecode/context/__init__.py\n- tests/ or test_vibecode_*.py according to the repository style.\n\nThe CLI must support at least:\n- `python -m vibecode.cli --help`\n- `python -m vibecode.cli init --help`\n- `python -m vibecode.cli index --help`\n- `python -m vibecode.cli context --help`\n- `python -m vibecode.cli map --help`\n\nAcceptance criteria:\n- all help commands exit successfully,\n- the CLI uses only the local filesystem,\n- if the repository already has dependency management, integrate naturally; otherwise keep it runnable through `python -m vibecode.cli`.\n\nVerification:\n- `python -m vibecode.cli --help` returns exit code 0,\n- `python -c \"import vibecode\"` succeeds.",
-      "completed": false
+      "completed": true
     },
     {
       "title": "03 - Implement init and create the .vibecode structure",

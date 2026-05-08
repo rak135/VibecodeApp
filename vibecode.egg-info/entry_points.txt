@@ -1,0 +1,2 @@
+[console_scripts]
+vibecode = vibecode.cli:main
