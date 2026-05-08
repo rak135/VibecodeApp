@@ -135,7 +135,7 @@
     {
       "title": "27 - Add unit tests for the main indexing modules",
       "description": "Add tests for key modules.\n\nMinimum coverage scenarios:\n- config load valid/invalid,\n- init creates structure and is idempotent,\n- file scan respects exclude,\n- language detection,\n- role_guess,\n- Python symbol extraction,\n- TSX heuristic symbol extraction,\n- import/dependency extraction,\n- test discovery,\n- risk rules,\n- validation warnings.\n\nAcceptance criteria:\n- tests run locally without external services,\n- tests are not dependent on the user's current working repository,\n- tests use temp dirs/fixtures,\n- tests are deterministic.\n\nVerification:\n- `python -m pytest` or the equivalent test command passes.",
-      "completed": false
+      "completed": true
     },
     {
       "title": "28 - Add end-to-end test for init, index, and context",
