@@ -20,7 +20,7 @@
     {
       "title": "04 - Implement loading and validation for project.yaml",
       "description": "Implement the configuration layer for `.vibecode/project.yaml`.\n\nRequirements:\n- load project identity,\n- load include/exclude glob rules,\n- load protected_paths,\n- load risk_rules,\n- load required_checks,\n- normalize the root path,\n- return clear errors for missing or invalid config.\n\nTechnical note:\n- YAML is the user-facing format. If the project does not already use PyYAML, either add the dependency cleanly or implement a narrow fallback for the generated format only. Do not introduce a large framework.\n\nAcceptance criteria:\n- a valid project.yaml loads into a ProjectConfig data structure,\n- missing mandatory fields produce readable errors,\n- Windows paths using backslashes or slashes are normalized safely,\n- the config loader does not mutate the config file.\n\nVerification:\n- unit test for a valid config,\n- unit test for missing project.id,\n- unit test for a nonexistent root,\n- unit test for a Windows-style path.",
-      "completed": false
+      "completed": true
     },
     {
       "title": "05 - Implement safe file scanning through git ls-files with filesystem fallback",

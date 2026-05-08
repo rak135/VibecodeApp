@@ -3,3 +3,4 @@ Name: vibecode
 Version: 0.1.0
 Summary: Local repository architecture map and context-pack CLI.
 Requires-Python: >=3.10
+Requires-Dist: pyyaml>=6.0
