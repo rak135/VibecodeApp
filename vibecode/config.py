@@ -38,7 +38,7 @@ def load_config(vibecode_dir: Path) -> ProjectConfig:
     try:
         raw = yaml.safe_load(config_path.read_text(encoding="utf-8"))
     except yaml.YAMLError as exc:
-        raise ValueError(f"project.yaml is not valid YAML: {exc}") from exc
+        raise ValueError(f"Invalid YAML in {config_path}: {exc}") from exc
 
     if not isinstance(raw, dict):
         raise ValueError("project.yaml must be a YAML mapping at the top level")

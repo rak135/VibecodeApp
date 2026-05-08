@@ -98,3 +98,72 @@ def test_no_command_returns_zero():
 def test_import_vibecode():
     import vibecode
     assert vibecode.__version__ == "0.1.0"
+
+
+# ---------------------------------------------------------------------------
+# Error handling
+# ---------------------------------------------------------------------------
+
+
+def test_index_missing_repo_root_exits_nonzero_with_readable_message(tmp_path, capsys):
+    missing = tmp_path / "nonexistent"
+    rc = main(["index", str(missing)])
+    assert rc == 1
+    err = capsys.readouterr().err
+    assert "nonexistent" in err
+    assert "Traceback" not in err
+
+
+def test_map_missing_repo_root_exits_nonzero_with_readable_message(tmp_path, capsys):
+    missing = tmp_path / "nonexistent"
+    rc = main(["map", str(missing)])
+    assert rc == 1
+    err = capsys.readouterr().err
+    assert "nonexistent" in err
+    assert "Traceback" not in err
+
+
+def test_index_missing_project_yaml_suggests_init(tmp_path, capsys):
+    rc = main(["index", str(tmp_path)])
+    assert rc == 1
+    err = capsys.readouterr().err
+    assert "vibecode init" in err
+    assert "Traceback" not in err
+
+
+def test_context_missing_repo_root_exits_nonzero_with_readable_message(tmp_path, capsys):
+    missing = tmp_path / "nonexistent"
+    rc = main(["context", str(missing), "--task", "test task"])
+    assert rc == 1
+    err = capsys.readouterr().err
+    assert "nonexistent" in err
+    assert "Traceback" not in err
+
+
+def test_context_missing_project_yaml_suggests_init(tmp_path, capsys):
+    rc = main(["context", str(tmp_path), "--task", "test task"])
+    assert rc == 1
+    err = capsys.readouterr().err
+    assert "vibecode init" in err
+    assert "Traceback" not in err
+
+
+def test_debug_flag_shows_traceback_on_invalid_yaml(tmp_path, capsys):
+    vdir = tmp_path / ".vibecode"
+    vdir.mkdir()
+    (vdir / "project.yaml").write_text("key: [unclosed\n", encoding="utf-8")
+    rc = main(["--debug", "index", str(tmp_path)])
+    assert rc == 1
+    err = capsys.readouterr().err
+    assert "Traceback" in err
+
+
+def test_no_debug_flag_hides_traceback_on_invalid_yaml(tmp_path, capsys):
+    vdir = tmp_path / ".vibecode"
+    vdir.mkdir()
+    (vdir / "project.yaml").write_text("key: [unclosed\n", encoding="utf-8")
+    rc = main(["index", str(tmp_path)])
+    assert rc == 1
+    err = capsys.readouterr().err
+    assert "Error" in err
+    assert "Traceback" not in err

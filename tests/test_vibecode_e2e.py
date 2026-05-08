@@ -216,6 +216,20 @@ def test_e2e_opencode_prompt_created_only_with_platform_flag(tmp_path):
     task = "Update context panel copy. Do not change matching algorithms."
 
     _write(
+        tmp_path / ".vibecode" / "project.yaml",
+        "# vibecode project configuration\n"
+        "# schema: vibecode/project/v1\n"
+        "project:\n"
+        "  id: sampleapp\n"
+        "  name: SampleApp\n"
+        "  root: .\n"
+        "indexing:\n"
+        "  include: []\n"
+        "  exclude: []\n"
+        "protected_paths: []\n"
+        "risk_rules: []\n",
+    )
+    _write(
         tmp_path / ".vibecode" / "architecture" / "INVARIANTS.md",
         "# SampleApp \u2013 Invariants\n\n"
         "- Do not modify the matching engine without review.\n",

@@ -4,6 +4,7 @@ from __future__ import annotations
 
 import argparse
 import sys
+from pathlib import Path
 
 
 def create_parser() -> argparse.ArgumentParser:
@@ -12,6 +13,12 @@ def create_parser() -> argparse.ArgumentParser:
         description="Local repository architecture map and context-pack CLI.",
     )
     parser.add_argument("--version", action="version", version="vibecode 0.1.0")
+    parser.add_argument(
+        "--debug",
+        action="store_true",
+        default=False,
+        help="Show full traceback on error.",
+    )
 
     subparsers = parser.add_subparsers(dest="command", metavar="COMMAND")
 
@@ -103,11 +110,43 @@ def create_parser() -> argparse.ArgumentParser:
 def main(argv: list[str] | None = None) -> int:
     parser = create_parser()
     args = parser.parse_args(argv)
+    debug: bool = getattr(args, "debug", False)
 
     if args.command is None:
         parser.print_help()
         return 0
 
+    try:
+        return _dispatch(args, parser)
+    except PermissionError as exc:
+        print(f"Error: Permission denied – {exc}", file=sys.stderr)
+        if debug:
+            import traceback
+            traceback.print_exc()
+        return 1
+    except FileNotFoundError as exc:
+        print(f"Error: {exc}", file=sys.stderr)
+        if debug:
+            import traceback
+            traceback.print_exc()
+        return 1
+    except (ValueError, OSError) as exc:
+        print(f"Error: {exc}", file=sys.stderr)
+        if debug:
+            import traceback
+            traceback.print_exc()
+        return 1
+    except Exception as exc:
+        print(f"Error: {exc}", file=sys.stderr)
+        if debug:
+            import traceback
+            traceback.print_exc()
+        else:
+            print("Hint: rerun with --debug for full details.", file=sys.stderr)
+        return 1
+
+
+def _dispatch(args, parser) -> int:
     from vibecode.paths import normalise_root
 
     if args.command == "init":
@@ -117,6 +156,7 @@ def main(argv: list[str] | None = None) -> int:
 
     if args.command == "index":
         args.repo_root = normalise_root(args.repo_root)
+        _require_root_exists(args.repo_root)
         from vibecode.indexer import cmd_index
         return cmd_index(args)
 
@@ -126,21 +166,29 @@ def main(argv: list[str] | None = None) -> int:
 
     if args.command == "map":
         args.repo_root = normalise_root(args.repo_root)
+        _require_root_exists(args.repo_root)
         from vibecode.project import cmd_map
         return cmd_map(args)
 
     if args.command == "validate":
         args.repo_root = normalise_root(args.repo_root)
+        _require_root_exists(args.repo_root)
         from vibecode.validation import cmd_validate
         return cmd_validate(args)
 
     if args.command == "export-agents":
         args.repo_root = normalise_root(args.repo_root)
+        _require_root_exists(args.repo_root)
         from vibecode.context.agents_export import cmd_export_agents
         return cmd_export_agents(args)
 
     parser.print_help()
     return 1
+
+
+def _require_root_exists(root: Path) -> None:
+    if not root.is_dir():
+        raise FileNotFoundError(f"Repository root does not exist: {root}")
 
 
 if __name__ == "__main__":

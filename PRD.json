@@ -165,7 +165,7 @@
     {
       "title": "33 - Add clear user-facing errors without noisy stack traces",
       "description": "The CLI must be usable. When something is missing, the primary output must not be a raw Python traceback.\n\nRequirements:\n- missing repo root => readable error,\n- missing project.yaml during index/context => readable error suggesting `vibecode init`,\n- invalid JSON/YAML => readable error with path and reason,\n- permission denied => readable error,\n- debug traceback only with `--debug`.\n\nAcceptance criteria:\n- common user errors have short messages and non-zero exits,\n- `--debug` may show details,\n- Ralph/OpenCode workers receive useful output, not chaos.\n\nVerification:\n- CLI tests for missing root/config and debug flag.",
-      "completed": false
+      "completed": true
     },
     {
       "title": "34 - Prepare extension points for future OpenCode and Serena support without runtime implementation",

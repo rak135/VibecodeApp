@@ -20,6 +20,20 @@ def _write(path: Path, content: str) -> Path:
 
 def _minimal_repo(tmp_path: Path) -> None:
     _write(
+        tmp_path / ".vibecode" / "project.yaml",
+        "# vibecode project configuration\n"
+        "# schema: vibecode/project/v1\n"
+        "project:\n"
+        "  id: testproject\n"
+        "  name: Test Project\n"
+        "  root: .\n"
+        "indexing:\n"
+        "  include: []\n"
+        "  exclude: []\n"
+        "protected_paths: []\n"
+        "risk_rules: []\n",
+    )
+    _write(
         tmp_path / ".vibecode" / "architecture" / "INVARIANTS.md",
         "# Invariants\n\n- Generated indexes are not source of truth.\n",
     )

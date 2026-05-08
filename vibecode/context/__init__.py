@@ -22,6 +22,19 @@ def cmd_context(args) -> int:
         repo = normalise_root(str(repo_arg or "."))
         task = legacy_task or context_arg or "(no task specified)"
 
+    if not repo.is_dir():
+        print(f"Error: Repository root does not exist: {repo}", file=sys.stderr)
+        return 1
+
+    vibecode_dir = repo / ".vibecode"
+    if not (vibecode_dir / "project.yaml").exists():
+        print(
+            f"Error: No project.yaml found in {vibecode_dir}.\n"
+            "       Run 'vibecode init' to initialize the project.",
+            file=sys.stderr,
+        )
+        return 1
+
     print(f"Generating context pack for: {task}", file=sys.stderr)
     print(f"Repository: {repo}", file=sys.stderr)
 

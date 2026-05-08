@@ -57,28 +57,23 @@ def cmd_index(args) -> int:
     repo_root = Path(args.repo_root).resolve()
     started_at = datetime.now(tz=timezone.utc)
 
-    if not repo_root.exists():
-        print(f"Error: repository root does not exist: {repo_root}", file=sys.stderr)
+    vibecode_dir = repo_root / ".vibecode"
+    if not (vibecode_dir / "project.yaml").exists():
+        print(
+            f"Error: No project.yaml found in {vibecode_dir}.\n"
+            "       Run 'vibecode init' to initialize the project.",
+            file=sys.stderr,
+        )
         return 1
 
-    include: list[str] = []
-    exclude: list[str] = []
-    project_id = repo_root.name.lower().replace(" ", "_")
-    protected_paths: list[str] = []
-    risk_rules: list[dict] = []
-    vibecode_dir = repo_root / ".vibecode"
-    if (vibecode_dir / "project.yaml").exists():
-        try:
-            from vibecode.config import load_config
+    from vibecode.config import load_config
 
-            cfg = load_config(vibecode_dir)
-            include = cfg.include
-            exclude = cfg.exclude
-            project_id = cfg.project_id
-            protected_paths = cfg.protected_paths
-            risk_rules = [r for r in cfg.risk_rules if isinstance(r, dict)]
-        except Exception as exc:  # noqa: BLE001
-            print(f"Warning: could not load project.yaml: {exc}", file=sys.stderr)
+    cfg = load_config(vibecode_dir)
+    include = cfg.include
+    exclude = cfg.exclude
+    project_id = cfg.project_id
+    protected_paths = cfg.protected_paths
+    risk_rules = [r for r in cfg.risk_rules if isinstance(r, dict)]
 
     _guard_index_paths(vibecode_dir, repo_root)
 
@@ -114,14 +109,7 @@ def cmd_index(args) -> int:
     write_dependency_map(repo_root, files, dependency_map_path, run_log=run_log)
     print(f"  dependency map written to {dependency_map_path.relative_to(repo_root).as_posix()}", file=sys.stderr)
 
-    required_checks: list[str] | None = None
-    if (vibecode_dir / "project.yaml").exists():
-        try:
-            from vibecode.config import load_config as _load_config
-
-            required_checks = _load_config(vibecode_dir).required_checks or None
-        except Exception:  # noqa: BLE001
-            pass
+    required_checks: list[str] | None = cfg.required_checks or None
 
     test_map_path = vibecode_dir / "index" / "test_map.json"
     write_test_map(repo_root, files, test_map_path, required_checks=required_checks)

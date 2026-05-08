@@ -18,6 +18,20 @@ def _write(path: Path, content: str) -> Path:
 def test_context_command_writes_agent_ready_context_pack(tmp_path):
     task = 'implement real context pack'
     _write(
+        tmp_path / ".vibecode" / "project.yaml",
+        "# vibecode project configuration\n"
+        "# schema: vibecode/project/v1\n"
+        "project:\n"
+        "  id: testproject\n"
+        "  name: Test Project\n"
+        "  root: .\n"
+        "indexing:\n"
+        "  include: []\n"
+        "  exclude: []\n"
+        "protected_paths: []\n"
+        "risk_rules: []\n",
+    )
+    _write(
         tmp_path / ".vibecode" / "architecture" / "INVARIANTS.md",
         "# Invariants\n\n"
         "- Human-maintained architecture docs are source-controlled.\n"
@@ -87,6 +101,20 @@ def test_context_command_writes_agent_ready_context_pack(tmp_path):
 
 
 def test_legacy_context_command_shape_still_works(tmp_path):
+    _write(
+        tmp_path / ".vibecode" / "project.yaml",
+        "# vibecode project configuration\n"
+        "# schema: vibecode/project/v1\n"
+        "project:\n"
+        "  id: testproject\n"
+        "  name: Test Project\n"
+        "  root: .\n"
+        "indexing:\n"
+        "  include: []\n"
+        "  exclude: []\n"
+        "protected_paths: []\n"
+        "risk_rules: []\n",
+    )
     _write(
         tmp_path / ".vibecode" / "architecture" / "INVARIANTS.md",
         "# Invariants\n\n- Generated indexes are not source of truth and must be regenerated.\n",
