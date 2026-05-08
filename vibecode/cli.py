@@ -54,6 +54,12 @@ def create_parser() -> argparse.ArgumentParser:
         default=None,
         help="Repository root directory (default: current directory).",
     )
+    context_parser.add_argument(
+        "--platform",
+        default=None,
+        choices=["opencode"],
+        help="Export a platform-specific prompt file (e.g. opencode).",
+    )
 
     # map
     map_parser = subparsers.add_parser("map", help="Print the repository architecture map.")

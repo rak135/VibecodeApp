@@ -21,3 +21,4 @@
 - [✓] 2026-05-08 17:32 - 19 - Implement relevant-file scoring for a task
 - [✓] 2026-05-08 17:32 - 20 - Implement context pack renderer
 - [✓] 2026-05-08 15:47 - 21 - Add length limits and content prioritization to context packs
+- [✓] 2026-05-08 15:49 - 22 - Implement OpenCode prompt export without launching OpenCode

@@ -110,7 +110,7 @@
     {
       "title": "22 - Implement OpenCode prompt export without launching OpenCode",
       "description": "Implement `vibecode context <repo_root> --task \"...\" --platform opencode`, which creates `.vibecode/current/opencode_prompt.md`.\n\nWrapper content:\n- `You are working inside a Vibecode-controlled repository.`,\n- pre-edit instructions: read the task, read relevant files, confirm protected files, prefer narrow edits,\n- post-edit instructions: summarize changed files, list tests run, update handoff when instructed,\n- embedded context_pack.md.\n\nImportant:\n- do not launch OpenCode,\n- only prepare the prompt file.\n\nAcceptance criteria:\n- opencode_prompt.md is created,\n- it contains the wrapper and the context pack,\n- no subprocess launches any agent runtime,\n- platform export can be extended later for codex/claude.\n\nVerification:\n- test that the prompt file exists,\n- test that no agent runtime is called.",
-      "completed": false
+      "completed": true
     },
     {
       "title": "23 - Implement AGENTS.md export as a generated artifact",

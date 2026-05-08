@@ -13,6 +13,7 @@ def cmd_context(args) -> int:
     context_arg = getattr(args, "context_arg", None)
     legacy_task = getattr(args, "task", None)
     repo_arg = getattr(args, "repo", None)
+    platform = getattr(args, "platform", None)
 
     if task_option:
         repo = Path(repo_arg or context_arg or ".").resolve()
@@ -44,4 +45,12 @@ def cmd_context(args) -> int:
 
     output_path = write_context_pack(repo, task)
     print(f"Context pack written: {output_path}", file=sys.stderr)
+
+    if platform == "opencode":
+        from vibecode.context.platform_export import write_opencode_prompt
+
+        context_pack_content = output_path.read_text(encoding="utf-8")
+        prompt_path = write_opencode_prompt(repo, context_pack_content)
+        print(f"OpenCode prompt written: {prompt_path}", file=sys.stderr)
+
     return 0
