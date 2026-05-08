@@ -1,0 +1,11 @@
+{
+  "name": "sample-frontend",
+  "version": "0.1.0",
+  "scripts": {
+    "test": "jest"
+  },
+  "devDependencies": {
+    "jest": "^29.0.0",
+    "@types/react": "^18.0.0"
+  }
+}

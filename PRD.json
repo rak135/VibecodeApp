@@ -130,7 +130,7 @@
     {
       "title": "26 - Add fixture repositories for indexer tests",
       "description": "Create a small fixture repository inside tests.\n\nThe fixture must include:\n- Python backend file with class/function/FastAPI route,\n- Python test file,\n- TSX frontend screen with React component,\n- TSX test file,\n- package.json with a test script,\n- pyproject.toml or simple config,\n- README.md,\n- dummy node_modules/.venv directories that must not be indexed,\n- a high-risk file such as engine/matching.py.\n\nAcceptance criteria:\n- fixture is small,\n- it runs without internet,\n- it does not require real npm install or a virtualenv,\n- it tests the main indexer behavior.\n\nVerification:\n- the test suite uses the fixture for file inventory, symbol map, test map, and context pack.",
-      "completed": false
+      "completed": true
     },
     {
       "title": "27 - Add unit tests for the main indexing modules",

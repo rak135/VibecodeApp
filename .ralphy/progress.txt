@@ -25,3 +25,4 @@
 - [✓] 2026-05-08 15:51 - 23 - Implement AGENTS.md export as a generated artifact
 - [✓] 2026-05-08 15:54 - 24 - Implement map/inspect CLI output for quick project review
 - [✓] 2026-05-08 15:59 - 25 - Enforce the human-maintained vs generated file boundary
+- [✓] 2026-05-08 16:03 - 26 - Add fixture repositories for indexer tests
