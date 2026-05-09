@@ -30,9 +30,20 @@ def test_render_agents_block_before_start_section():
     assert "## Before you start" in block
 
 
-def test_render_agents_block_references_context_pack():
+def test_render_agents_block_references_cli_context_command():
     block = render_agents_block()
-    assert ".vibecode/current/context_pack.md" in block
+    assert "vibecode.cli context" in block
+    assert "--task" in block
+
+
+def test_render_agents_block_does_not_reference_stale_context_pack():
+    block = render_agents_block()
+    assert ".vibecode/current/context_pack.md" not in block
+
+
+def test_render_agents_block_source_of_truth_section():
+    block = render_agents_block()
+    assert "## Source of truth" in block
 
 
 def test_render_agents_block_references_architecture_files():
