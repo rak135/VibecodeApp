@@ -6,8 +6,10 @@ from vibecode.config import ProtectedPathRule
 from vibecode.git_state import GitState
 from vibecode.guard import (
     GENERATED_RUNTIME_MESSAGE,
+    README_MANUAL_ONLY_MESSAGE,
     check_generated_runtime_changes,
     check_protected_path_changes,
+    check_readme_changes,
     evaluate_guard,
 )
 
@@ -95,6 +97,48 @@ def test_evaluate_guard_consumes_git_state_changed_paths():
     assert result.passed is False
     assert tuple(finding.path for finding in result.findings) == (
         ".vibecode/index/repo_tree.generated.md",
+    )
+
+
+def test_readme_change_is_allowed_during_docs_task():
+    result = check_readme_changes(("README.md",), task="update docs")
+
+    assert result.passed is True
+    assert result.findings == ()
+
+
+def test_readme_change_fails_for_non_docs_task():
+    result = check_readme_changes(("README.md",), task="update app logic")
+
+    finding = result.findings[0]
+
+    assert result.passed is False
+    assert finding.rule_id == "readme-manual-only"
+    assert finding.path == "README.md"
+    assert finding.severity == "error"
+    assert README_MANUAL_ONLY_MESSAGE in finding.message
+    assert "README/docs task" in finding.message
+
+
+def test_docs_quickstart_change_does_not_trigger_readme_guard():
+    result = check_readme_changes(("docs/QUICKSTART.md",), task="update app logic")
+
+    assert result.passed is True
+    assert result.findings == ()
+
+
+def test_evaluate_guard_applies_readme_policy():
+    state = GitState(
+        is_git_repo=True,
+        changed_paths=("README.md",),
+        untracked_paths=(),
+    )
+
+    result = evaluate_guard(state, task="update app logic")
+
+    assert result.passed is False
+    assert tuple(finding.rule_id for finding in result.findings) == (
+        "readme-manual-only",
     )
 
 

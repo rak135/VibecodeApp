@@ -14,6 +14,16 @@ GENERATED_RUNTIME_RULE_ID = "generated-runtime-files"
 GENERATED_RUNTIME_MESSAGE = (
     "Regenerate generated files; do not manually edit them."
 )
+README_RULE_ID = "readme-manual-only"
+README_MANUAL_ONLY_MESSAGE = (
+    "README.md is manual-only until generated block markers are introduced."
+)
+README_ALLOWED_GENERATED_BLOCK_MARKERS: tuple[tuple[str, str], ...] = (
+    (
+        "<!-- vibecode:readme:generated:start -->",
+        "<!-- vibecode:readme:generated:end -->",
+    ),
+)
 
 _GENERATED_RUNTIME_PREFIXES: tuple[str, ...] = (
     ".vibecode/current/",
@@ -63,8 +73,15 @@ def evaluate_guard(git_state: GitState, *, task: str = "") -> GuardResult:
         task=task,
         untracked_paths=git_state.untracked_paths,
     )
+    readme_result = check_readme_changes(git_state.changed_paths, task=task)
     return GuardResult(
-        findings=_dedupe_findings((*policy_result.findings, *generated_result.findings))
+        findings=_dedupe_findings(
+            (
+                *policy_result.findings,
+                *generated_result.findings,
+                *readme_result.findings,
+            )
+        )
     )
 
 
@@ -134,6 +151,48 @@ def check_generated_runtime_changes(
                 recommended_fix=(
                     "Regenerate this artifact with the owning command and do not "
                     "commit manual generated/runtime edits."
+                ),
+            )
+        )
+    return GuardResult(findings=tuple(findings))
+
+
+def check_readme_changes(
+    changed_paths: tuple[str, ...] | list[str],
+    *,
+    task: str = "",
+) -> GuardResult:
+    """Fail root README changes unless the task is explicitly docs-scoped.
+
+    The allowed generated block markers are defined for future policy use, but
+    this task does not add generated README block automation.
+    """
+
+    if _task_allows_readme_change(task):
+        return GuardResult()
+
+    findings = []
+    for raw_path in changed_paths:
+        path = _normalise_path(raw_path)
+        if path != "README.md":
+            continue
+        findings.append(
+            GuardFinding(
+                rule_id=README_RULE_ID,
+                path=path,
+                severity="error",
+                message=(
+                    "README.md changed outside an explicit README/docs task "
+                    f"or allowed generated block markers. {README_MANUAL_ONLY_MESSAGE} "
+                    f"Offending path: {path}."
+                ),
+                rule=(
+                    "Root README changes are allowed only for README/docs tasks "
+                    "or inside future generated blocks."
+                ),
+                recommended_fix=(
+                    "Revert README.md or rerun with explicit README/docs task "
+                    "scope. Do not add generated README automation here."
                 ),
             )
         )
@@ -237,6 +296,10 @@ def _task_mentions_scope(task: str, path: str, rule_path: str) -> bool:
 def _task_tests_generator_behavior(task: str) -> bool:
     words = task.lower().replace("-", " ")
     return "generator" in words and ("test" in words or "testing" in words)
+
+
+def _task_allows_readme_change(task: str) -> bool:
+    return bool(_words(task) & {"readme", "docs", "doc", "documentation"})
 
 
 def _format_required_tests(required_tests: tuple[str, ...]) -> str:

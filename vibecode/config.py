@@ -64,6 +64,14 @@ DEFAULT_PROTECTED_PATH_RULES = (
         rule="Runtime/session state; do not commit or treat as source truth.",
     ),
     ProtectedPathRule(
+        path="README.md",
+        rule=(
+            "Manual-only until generated block markers are introduced; only "
+            "README/docs tasks may change it."
+        ),
+        explicit_task_scope_required=False,
+    ),
+    ProtectedPathRule(
         path="vibecode/indexer/scanner.py",
         rule=(
             "Scanner semantics define repository inventory; require task scope and "

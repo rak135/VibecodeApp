@@ -11,3 +11,4 @@
 - Internal git changed-file inspection utility is implemented and tested for future guard/check/run workflows.
 - Internal guard rule evaluation now fails generated/runtime file changes with tests.
 - Protected path guard evaluation now reports protected path scope failures, required tests, generated-artifact hard failures, and handoff/explanation requirements.
+- README guard evaluation now treats root `README.md` as manual-only unless the task explicitly mentions README/docs; docs files such as `docs/QUICKSTART.md` are not blocked.

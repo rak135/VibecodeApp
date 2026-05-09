@@ -65,7 +65,7 @@
     {
       "title": "Implement README generated-block guard",
       "description": "Purpose: protect README from uncontrolled agent rewrites.\n\nScope:\n- Add guard logic for README changes.\n- Define allowed generated block markers if they exist, or document that README is manual-only until generated blocks are introduced.\n- Do not add README generated block automation in this task.\n\nBehavior:\n- If README changes outside allowed markers, guard should warn or fail depending on policy.\n- If no markers exist, README changes are allowed only when task explicitly mentions README/docs.\n- Do not block docs tasks.\n\nAcceptance:\n- Tests cover README changed during docs task and non-docs task.\n- Error message is clear.\n- No false failure for `docs/QUICKSTART.md` changes.",
-      "completed": false
+      "completed": true
     },
     {
       "title": "Implement architecture-change handoff guard",

@@ -17,6 +17,10 @@ protected_paths:
   - path: ".vibecode/current/*"
     rule: "Runtime/session state; do not commit or treat as source truth."
 
+  - path: "README.md"
+    rule: "Manual-only until generated block markers are introduced; only README/docs tasks may change it."
+    explicit_task_scope_required: false
+
   - path: "vibecode/indexer/scanner.py"
     rule: "Scanner semantics define repository inventory; require task scope and tests for path/include/exclude behavior."
     required_tests:
