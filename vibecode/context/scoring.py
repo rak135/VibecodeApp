@@ -148,6 +148,17 @@ _DEP_BOOST_THRESHOLD = 12
 _DEP_BOOST = 3
 _DEP_BOOST_CAP = 3
 
+# Cap the number of files that any single high-scoring source can boost via dep
+# connections.  Without a cap, a utility module imported by many peers can scatter
+# boosts across files that are only tangentially relevant.
+_DEP_FANOUT_CAP = 5
+
+# Minimum pass-1 (+ pairing) score that a dep-connected target must reach before
+# it qualifies for a dep boost.  Requires more than a bare extension match (+2),
+# ensuring dep boosts only amplify files that already carry a meaningful relevance
+# signal (keyword, phrase, arch doc, pairing, …).
+_DEP_RECEIVE_THRESHOLD = 4
+
 # Minimum pass-1 score a source file must reach (without pairing boost) for its
 # paired tests to receive the pairing boost in pass 1.5.  This prevents unrelated
 # tests from entering the long tail simply because they happen to be paired with a
@@ -192,7 +203,10 @@ _PHRASE_BOOST = 12
 #   - path_patterns are lowercase substrings of file paths (posix separators).
 _PHRASE_ROUTES: tuple[tuple[frozenset[str], tuple[str, ...]], ...] = (
     # "context pack" / "context rendering" / "context pack rendering"
-    (frozenset({"context", "pack"}),      ("context/renderer", "test_vibecode_context_pack", "context/scoring")),
+    # "context/__init__" targets vibecode/context/__init__.py (defines cmd_context,
+    # the entry point for the context command) — relevant for context-pack tasks even
+    # though __init__.py is otherwise a hub file that must not spread dep boosts.
+    (frozenset({"context", "pack"}),      ("context/renderer", "test_vibecode_context_pack", "context/scoring", "context/__init__")),
     (frozenset({"context", "rendering"}), ("context/renderer", "test_vibecode_context_pack")),
     # "repo tree" / "architecture tree" / "architecture map rendering"
     (frozenset({"repo", "tree"}),             ("indexer/repo_tree", "test_vibecode_repo_tree")),
@@ -238,6 +252,14 @@ def score_relevant_files(
 
     # Load all project signals once.
     arch_keyword_reasons = _architecture_signal(root, task_keywords)
+    # Arch docs that mention a task keyword (e.g. "scoring") often also cross-reference
+    # hub/gateway files (cli.py, config.py, …).  Without filtering, those hub files
+    # receive a false +3 arch-doc boost for tasks unrelated to CLI behaviour.
+    if not task_is_hub_relevant:
+        arch_keyword_reasons = {
+            k: v for k, v in arch_keyword_reasons.items()
+            if not _is_hub_file(k)
+        }
     recent_paths = _recent_git_paths(root)
     source_to_tests = _source_test_pairs(root, path_set)
     # Suppress hub-file pairings when the task is not CLI/command-related.
@@ -344,8 +366,12 @@ def score_relevant_files(
                 reasons.append("config/entrypoint file")
 
         if _extension_matches_task(rel, task_keywords):
-            score += 2
-            reasons.append("matching extension for task domain")
+            # Hub files match ".py" on almost every Python task via language extension
+            # alone; suppress the extension boost unless the task is explicitly about
+            # CLI/command behaviour so they don't create noise in unrelated results.
+            if not _is_hub_file(rel) or task_is_hub_relevant:
+                score += 2
+                reasons.append("matching extension for task domain")
 
         extra: dict = {}
         if risk_level:
@@ -387,11 +413,27 @@ def score_relevant_files(
         # fan-out that lifts unrelated files.
         if _is_hub_file(rel) and not task_is_hub_relevant:
             continue
-        for connected in dep_connections.get(rel, set()):
-            if connected in path_set and connected != rel:
-                dep_boosts.setdefault(connected, []).append(
-                    f"dependency connection from `{rel}`"
-                )
+        # Fan-out cap: sort connected files for deterministic selection, then
+        # limit the number of files this source can boost so that a widely-imported
+        # utility cannot scatter boosts across many unrelated files.
+        connected_candidates = sorted(
+            c for c in dep_connections.get(rel, set())
+            if c in path_set and c != rel
+        )
+        sent = 0
+        for connected in connected_candidates:
+            if sent >= _DEP_FANOUT_CAP:
+                break
+            # Target must already carry a meaningful relevance signal of its own
+            # (pass-1 + pairing score ≥ _DEP_RECEIVE_THRESHOLD).  A bare extension
+            # match (+2) is not sufficient; this prevents completely unrelated files
+            # from entering results solely via a dep connection.
+            if raw.get(connected, (0,))[0] < _DEP_RECEIVE_THRESHOLD:
+                continue
+            dep_boosts.setdefault(connected, []).append(
+                f"dependency connection from `{rel}`"
+            )
+            sent += 1
 
     # Assemble final results.
     results: list[dict] = []

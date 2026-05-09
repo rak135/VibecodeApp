@@ -17,4 +17,10 @@
   - `_active_phrase_patterns()` helper computes active patterns from task keywords each run.
   - Matched files receive `_PHRASE_BOOST` (+12), producing a "phrase route match" reason.
   - `platform_registry.py` no longer outranks `renderer.py` for context-pack rendering tasks.
-  - 8 new phrase-routing tests (O–V) added to test_vibecode_relevant_files.py; 715 total tests pass.
+  - `context/__init__` added to "context pack" phrase route (targets cmd_context entry point).
+- Hub/gateway file isolation strengthened in scoring.py:
+  - Arch-doc cross-references to hub files suppressed for non-hub tasks; arch docs mentioning a scoring keyword no longer lift cli.py via a false +3 reference boost.
+  - Extension match suppressed for hub files in non-hub tasks; hub files no longer appear via bare language-extension signal.
+  - `_DEP_FANOUT_CAP = 5`: each high-scoring source now boosts at most 5 connected files, preventing widely-imported utility modules from scattering boosts.
+  - `_DEP_RECEIVE_THRESHOLD = 4`: dep boost targets must reach score ≥ 4 (more than a bare +2 extension match) before receiving a dep boost, ensuring only files with own relevance are amplified.
+  - 3 new tests (W–Y) added: hub absent from non-CLI results, fan-out cap, dep receive threshold; 718 total tests pass.

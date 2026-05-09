@@ -697,3 +697,118 @@ def test_opencode_phrase_boosts_platform_files(tmp_path):
     export_score = scored["vibecode/context/platform_export.py"]["score"]
     assert export_score > renderer_score
 
+
+# ---------------------------------------------------------------------------
+# Hub suppression and dep fan-out / receive-threshold tests — W, X, Y
+# ---------------------------------------------------------------------------
+
+
+def test_hub_file_absent_from_non_cli_task_results(tmp_path):
+    """W: cli.py must not appear in scored results for a non-CLI implementation task."""
+    _write(
+        tmp_path / ".vibecode" / "architecture" / "MODULE_BOUNDARIES.md",
+        # This doc mentions "scoring" (a task keyword) and cross-references cli.py.
+        # The hub-ref suppression must prevent cli.py from receiving a false arch-doc boost.
+        "CLI code (`vibecode/cli.py`) must not implement scoring.\n"
+        "Scoring lives in `vibecode/context/scoring.py`.\n",
+    )
+    inventory = _inventory(
+        "vibecode/context/scoring.py",
+        "tests/test_vibecode_relevant_files.py",
+        "vibecode/cli.py",
+        "vibecode/config.py",
+        "vibecode/__init__.py",
+    )
+
+    results = score_relevant_files(
+        tmp_path, "Improve relevant-file scoring", inventory=inventory, limit=10
+    )
+    paths = _paths(results)
+
+    # Direct implementation files must dominate.
+    assert "vibecode/context/scoring.py" in paths[:2]
+    assert "tests/test_vibecode_relevant_files.py" in paths[:2]
+    # Hub files must be absent — they have no own-relevance signal for a scoring task.
+    assert "vibecode/cli.py" not in paths, "cli.py must not appear in non-CLI task results"
+    assert "vibecode/config.py" not in paths, "config.py must not appear in non-CLI task results"
+    assert "vibecode/__init__.py" not in paths, "__init__.py must not appear in non-CLI task results"
+
+
+def test_dep_boost_fanout_is_capped_per_source(tmp_path):
+    """X: A single high-scoring source must not boost more than _DEP_FANOUT_CAP files."""
+    from vibecode.context.scoring import _DEP_FANOUT_CAP
+
+    # scoring.py → 8 target files that all carry their own relevance signal
+    # (each has "relevant" in the name → +10 keyword match for "Improve relevant-file scoring").
+    targets = [f"vibecode/context/relevant_{chr(ord('a') + i)}.py" for i in range(8)]
+    dep_edges = [
+        {
+            "from": "vibecode/context/scoring.py",
+            "import_target": f"vibecode.context.relevant_{chr(ord('a') + i)}",
+            "type": "python",
+            "status": "resolved",
+            "resolved_path": t,
+        }
+        for i, t in enumerate(targets)
+    ]
+    dep_path = tmp_path / ".vibecode" / "index" / "dependency_map.json"
+    dep_path.parent.mkdir(parents=True, exist_ok=True)
+    dep_path.write_text(
+        json.dumps({"$schema": "vibecode/dependency-map/v1", "edges": dep_edges}),
+        encoding="utf-8",
+    )
+
+    inventory = _inventory("vibecode/context/scoring.py", *targets)
+    results = score_relevant_files(
+        tmp_path, "Improve relevant-file scoring", inventory=inventory, limit=20
+    )
+    scored = {r["path"]: r for r in results}
+
+    boosted_count = sum(
+        1
+        for t in targets
+        if "dependency connection" in " ".join(scored.get(t, {}).get("reasons", []))
+    )
+    assert boosted_count <= _DEP_FANOUT_CAP, (
+        f"Fan-out from scoring.py exceeded cap: {boosted_count} files boosted "
+        f"(cap={_DEP_FANOUT_CAP})"
+    )
+
+
+def test_dep_boost_requires_target_own_relevance(tmp_path):
+    """Y: A dep-connected file with no meaningful own signal must not receive a dep boost."""
+    dep_map = {
+        "$schema": "vibecode/dependency-map/v1",
+        "edges": [
+            {
+                "from": "vibecode/context/scoring.py",
+                "import_target": "vibecode.context.unrelated_helper",
+                "type": "python",
+                "status": "resolved",
+                "resolved_path": "vibecode/context/unrelated_helper.py",
+            }
+        ],
+    }
+    dep_path = tmp_path / ".vibecode" / "index" / "dependency_map.json"
+    dep_path.parent.mkdir(parents=True, exist_ok=True)
+    dep_path.write_text(json.dumps(dep_map), encoding="utf-8")
+
+    inventory = _inventory(
+        "vibecode/context/scoring.py",
+        "tests/test_vibecode_relevant_files.py",
+        # unrelated_helper.py has no task keywords ("relevant", "scoring" absent from path)
+        # and scores only +2 from extension match — below _DEP_RECEIVE_THRESHOLD.
+        "vibecode/context/unrelated_helper.py",
+    )
+
+    results = score_relevant_files(
+        tmp_path, "Improve relevant-file scoring", inventory=inventory, limit=10
+    )
+    scored = {r["path"]: r for r in results}
+
+    unrelated_reasons = " ".join(
+        scored.get("vibecode/context/unrelated_helper.py", {}).get("reasons", [])
+    )
+    assert "dependency connection" not in unrelated_reasons, (
+        "unrelated_helper.py must not receive a dep boost without own relevance"
+    )
