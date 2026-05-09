@@ -1,7 +1,7 @@
 # Vibecode — Quickstart Guide
 
 This guide walks a new developer through installing Vibecode, creating an architecture map
-for any local repository, and inspecting the generated output.
+for any local repository, and using the safe OpenCode workflow to run agent-assisted tasks.
 
 ---
 
@@ -12,24 +12,27 @@ for any local repository, and inspecting the generated output.
 - **`validate`** — check that all generated artifacts are internally consistent and that human-maintained files are in place
 - **`map`** — print a one-page project summary (file counts, languages, symbols, tests, high-risk files) from the last index run
 - **`context`** — generate a task-scoped `.vibecode/current/context_pack.md` ready to be pasted as agent context
+- **`run-plan`** — assemble and inspect a full run plan without launching an agent (pre-flight check)
+- **`run`** — execute the full agent loop: context generation, platform invocation, post-run guard/check/handoff
+- **`guard`** — check git diff against guard rules (protected paths, generated files, architecture truth)
 - **`check`** — run required checks from `.vibecode/checks/required_checks.yaml`
-- **`export-agents`** — write `AGENTS.md` (and `.vibecode/generated/AGENTS.generated.md`) with pre-edit and post-edit agent instructions
+- **`handoff-check`** — validate handoff files (NOW/NEXT/BLOCKERS) and architecture-change recording
+- **`export-agents`** — write `AGENTS.md` with pre-edit and post-edit agent instructions
 
-## What Vibecode cannot do yet
+## What Vibecode does not do
 
-The following are **explicitly out of scope** for the Architecture Map Core:
+The following behaviors are **explicitly out of scope**:
 
-| Not available yet | Why deferred |
-|---|---|
-| Launching OpenCode or any other coding agent | Agent runtime work begins after the map and context pack are verified |
-| Calling any LLM or AI API | Architecture Map Core is fully deterministic and offline |
-| MCP server | Depends on a stable index |
-| GUI | CLI-first by design |
-| Auto-commit or auto-approve | Dangerous without a validated, stable index |
+- No custom coding agent runtime bundled with Vibecode — the `run` command invokes an external tool (e.g. OpenCode) that must be installed separately
+- No LLM or AI API calls from Vibecode itself — all inference happens in the external tool
+- No auto-commit or auto-approve — every agent edit is reviewed through guard checks before and after the run
+- No GUI — CLI-first by design
+- No MCP server
 
-> **Note:** OpenCode prompt export (`--platform opencode`) prepares a file you can pass
-> to an external agent yourself. Vibecode does **not** launch OpenCode.
-> OpenCode runtime integration is a future phase.
+> **Note:** OpenCode prompt export (`--platform opencode`) prepares a file you can pass to an external agent manually.
+> The `vibecode run` command can invoke OpenCode directly if it is on PATH, but this is still a **manual, user-initiated action** —
+> Vibecode orchestrates the workflow, the external tool does the editing.
+> Agent runtime integration is a supported workflow but requires OpenCode to be installed.
 
 ---
 
@@ -201,11 +204,15 @@ Generate a task-scoped context pack for a coding agent:
 python -m vibecode.cli context "Add rate limiting to the auth endpoint" --repo C:\path\to\example-repo
 ```
 
-This writes `.vibecode\current\context_pack.md`, a task-specific runtime artifact. Inspect it:
+This writes `.vibecode\current\context_pack.md`, a task-specific runtime artifact.
+To also export an OpenCode-compatible prompt wrapper, add `--platform opencode`:
 
 ```powershell
-Get-Content C:\path\to\example-repo\.vibecode\current\context_pack.md
+python -m vibecode.cli context "Add rate limiting to the auth endpoint" --repo C:\path\to\example-repo --platform opencode
 ```
+
+This additionally writes `.vibecode\current\opencode_prompt.md` with pre-edit and post-edit instructions.
+**Vibecode does not launch OpenCode** — passing the prompt to an external agent is a manual step.
 
 The context pack contains:
 
@@ -232,44 +239,92 @@ Alternative forms of the `context` command:
 python -m vibecode.cli context C:\path\to\example-repo --task "Add rate limiting to the auth endpoint"
 ```
 
-### Step 6 — OpenCode prompt export (preview)
+### Step 7 — run-plan (preview)
 
-> **Preview feature.** OpenCode prompt export prepares a file you can pass to an
-> external agent manually. **Vibecode does not launch OpenCode.** Automated
-> OpenCode runtime integration is a planned future phase.
-
-Wrap the context pack in OpenCode-compatible pre/post-edit instructions:
+Before launching an agent, assemble and inspect a full run plan:
 
 ```powershell
-python -m vibecode.cli context "Add rate limiting to the auth endpoint" --repo C:\path\to\example-repo --platform opencode
+python -m vibecode.cli run-plan C:\path\to\example-repo --task "Add rate limiting to the auth endpoint"
 ```
 
-This writes two files:
+`run-plan` checks preconditions without making changes:
 
-| File | Purpose |
-|---|---|
-| `.vibecode\current\context_pack.md` | Raw context pack (always written) |
-| `.vibecode\current\opencode_prompt.md` | OpenCode wrapper with pre/post-edit instructions |
+- Git working tree status (clean or dirty)
+- Project config exists and is valid
+- Index freshness (warns if stale or missing)
+- OpenCode availability on PATH
+- Permission profile resolution
 
-Inspect the prompt:
+It writes `.vibecode\current\run_plan.json` and prints a human-readable summary.
+Errors must be resolved before proceeding with `run`.
+
+### Step 8 — run (agent loop)
+
+Execute the full safe agent loop:
 
 ```powershell
-Get-Content C:\path\to\example-repo\.vibecode\current\opencode_prompt.md
+python -m vibecode.cli run C:\path\to\example-repo --task "Add rate limiting to the auth endpoint" --profile safe
 ```
 
-> **This command does not launch OpenCode.** It only writes the file. Passing the file to
-> an external agent session is a manual step for now. Automated OpenCode integration is a
-> planned future phase.
+`run` orchestrates the complete workflow:
 
-### Step 7 — export-agents (optional)
+1. Check git status (abort if dirty, unless `--allow-dirty`)
+2. Generate or refresh the index if missing or stale (>5 min)
+3. Generate the context pack and OpenCode prompt
+4. Invoke the platform command (e.g. OpenCode) with the prompt on stdin
+5. Capture stdout / stderr / exit code
+6. Run post-run guard, required checks, and handoff validation
+7. Write session metadata to `.vibecode/runs/<session_id>.json` and a summary
+
+Permission profiles control what the agent may do:
+
+| Profile | `allows` | `prompts` | `denies` | Use case |
+|---|---|---|---|---|
+| **safe** (default) | read, grep, glob | edit, bash | write_generated, write_runtime | Most workflows |
+| **fast** | read, grep, glob, edit | bash | write_generated, write_runtime | Trusted edits; guard runs after |
+| **audit** | read, grep, glob | (none) | edit, write, write_generated, write_runtime | Read-only inspection |
+
+Flags:
+
+| Flag | Default | Purpose |
+|---|---|---|
+| `--profile` | safe | Permission profile name |
+| `--allow-dirty` | off | Allow running with uncommitted changes (warn only) |
+| `--no-index` | off | Skip automatic index generation/refresh |
+
+### Step 9 — post-run audit
+
+After a `run` completes (or independently), inspect results:
+
+**Guard checks** — verify no protected paths were modified without proper scope:
+
+```powershell
+python -m vibecode.cli guard C:\path\to\example-repo
+```
+
+Use `--strict` to treat warnings as hard failures.
+
+**Required checks** — re-run the check suite on the post-run state:
+
+```powershell
+python -m vibecode.cli check C:\path\to\example-repo
+```
+
+**Handoff validation** — confirm handoff files are consistent with changes:
+
+```powershell
+python -m vibecode.cli handoff-check C:\path\to\example-repo [--json]
+```
+
+### Step 10 — export-agents (optional)
 
 ```powershell
 python -m vibecode.cli export-agents C:\path\to\example-repo
 ```
 
 This writes:
-- root `AGENTS.md` - stable agent instruction for the repository; created if absent, updated if Vibecode-managed, and skipped if manual unless `--force` is given
-- `.vibecode\generated\AGENTS.generated.md` - generated export output that is ignored and always updated
+- root `AGENTS.md` — stable agent instruction for the repository; created if absent, updated if Vibecode-managed, and skipped if manual unless `--force` is given
+- `.vibecode\generated\AGENTS.generated.md` — generated export output that is ignored and always updated
 
 `export-agents` must not overwrite a manual root `AGENTS.md` without `--force`.
 Future agents should read root `AGENTS.md`, then generate a task-specific
@@ -318,6 +373,16 @@ Get-Content C:\path\to\example-repo\.vibecode\current\check_results.json | pytho
 ```powershell
 Get-ChildItem C:\path\to\example-repo\.vibecode\logs\index_runs\ | Sort-Object LastWriteTime -Descending | Select-Object -First 1 | Get-Content
 ```
+
+### Run metadata
+
+After a `vibecode run`, session metadata is written under `.vibecode/runs/<session_id>/summary.json`:
+
+```powershell
+Get-ChildItem C:\path\to\example-repo\.vibecode\runs\ -Directory | Sort-Object LastWriteTime -Descending | Select-Object -First 1 | Get-ChildItem | Get-Content
+```
+
+The summary includes overall status, agent exit code, guard results, check results, handoff results, and a diff summary of changes made during the run.
 
 ---
 
@@ -408,3 +473,9 @@ Get-ChildItem C:\path\to\example-repo\.vibecode\logs\index_runs\ | Sort-Object L
 3. Update `.vibecode/handoff/NOW.md` before each agent session.
 4. Re-run `vibecode index` whenever repository structure changes significantly.
 5. Re-run `vibecode context` to refresh the context pack before each agent task.
+6. Use the safe OpenCode workflow:
+   - `vibecode context "task" --repo . --platform opencode` to generate context + prompt
+   - `vibecode run-plan . --task "task"` to pre-flight the run
+   - `vibecode run . --task "task" --profile safe` to execute the agent loop
+   - `vibecode guard .`, `vibecode check .`, `vibecode handoff-check .` for post-run audit
+   - Review session metadata in `.vibecode/runs/<session_id>/summary.json`

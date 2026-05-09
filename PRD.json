@@ -170,7 +170,7 @@
     {
       "title": "Document OpenCode run workflow",
       "description": "Purpose: document the safe OpenCode workflow once implementation exists.\n\nScope:\n- Update README and QUICKSTART minimally.\n- No broad marketing copy.\n\nDocs should show context-only generation, run plan/preflight, audit/safe/fast permission profiles, running fake or real OpenCode, post-run guard/check/handoff behavior, where run metadata is stored, and that generated/runtime files remain ignored.\n\nAcceptance:\n- Docs match actual commands.\n- No claim that VibecodeApp edits code itself.\n- No GUI/MCP claims.",
-      "completed": false
+      "completed": true
     },
     {
       "title": "Keep canonical CLI command set small and consistent",

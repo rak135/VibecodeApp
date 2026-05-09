@@ -32,11 +32,9 @@ VibecodeApp is meant to become the project control layer around agentic coding w
 
 Non-goals:
 
-- no custom coding agent
+- no custom coding agent — VibecodeApp does not edit code itself; it prepares context, validates plans, and orchestrates external tools
 - no GUI
 - no MCP server
-- no OpenCode run adapter (prompt export exists as manual workflow; runtime integration is a future phase)
-- no auto-commit or auto-approve behavior
 - no LLM API calls
 
 See `docs/ARCHITECTURE_MAP_PRD.md` for desired behavior and `docs/ARCHITECTURE_MAP_STATUS.md` for implementation status.
@@ -137,13 +135,46 @@ Generate a context pack:
 python -m vibecode.cli context "Update context panel copy" --repo C:\path\to\example-repo
 ```
 
-The PRD-style form is also supported:
+This writes `.vibecode\current\context_pack.md`, a task-specific runtime artifact.
+To also export an OpenCode-compatible prompt wrapper, add `--platform opencode`:
 
 ```powershell
-python -m vibecode.cli context C:\path\to\example-repo --task "Update context panel copy"
+python -m vibecode.cli context "Update context panel copy" --repo C:\path\to\example-repo --platform opencode
 ```
 
-`context` writes `.vibecode/current/context_pack.md`, a task-specific runtime artifact for the current task. Future agent sessions should generate a fresh context pack instead of relying on old `.vibecode/current/*` output.
+This additionally writes `.vibecode\current\opencode_prompt.md` with pre-edit and post-edit instructions.
+`vibecode` does **not** launch OpenCode — passing the prompt to an external agent is a manual step.
+
+Preview a full agent run without launching it:
+
+```powershell
+python -m vibecode.cli run-plan C:\path\to\example-repo --task "Update context panel copy"
+```
+
+`run-plan` checks preconditions (git status, index freshness, OpenCode availability, permission profile)
+and writes `.vibecode\current\run_plan.json`.
+
+Run an agent session:
+
+```powershell
+python -m vibecode.cli run C:\path\to\example-repo --task "Update context panel copy" --profile safe
+```
+
+`run` orchestrates the full loop: generate context pack → invoke the platform command with the prompt on stdin →
+run post-run guard, required checks, and handoff validation → write session metadata.
+Use `--profile safe` (default), `fast`, or `audit` to control permission levels.
+Use `--allow-dirty` to run with uncommitted changes (warn only, no error).
+Use `--no-index` to skip automatic index generation.
+
+Execute a post-run audit:
+
+```powershell
+python -m vibecode.cli guard C:\path\to\example-repo [--strict]
+python -m vibecode.cli check C:\path\to\example-repo
+python -m vibecode.cli handoff-check C:\path\to\example-repo [--json]
+```
+
+These can also be run independently outside of a `run` session.
 
 Export agent instructions:
 
