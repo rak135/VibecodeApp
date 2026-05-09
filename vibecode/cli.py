@@ -134,6 +134,32 @@ def create_parser() -> argparse.ArgumentParser:
         help="Write a JSON report to .vibecode/current/handoff_check.json.",
     )
 
+    # run-plan
+    run_plan_parser = subparsers.add_parser(
+        "run-plan",
+        help="Assemble a run plan for an agent without launching it.",
+    )
+    run_plan_parser.add_argument(
+        "repo_root",
+        nargs="?",
+        default=".",
+        help="Repository root directory (default: current directory).",
+    )
+    run_plan_parser.add_argument(
+        "--task", default="", help="Task description for the context pack."
+    )
+    run_plan_parser.add_argument(
+        "--platform",
+        default="opencode",
+        choices=["opencode"],
+        help="Target platform (default: opencode).",
+    )
+    run_plan_parser.add_argument(
+        "--profile",
+        default=None,
+        help="Permission profile name (default: safe).",
+    )
+
     # history
     history_parser = subparsers.add_parser(
         "history", help="Manage durable history summaries."
@@ -288,6 +314,12 @@ def _dispatch(args, parser) -> int:
         _require_root_exists(args.repo_root)
         from vibecode.handoff import cmd_handoff_check
         return cmd_handoff_check(args)
+
+    if args.command == "run-plan":
+        args.repo_root = normalise_root(args.repo_root)
+        _require_root_exists(args.repo_root)
+        from vibecode.run_plan import cmd_run_plan
+        return cmd_run_plan(args)
 
     if args.command == "history":
         from vibecode.history import cmd_history

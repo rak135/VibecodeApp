@@ -7,7 +7,7 @@ import sys
 from pathlib import Path
 
 from vibecode.config import render_protected_paths_yaml
-from vibecode.permissions import PROFILES, all_profile_paths, write_profile
+from vibecode.permissions import PROFILES, profile_path, write_profile
 
 # Directories created as empty generated artifacts (always safe to re-create).
 _GENERATED_DIRS = [

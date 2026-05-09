@@ -145,7 +145,7 @@
     {
       "title": "Build OpenCode prompt/run plan assembly",
       "description": "Purpose: assemble everything needed for an OpenCode run without executing OpenCode yet.\n\nScope:\n- Add run planning utility.\n- Do not launch OpenCode in this task.\n- Tests required.\n\nRun plan should include repo root, task, dirty git status, index freshness status, context pack path, opencode prompt path, permission profile, preflight warnings, and commands that would be run.\n\nAcceptance:\n- Either `vibecode run-plan <repo> --platform opencode --task \"...\"` exists, or an internal utility with tests exists if CLI is too soon.\n- Dirty repo warning exists.\n- Missing/stale index warning exists.\n- No agent process is started.",
-      "completed": false
+      "completed": true
     },
     {
       "title": "Implement OpenCode run preflight",
