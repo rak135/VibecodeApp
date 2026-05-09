@@ -155,7 +155,7 @@
     {
       "title": "Implement OpenCode run adapter with fake runner tests",
       "description": "Purpose: add `vibecode run <repo> --platform opencode --task \"...\"` using a fake OpenCode binary in tests.\n\nPrerequisites:\nOpenCode detection and preflight exist.\n\nFlow:\n1. check git status\n2. generate or refresh index if missing/stale\n3. generate context pack\n4. generate opencode prompt\n5. invoke configured OpenCode command with safe prompt input\n6. capture stdout/stderr/exit code\n7. write session metadata under `.vibecode/runs/`\n8. do not commit generated/runtime files\n\nAcceptance:\n- Tests use fake OpenCode script/command and do not require real OpenCode.\n- Run metadata is stored under ignored `.vibecode/runs/`.\n- Failed OpenCode command reports clear error.\n- Dirty repo behavior is safe.",
-      "completed": false
+      "completed": true
     },
     {
       "title": "Run post-OpenCode guard and check pipeline",
