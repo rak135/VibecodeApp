@@ -19,9 +19,93 @@ class ProjectConfig:
     include: List[str] = field(default_factory=list)
     exclude: List[str] = field(default_factory=list)
     protected_paths: List[str] = field(default_factory=list)
+    protected_path_records: List["ProtectedPathRule"] = field(default_factory=list)
     risk_rules: List[str] = field(default_factory=list)
     required_checks: List[str] = field(default_factory=list)
     required_check_records: List[dict] = field(default_factory=list)
+
+
+@dataclass(frozen=True)
+class ProtectedPathRule:
+    path: str
+    rule: str
+
+
+DEFAULT_PROTECTED_PATH_RULES = (
+    ProtectedPathRule(
+        path=".vibecode/architecture/",
+        rule=(
+            "Edit only when the task explicitly changes architecture truth; "
+            "preserve human-maintained docs."
+        ),
+    ),
+    ProtectedPathRule(
+        path=".vibecode/checks/",
+        rule=(
+            "Edit only for check or policy tasks; keep human-maintained policies "
+            "separate from generated artifacts."
+        ),
+    ),
+    ProtectedPathRule(
+        path=".vibecode/handoff/",
+        rule=(
+            "Edit only to record current scope or handoff state; do not treat it "
+            "as generated output."
+        ),
+    ),
+    ProtectedPathRule(
+        path=".vibecode/index/*.generated.*",
+        rule="Regenerate through index commands instead of manual edits.",
+    ),
+    ProtectedPathRule(
+        path=".vibecode/current/*",
+        rule="Runtime/session state; do not commit or treat as source truth.",
+    ),
+    ProtectedPathRule(
+        path="vibecode/indexer/scanner.py",
+        rule=(
+            "Scanner semantics define repository inventory; require task scope and "
+            "tests for path/include/exclude behavior."
+        ),
+    ),
+    ProtectedPathRule(
+        path="vibecode/indexer/repo_tree.py",
+        rule=(
+            "Repository tree rendering controls generated map output; require task "
+            "scope and tests for tree output."
+        ),
+    ),
+    ProtectedPathRule(
+        path="vibecode/context/scoring.py",
+        rule=(
+            "Context relevance scoring controls agent context; require task scope "
+            "and tests for ranking behavior."
+        ),
+    ),
+    ProtectedPathRule(
+        path="vibecode/context/renderer.py",
+        rule=(
+            "Context-pack rendering controls agent-facing output; require task "
+            "scope and tests for rendered sections/limits."
+        ),
+    ),
+)
+
+
+def render_protected_paths_yaml() -> str:
+    lines = [
+        "# vibecode protected paths policy",
+        "# schema: vibecode/protected-paths/v1",
+        "",
+        "protected_paths:",
+    ]
+    for record in DEFAULT_PROTECTED_PATH_RULES:
+        lines.extend([
+            f'  - path: "{record.path}"',
+            f'    rule: "{record.rule}"',
+            "",
+        ])
+    return "\n".join(lines)
 
 
 def load_config(vibecode_dir: Path) -> ProjectConfig:
@@ -63,6 +147,13 @@ def load_config(vibecode_dir: Path) -> ProjectConfig:
 
     indexing = raw.get("indexing") or {}
     check_records = _load_required_check_records(vibecode_dir)
+    protected_path_records = load_protected_path_records(vibecode_dir)
+    legacy_protected_paths = list(raw.get("protected_paths") or [])
+    protected_paths = (
+        [_protected_path_pattern(record.path) for record in protected_path_records]
+        if protected_path_records
+        else legacy_protected_paths
+    )
     legacy_checks = _legacy_required_checks(raw.get("required_checks") or [])
     required_checks = [str(check["command"]) for check in check_records if check.get("required")]
     if not required_checks:
@@ -73,7 +164,8 @@ def load_config(vibecode_dir: Path) -> ProjectConfig:
         root=root_path,
         include=list(indexing.get("include") or []),
         exclude=list(indexing.get("exclude") or []),
-        protected_paths=list(raw.get("protected_paths") or []),
+        protected_paths=protected_paths,
+        protected_path_records=protected_path_records,
         risk_rules=list(raw.get("risk_rules") or []),
         required_checks=required_checks,
         required_check_records=check_records,
@@ -88,6 +180,48 @@ def _legacy_required_checks(raw_checks: list) -> list[str]:
         elif isinstance(item, dict) and item.get("command"):
             checks.append(str(item["command"]))
     return checks
+
+
+def load_protected_path_records(vibecode_dir: Path) -> list[ProtectedPathRule]:
+    path = vibecode_dir / "checks" / "protected_paths.yaml"
+    if not path.exists():
+        return []
+    try:
+        raw = yaml.safe_load(path.read_text(encoding="utf-8"))
+    except yaml.YAMLError as exc:
+        raise ValueError(f"protected_paths.yaml is not valid YAML: {exc}") from exc
+    if raw is None:
+        raise ValueError("protected_paths.yaml: missing required field 'protected_paths'")
+    if not isinstance(raw, dict):
+        raise ValueError("protected_paths.yaml must be a YAML mapping at the top level")
+    if "protected_paths" not in raw:
+        raise ValueError("protected_paths.yaml: missing required field 'protected_paths'")
+    records = raw["protected_paths"]
+    if not isinstance(records, list):
+        raise ValueError("protected_paths.yaml: 'protected_paths' must be a list")
+
+    normalized: list[ProtectedPathRule] = []
+    for index, record in enumerate(records, start=1):
+        if not isinstance(record, dict):
+            raise ValueError(f"protected_paths.yaml: entry #{index} must be a mapping")
+        path_value = record.get("path")
+        rule = record.get("rule")
+        if not isinstance(path_value, str) or not path_value.strip():
+            raise ValueError(
+                f"protected_paths.yaml: entry #{index} requires non-empty string field 'path'"
+            )
+        if not isinstance(rule, str) or not rule.strip():
+            raise ValueError(
+                f"protected_paths.yaml: entry #{index} requires non-empty string field 'rule'"
+            )
+        normalized.append(ProtectedPathRule(path=path_value.strip(), rule=rule.strip()))
+    return normalized
+
+
+def _protected_path_pattern(path: str) -> str:
+    if path.endswith("/"):
+        return f"{path}**"
+    return path
 
 
 def _load_required_check_records(vibecode_dir: Path) -> list[dict]:

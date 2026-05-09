@@ -1,0 +1,30 @@
+# vibecode protected paths policy
+# schema: vibecode/protected-paths/v1
+
+protected_paths:
+  - path: ".vibecode/architecture/"
+    rule: "Edit only when the task explicitly changes architecture truth; preserve human-maintained docs."
+
+  - path: ".vibecode/checks/"
+    rule: "Edit only for check or policy tasks; keep human-maintained policies separate from generated artifacts."
+
+  - path: ".vibecode/handoff/"
+    rule: "Edit only to record current scope or handoff state; do not treat it as generated output."
+
+  - path: ".vibecode/index/*.generated.*"
+    rule: "Regenerate through index commands instead of manual edits."
+
+  - path: ".vibecode/current/*"
+    rule: "Runtime/session state; do not commit or treat as source truth."
+
+  - path: "vibecode/indexer/scanner.py"
+    rule: "Scanner semantics define repository inventory; require task scope and tests for path/include/exclude behavior."
+
+  - path: "vibecode/indexer/repo_tree.py"
+    rule: "Repository tree rendering controls generated map output; require task scope and tests for tree output."
+
+  - path: "vibecode/context/scoring.py"
+    rule: "Context relevance scoring controls agent context; require task scope and tests for ranking behavior."
+
+  - path: "vibecode/context/renderer.py"
+    rule: "Context-pack rendering controls agent-facing output; require task scope and tests for rendered sections/limits."

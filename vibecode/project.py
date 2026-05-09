@@ -6,6 +6,8 @@ import json
 import sys
 from pathlib import Path
 
+from vibecode.config import render_protected_paths_yaml
+
 # Directories created as empty generated artifacts (always safe to re-create).
 _GENERATED_DIRS = [
     ".vibecode/index",
@@ -143,6 +145,7 @@ def _file_templates(project_id: str, project_name: str) -> dict[str, str]:  # no
     return {
         ".vibecode/project.yaml": _project_yaml(project_id, project_name),
         ".vibecode/checks/required_checks.yaml": _required_checks_yaml(),
+        ".vibecode/checks/protected_paths.yaml": render_protected_paths_yaml(),
         ".vibecode/architecture/OVERVIEW.md": (
             f"# {project_name} Architecture Overview\n\n"
             f"{marker}\n\n"

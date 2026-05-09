@@ -5,7 +5,11 @@ from __future__ import annotations
 from pathlib import Path
 
 from vibecode.cli import main
-from vibecode.config import load_config
+from vibecode.config import (
+    DEFAULT_PROTECTED_PATH_RULES,
+    load_config,
+    load_protected_path_records,
+)
 
 
 def test_init_creates_all_required_paths(tmp_path):
@@ -21,6 +25,7 @@ def test_init_creates_all_required_paths(tmp_path):
     # Human-maintained files
     assert (tmp_path / ".vibecode" / "project.yaml").is_file()
     assert (tmp_path / ".vibecode" / "checks" / "required_checks.yaml").is_file()
+    assert (tmp_path / ".vibecode" / "checks" / "protected_paths.yaml").is_file()
     assert (tmp_path / ".vibecode" / "architecture" / "OVERVIEW.md").is_file()
     assert (tmp_path / ".vibecode" / "architecture" / "INVARIANTS.md").is_file()
     assert (tmp_path / ".vibecode" / "architecture" / "STRUCTURE.md").is_file()
@@ -51,6 +56,14 @@ def test_init_project_yaml_contains_required_fields(tmp_path):
     )
     assert "command: python -m pytest" in checks
     assert "command: python -m vibecode.cli --help" in checks
+
+
+def test_init_protected_paths_yaml_contains_default_policy(tmp_path):
+    main(["init", str(tmp_path), "--id", "myapp", "--name", "My App"])
+
+    records = load_protected_path_records(tmp_path / ".vibecode")
+
+    assert records == list(DEFAULT_PROTECTED_PATH_RULES)
 
 
 def test_init_project_yaml_default_indexing_covers_python_js_ts_and_config(tmp_path):
@@ -133,6 +146,7 @@ def test_init_idempotent_preserves_all_human_files(tmp_path):
     human_files = [
         ".vibecode/project.yaml",
         ".vibecode/checks/required_checks.yaml",
+        ".vibecode/checks/protected_paths.yaml",
         ".vibecode/architecture/OVERVIEW.md",
         ".vibecode/architecture/INVARIANTS.md",
         ".vibecode/architecture/STRUCTURE.md",

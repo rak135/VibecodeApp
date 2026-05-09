@@ -40,7 +40,7 @@
     {
       "title": "Create protected paths policy file and schema",
       "description": "Purpose: define what files/folders are protected before implementing guard enforcement.\n\nScope:\n- Add `.vibecode/checks/protected_paths.yaml`.\n- Add loader/schema code if needed.\n- Add tests for parsing and default content.\n- Do not implement full `guard` command in this task unless minimal loading CLI help is required.\n\nDefault policy should include `.vibecode/architecture/`, `.vibecode/checks/`, `.vibecode/handoff/`, `.vibecode/index/*.generated.*`, `.vibecode/current/*`, `vibecode/indexer/scanner.py`, `vibecode/indexer/repo_tree.py`, `vibecode/context/scoring.py`, and `vibecode/context/renderer.py`, each with a concrete rule and required tests where relevant.\n\nAcceptance:\n- Policy file is committed.\n- Loader validates required fields.\n- Invalid entries produce clear errors.\n- Context pack can later include protected path summary.",
-      "completed": false
+      "completed": true
     },
     {
       "title": "Expose protected paths in context pack",
