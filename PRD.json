@@ -90,7 +90,7 @@
     {
       "title": "Implement required checks schema validation",
       "description": "Purpose: make `.vibecode/checks/required_checks.yaml` enforce concrete commands before adding a runner.\n\nScope:\n- Work in config/check loading code.\n- Add tests.\n\nRules:\n- Each check must have a name and command.\n- `required` defaults to true unless explicitly false.\n- Generic commands such as `tests`, `lint`, or `run checks` without a real command should be rejected or warned.\n- Duplicate commands should be deduplicated or reported clearly.\n- Purpose/description is optional but recommended.\n\nAcceptance:\n- Existing required checks load successfully.\n- Invalid check files fail with clear error.\n- Context pack required checks remain deduplicated.",
-      "completed": false
+      "completed": true
     },
     {
       "title": "Implement required checks runner",

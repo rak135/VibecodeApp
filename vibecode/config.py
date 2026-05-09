@@ -10,6 +10,19 @@ import yaml
 
 from vibecode.paths import strip_to_posix
 
+# Commands that are too vague to be actionable as required checks.
+_GENERIC_COMMANDS = frozenset({
+    "build",
+    "check",
+    "ci",
+    "lint",
+    "run checks",
+    "test",
+    "tests",
+    "validate",
+    "verify",
+})
+
 
 @dataclass
 class ProjectConfig:
@@ -288,16 +301,37 @@ def _load_required_check_records(vibecode_dir: Path) -> list[dict]:
         raise ValueError("required_checks.yaml: 'checks' must be a list")
 
     normalized: list[dict] = []
+    seen_commands: set[str] = set()
     for index, record in enumerate(records, start=1):
         if not isinstance(record, dict):
             raise ValueError(f"required_checks.yaml: check #{index} must be a mapping")
         name = record.get("name")
         command = record.get("command")
-        if not name or not command:
-            raise ValueError(f"required_checks.yaml: check #{index} requires name and command")
+        if not isinstance(name, str) or not name.strip():
+            raise ValueError(
+                f"required_checks.yaml: check #{index} requires a non-empty name"
+            )
+        if not isinstance(command, str) or not command.strip():
+            raise ValueError(
+                f"required_checks.yaml: check #{index} requires a non-empty command"
+            )
+        name = name.strip()
+        command = command.strip()
+        if command.lower() in _GENERIC_COMMANDS:
+            raise ValueError(
+                f"required_checks.yaml: check #{index} ({name!r}) has a "
+                f"generic command {command!r}; use a concrete command "
+                f"(e.g. 'python -m pytest' instead of 'tests')"
+            )
+        if command in seen_commands:
+            raise ValueError(
+                f"required_checks.yaml: duplicate command {command!r} "
+                f"(first seen in check #{index})"
+            )
+        seen_commands.add(command)
         normalized.append({
-            "name": str(name),
-            "command": str(command),
+            "name": name,
+            "command": command,
             "required": bool(record.get("required", True)),
         })
     return normalized
