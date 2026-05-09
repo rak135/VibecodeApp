@@ -70,19 +70,20 @@ def test_ignored_generated_vendor_and_cache_files_do_not_reach_top(tmp_path):
 
 
 def test_reasons_include_task_architecture_test_pair_and_domain_extension(tmp_path):
+    # Use "pack" (domain-specific, not low-value) so keyword reason strings are generated.
     _write(
         tmp_path / ".vibecode" / "architecture" / "MODULE_BOUNDARIES.md",
-        "Scoring code is maintained in `src/context.py`.\n",
+        "Scoring code is maintained in `src/pack.py`.\n",
     )
-    inventory = _inventory("src/context.py", "tests/test_context.py")
+    inventory = _inventory("src/pack.py", "tests/test_pack.py")
 
     results = score_relevant_files(tmp_path, "context pack", inventory=inventory, limit=2)
     scored = {item["path"]: item for item in results}
-    source_reasons = " ".join(scored["src/context.py"]["reasons"])
-    test_reasons = " ".join(scored["tests/test_context.py"]["reasons"])
+    source_reasons = " ".join(scored["src/pack.py"]["reasons"])
+    test_reasons = " ".join(scored["tests/test_pack.py"]["reasons"])
 
-    assert 'task keyword matched path token: "context"' in source_reasons
-    assert 'task keyword matched filename token: "context"' in source_reasons
+    assert 'task keyword matched path token: "pack"' in source_reasons
+    assert 'task keyword matched filename token: "pack"' in source_reasons
     assert "architecture" in source_reasons  # "referenced in task-relevant architecture doc ..."
     assert "paired test" in source_reasons
     assert "matching extension for task domain" in source_reasons
@@ -514,3 +515,185 @@ def test_relevant_source_propagates_boost_to_paired_test(tmp_path):
     assert "tests/test_vibecode_scoring.py" in scored, "paired test must appear in results"
     reasons = " ".join(scored["tests/test_vibecode_scoring.py"]["reasons"])
     assert "paired" in reasons, "paired test must carry a pairing reason"
+
+
+# ---------------------------------------------------------------------------
+# Phrase routing tests — O through V
+# ---------------------------------------------------------------------------
+
+
+def test_broad_context_token_alone_produces_no_keyword_reason(tmp_path):
+    """O: 'context' alone is weak — it must not generate a 'task keyword matched' reason."""
+    inventory = _inventory(
+        "vibecode/context/renderer.py",
+        "vibecode/context/platform_registry.py",
+        "vibecode/context/scoring.py",
+    )
+    results = score_relevant_files(tmp_path, "context", inventory=inventory, limit=10)
+    for item in results:
+        reasons = " ".join(item["reasons"])
+        assert 'task keyword matched' not in reasons, (
+            f"{item['path']} got a strong keyword-match reason for bare 'context': {reasons}"
+        )
+
+
+def test_context_pack_rendering_ranks_renderer_above_platform_registry(tmp_path):
+    """P: 'context pack rendering' phrase must rank renderer.py above platform_registry.py."""
+    inventory = _inventory(
+        "vibecode/context/renderer.py",
+        "vibecode/context/platform_registry.py",
+        "vibecode/context/scoring.py",
+        "tests/test_vibecode_context_pack.py",
+    )
+    results = score_relevant_files(
+        tmp_path, "Improve context pack rendering", inventory=inventory, limit=10
+    )
+    scored = {r["path"]: r["score"] for r in results}
+
+    renderer_score = scored.get("vibecode/context/renderer.py", 0)
+    registry_score = scored.get("vibecode/context/platform_registry.py", 0)
+
+    assert renderer_score > registry_score, (
+        f"renderer.py ({renderer_score}) must outscore platform_registry.py ({registry_score})"
+    )
+
+
+def test_context_pack_phrase_boosts_renderer_and_scoring(tmp_path):
+    """Q: 'context pack' phrase route boosts renderer.py, context_pack test, and scoring.py."""
+    inventory = _inventory(
+        "vibecode/context/renderer.py",
+        "vibecode/context/scoring.py",
+        "tests/test_vibecode_context_pack.py",
+        "vibecode/context/platform_registry.py",  # same dir, no phrase boost
+    )
+    results = score_relevant_files(tmp_path, "context pack", inventory=inventory, limit=10)
+    scored = {r["path"]: r for r in results}
+
+    for expected in (
+        "vibecode/context/renderer.py",
+        "vibecode/context/scoring.py",
+        "tests/test_vibecode_context_pack.py",
+    ):
+        assert expected in scored, f"{expected} missing from results"
+        reasons = " ".join(scored[expected]["reasons"])
+        assert "phrase route match" in reasons, f"{expected} lacks phrase route reason"
+
+    # platform_registry.py must score lower than phrase-boosted files.
+    registry_score = scored.get("vibecode/context/platform_registry.py", {}).get("score", 0)
+    renderer_score = scored["vibecode/context/renderer.py"]["score"]
+    assert renderer_score > registry_score, (
+        f"renderer.py ({renderer_score}) must beat platform_registry.py ({registry_score})"
+    )
+
+
+def test_repo_tree_phrase_boosts_repo_tree_file(tmp_path):
+    """R: 'repo tree' phrase boosts repo_tree.py and its test."""
+    inventory = _inventory(
+        "vibecode/indexer/repo_tree.py",
+        "tests/test_vibecode_repo_tree.py",
+        "vibecode/context/renderer.py",
+    )
+    results = score_relevant_files(tmp_path, "repo tree rendering", inventory=inventory, limit=10)
+    scored = {r["path"]: r for r in results}
+
+    for expected in ("vibecode/indexer/repo_tree.py", "tests/test_vibecode_repo_tree.py"):
+        assert expected in scored, f"{expected} missing"
+        reasons = " ".join(scored[expected]["reasons"])
+        assert "phrase route match" in reasons, f"{expected} lacks phrase route reason"
+
+    renderer_score = scored.get("vibecode/context/renderer.py", {}).get("score", 0)
+    repo_tree_score = scored["vibecode/indexer/repo_tree.py"]["score"]
+    assert repo_tree_score > renderer_score, (
+        f"repo_tree.py ({repo_tree_score}) must outscore renderer.py ({renderer_score})"
+    )
+
+
+def test_platform_export_phrase_boosts_platform_files(tmp_path):
+    """S: 'platform export' phrase boosts platform_export.py and platform_registry.py."""
+    inventory = _inventory(
+        "vibecode/context/platform_export.py",
+        "vibecode/context/platform_registry.py",
+        "tests/test_vibecode_platform_export.py",
+        "vibecode/context/renderer.py",
+    )
+    results = score_relevant_files(tmp_path, "platform export behavior", inventory=inventory, limit=10)
+    scored = {r["path"]: r for r in results}
+
+    for expected in (
+        "vibecode/context/platform_export.py",
+        "vibecode/context/platform_registry.py",
+        "tests/test_vibecode_platform_export.py",
+    ):
+        assert expected in scored, f"{expected} missing"
+        reasons = " ".join(scored[expected]["reasons"])
+        assert "phrase route match" in reasons, f"{expected} lacks phrase route reason"
+
+    renderer_score = scored.get("vibecode/context/renderer.py", {}).get("score", 0)
+    export_score = scored["vibecode/context/platform_export.py"]["score"]
+    assert export_score > renderer_score, (
+        f"platform_export.py ({export_score}) must outscore renderer.py ({renderer_score})"
+    )
+
+
+def test_agents_export_phrase_boosts_agents_files(tmp_path):
+    """T: 'agents export' phrase boosts agents_export.py and its test."""
+    inventory = _inventory(
+        "vibecode/context/agents_export.py",
+        "tests/test_vibecode_agents_export.py",
+        "vibecode/context/platform_export.py",
+    )
+    results = score_relevant_files(tmp_path, "agents export", inventory=inventory, limit=10)
+    scored = {r["path"]: r for r in results}
+
+    for expected in ("vibecode/context/agents_export.py", "tests/test_vibecode_agents_export.py"):
+        assert expected in scored, f"{expected} missing"
+        reasons = " ".join(scored[expected]["reasons"])
+        assert "phrase route match" in reasons, f"{expected} lacks phrase route reason"
+
+
+def test_required_checks_phrase_boosts_yaml_config(tmp_path):
+    """U: 'required checks' phrase boosts .vibecode/checks/required_checks.yaml."""
+    (tmp_path / ".vibecode" / "checks").mkdir(parents=True, exist_ok=True)
+    (tmp_path / ".vibecode" / "checks" / "required_checks.yaml").write_text(
+        "checks: []\n", encoding="utf-8"
+    )
+    inventory = _inventory(
+        ".vibecode/checks/required_checks.yaml",
+        "vibecode/context/scoring.py",
+    )
+    results = score_relevant_files(
+        tmp_path, "required checks validation", inventory=inventory, limit=10
+    )
+    scored = {r["path"]: r for r in results}
+
+    assert ".vibecode/checks/required_checks.yaml" in scored, "required_checks.yaml missing"
+    reasons = " ".join(scored[".vibecode/checks/required_checks.yaml"]["reasons"])
+    assert "phrase route match" in reasons
+
+
+def test_opencode_phrase_boosts_platform_files(tmp_path):
+    """V: 'opencode' token (single-token phrase) boosts platform export and registry files."""
+    inventory = _inventory(
+        "vibecode/context/platform_export.py",
+        "vibecode/context/platform_registry.py",
+        "tests/test_vibecode_platform_export.py",
+        "vibecode/context/renderer.py",
+    )
+    results = score_relevant_files(
+        tmp_path, "Add opencode prompt support", inventory=inventory, limit=10
+    )
+    scored = {r["path"]: r for r in results}
+
+    for expected in (
+        "vibecode/context/platform_export.py",
+        "vibecode/context/platform_registry.py",
+        "tests/test_vibecode_platform_export.py",
+    ):
+        assert expected in scored, f"{expected} missing"
+        reasons = " ".join(scored[expected]["reasons"])
+        assert "phrase route match" in reasons, f"{expected} lacks phrase route reason"
+
+    renderer_score = scored.get("vibecode/context/renderer.py", {}).get("score", 0)
+    export_score = scored["vibecode/context/platform_export.py"]["score"]
+    assert export_score > renderer_score
+

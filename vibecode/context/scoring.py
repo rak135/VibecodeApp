@@ -34,6 +34,10 @@ _STOPWORDS: frozenset[str] = frozenset({
 _LOW_VALUE_TOKENS: frozenset[str] = frozenset({
     "add",
     "change",
+    # "context" is the name of an entire source directory; matching it alone boosts
+    # every file under vibecode/context/ equally.  Compound phrases like "context pack"
+    # are handled via _PHRASE_ROUTES instead, which target specific files.
+    "context",
     "current",
     "file",
     "files",
@@ -172,6 +176,43 @@ _HUB_KEYWORDS: frozenset[str] = frozenset({
     "dispatch",
 })
 
+# Score bonus applied to a file when its lowercase path matches a phrase route pattern.
+_PHRASE_BOOST = 12
+
+# Phrase routes: each entry is (phrase_tokens, path_patterns).
+# When ALL tokens in phrase_tokens are present in the task keyword list, every file
+# whose lowercase path contains at least one of path_patterns receives _PHRASE_BOOST.
+# This lets compound phrases like "context pack rendering" target renderer.py
+# specifically rather than every file under vibecode/context/.
+#
+# Design rules:
+#   - Phrases must be multi-token when the individual tokens are broad (e.g. "context").
+#   - Single-token entries are allowed only for highly specific product/domain names
+#     (e.g. "opencode", "agents") that already name a narrow concern.
+#   - path_patterns are lowercase substrings of file paths (posix separators).
+_PHRASE_ROUTES: tuple[tuple[frozenset[str], tuple[str, ...]], ...] = (
+    # "context pack" / "context rendering" / "context pack rendering"
+    (frozenset({"context", "pack"}),      ("context/renderer", "test_vibecode_context_pack", "context/scoring")),
+    (frozenset({"context", "rendering"}), ("context/renderer", "test_vibecode_context_pack")),
+    # "repo tree" / "architecture tree" / "architecture map rendering"
+    (frozenset({"repo", "tree"}),             ("indexer/repo_tree", "test_vibecode_repo_tree")),
+    (frozenset({"architecture", "tree"}),     ("indexer/repo_tree", "test_vibecode_repo_tree")),
+    (frozenset({"architecture", "map"}),      ("indexer/repo_tree", "test_vibecode_repo_tree")),
+    # "opencode prompt" / "platform export" / "prompt export"
+    (frozenset({"opencode"}),            ("platform_export", "platform_registry", "test_vibecode_platform")),
+    (frozenset({"platform", "export"}),  ("platform_export", "platform_registry", "test_vibecode_platform")),
+    (frozenset({"prompt", "export"}),    ("platform_export", "platform_registry", "test_vibecode_platform")),
+    # "agents export" / "AGENTS.md"
+    (frozenset({"agents", "export"}), ("agents_export", "test_vibecode_agents_export")),
+    (frozenset({"agents"}),           ("agents_export", "test_vibecode_agents_export")),
+    # "required checks" / "check runner"
+    (frozenset({"required", "checks"}), (".vibecode/checks/required_checks", "check_runner")),
+    (frozenset({"check", "runner"}),    (".vibecode/checks/required_checks", "check_runner")),
+    # "guard" / "protected paths"
+    (frozenset({"guard"}),              ("guard", "protected")),
+    (frozenset({"protected", "paths"}), ("guard", "protected")),
+)
+
 
 def score_relevant_files(
     repo_root: Path,
@@ -193,6 +234,7 @@ def score_relevant_files(
     path_set = set(paths)
     task_keywords = _task_keywords(task)
     task_is_hub_relevant = _task_has_hub_keyword(task_keywords)
+    phrase_patterns = _active_phrase_patterns(task_keywords)
 
     # Load all project signals once.
     arch_keyword_reasons = _architecture_signal(root, task_keywords)
@@ -255,6 +297,15 @@ def score_relevant_files(
                 if keyword in filename_tokens:
                     score += 8
                     reasons.append(f'task keyword matched filename token: "{keyword}"')
+
+        # Phrase route boost: when the task contains a recognised domain phrase
+        # (e.g. "context pack", "repo tree"), files whose paths match the route's
+        # target patterns receive a strong, targeted boost.  This prevents broad
+        # directory-level tokens (like "context") from equally lifting every file
+        # under that directory; the compound phrase narrows the signal.
+        if phrase_patterns and any(pat in path_lower for pat in phrase_patterns):
+            score += _PHRASE_BOOST
+            reasons.append("phrase route match")
 
         # Architecture doc signal: the doc files themselves get a small boost.
         if _is_architecture_doc(rel):
@@ -736,3 +787,17 @@ def _is_hub_file(rel: str) -> bool:
 def _task_has_hub_keyword(task_keywords: list[str]) -> bool:
     """Return True when the task explicitly targets CLI/command topics."""
     return any(kw in _HUB_KEYWORDS for kw in task_keywords)
+
+
+def _active_phrase_patterns(task_keywords: list[str]) -> frozenset[str]:
+    """Return the set of path-substring patterns to boost, based on matched phrase routes.
+
+    A phrase route fires when all of its tokens are present in *task_keywords*.
+    The returned frozenset is empty when no phrase route matches.
+    """
+    kw_set = frozenset(task_keywords)
+    patterns: set[str] = set()
+    for phrase_tokens, route_patterns in _PHRASE_ROUTES:
+        if phrase_tokens <= kw_set:
+            patterns.update(route_patterns)
+    return frozenset(patterns)
