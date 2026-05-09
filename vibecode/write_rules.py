@@ -28,6 +28,9 @@ HUMAN_MAINTAINED_PATHS: frozenset[str] = frozenset({
     ".vibecode/handoff/NEXT.md",
     ".vibecode/handoff/BLOCKERS.md",
     ".vibecode/history/README.md",
+    ".vibecode/agents/safe.json",
+    ".vibecode/agents/fast.json",
+    ".vibecode/agents/audit.json",
 })
 
 # Path prefixes (POSIX, relative to repo root) whose contents are entirely generated.

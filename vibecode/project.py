@@ -7,6 +7,7 @@ import sys
 from pathlib import Path
 
 from vibecode.config import render_protected_paths_yaml
+from vibecode.permissions import PROFILES, all_profile_paths, write_profile
 
 # Directories created as empty generated artifacts (always safe to re-create).
 _GENERATED_DIRS = [
@@ -14,6 +15,7 @@ _GENERATED_DIRS = [
     ".vibecode/current",
     ".vibecode/logs/index_runs",
     ".vibecode/checks",
+    ".vibecode/agents",
 ]
 
 # Sentinel embedded in unfilled architecture templates.
@@ -254,6 +256,14 @@ def cmd_init(args) -> int:
             + ", ".join(skipped),
             file=sys.stderr,
         )
+
+    # Create agent permission profiles (never overwrite human-edited profiles).
+    profile_force = getattr(args, "force", False)
+    for profile_name, profile_data in PROFILES.items():
+        if write_profile(repo_root, profile_name, profile_data, force=profile_force):
+            print(f"  created {profile_path(profile_name)}", file=sys.stderr)
+        else:
+            skipped.append(profile_path(profile_name))
 
     return 0
 

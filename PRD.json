@@ -140,7 +140,7 @@
     {
       "title": "Add OpenCode permission profile templates",
       "description": "Purpose: create safe/fast/audit permission profiles for future OpenCode runs.\n\nScope:\n- Add `.vibecode/agents/` policy docs/templates or generated-on-init files.\n- Decide whether templates are human-maintained and committed.\n- Add tests for init preserving custom profiles.\n\nProfiles:\n- safe: read allow, grep/glob allow, edit ask, bash ask, generated files deny\n- fast: edit allow, bash ask, guard after run\n- audit: read only, no edit, no write\n\nAcceptance:\n- Profiles exist in clear files like `.vibecode/agents/opencode.safe.json`.\n- `init` creates missing templates but does not overwrite human-edited profiles.\n- Docs warn that sensitive projects should use audit/safe.",
-      "completed": false
+      "completed": true
     },
     {
       "title": "Build OpenCode prompt/run plan assembly",
