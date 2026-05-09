@@ -180,7 +180,7 @@
     {
       "title": "Implement project registry storage",
       "description": "Purpose: allow selecting repos by project name instead of passing paths every time.\n\nScope:\n- Add registry module.\n- No GUI.\n- Use local user-level file, likely `~/.vibecode/projects.yaml`.\n- Tests must not write to real home; use temp HOME/app data override.\n\nRegistry fields:\n- project name\n- repo path\n- project id if known\n- last used timestamp if useful\n- active project name\n\nAcceptance:\n- Can read/write registry.\n- Handles Windows paths.\n- Handles missing/deleted repo paths gracefully.\n- Registry file is outside project repo and not committed.",
-      "completed": false
+      "completed": true
     },
     {
       "title": "Add project registry CLI commands",
