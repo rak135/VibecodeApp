@@ -30,12 +30,12 @@
     {
       "title": "Harden AGENTS export workflow safety",
       "description": "Purpose: make `vibecode export-agents .` safe and predictable.\n\nExisting behavior:\nAGENTS export support exists, but the workflow must be explicit and tested.\n\nScope:\n- Work in `vibecode/context/agents_export.py`, CLI dispatch, and tests.\n- Update docs only if behavior changes.\n- Do not implement OpenCode run integration.\n\nRequired behavior:\n1. Generated content is written to `.vibecode/generated/AGENTS.generated.md`.\n2. Root `AGENTS.md` is either Vibecode-managed and safe to update, or manual and not overwritten unless `--force` is explicitly passed.\n3. If root `AGENTS.md` exists and is manual, command exits with clear message and non-zero or warning status according to existing CLI conventions.\n4. `--force` must be explicit and tested.\n5. Generated files remain ignored/untracked.\n\nAcceptance:\n- `export-agents` never silently overwrites a manual root `AGENTS.md`.\n- Tests cover no existing AGENTS, managed AGENTS, manual AGENTS without force, and manual AGENTS with force.\n- `python -m pytest tests/test_vibecode_agents_export.py -p no:cacheprovider` passes.",
-            "completed": true
-        },
+      "completed": true
+    },
     {
       "title": "Include AGENTS export workflow in context and docs",
       "description": "Purpose: make agent-facing docs explain how AGENTS.md relates to generated context packs.\n\nScope:\n- Update `README.md`, `docs/QUICKSTART.md`, or relevant docs only.\n- Do not add large roadmap text.\n- Do not modify implementation unless docs reveal a real mismatch.\n\nDocumentation must state:\n- Root `AGENTS.md` is stable agent instruction.\n- `.vibecode/current/context_pack.md` is task-specific runtime output.\n- `.vibecode/generated/AGENTS.generated.md` is generated and ignored.\n- `export-agents` must not overwrite manual root AGENTS without `--force`.\n- Future agents should generate context for each task rather than relying on old context packs.\n\nAcceptance:\n- Docs are concise and consistent with code.\n- No version labels are introduced.\n- Tests still pass.",
-      "completed": false
+      "completed": true
     },
     {
       "title": "Create protected paths policy file and schema",

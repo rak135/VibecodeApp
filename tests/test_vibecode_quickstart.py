@@ -406,6 +406,20 @@ class TestQuickstartDocumentationExists:
         assert "human-maintained" in content.lower()
         assert "generated" in content.lower()
 
+    def test_docs_explain_agent_file_lifecycles(self) -> None:
+        root = Path(__file__).parent.parent
+        content = "\n".join(
+            [
+                (root / "README.md").read_text(encoding="utf-8"),
+                (root / "docs" / "QUICKSTART.md").read_text(encoding="utf-8"),
+            ]
+        )
+        assert "Root `AGENTS.md` is stable agent instruction" in content
+        assert ".vibecode/current/context_pack.md` is task-specific runtime output" in content
+        assert ".vibecode/generated/AGENTS.generated.md` is generated export output" in content
+        assert "manual root `AGENTS.md` is not overwritten without `--force`" in content
+        assert "generate a task-specific" in content
+
     def test_quickstart_uses_example_repo_placeholder(self) -> None:
         quickstart = Path(__file__).parent.parent / "docs" / "QUICKSTART.md"
         content = quickstart.read_text(encoding="utf-8")

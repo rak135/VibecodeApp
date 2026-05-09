@@ -190,7 +190,7 @@ Generate a task-scoped context pack for a coding agent:
 python -m vibecode.cli context "Add rate limiting to the auth endpoint" --repo C:\path\to\example-repo
 ```
 
-This writes `.vibecode\current\context_pack.md`. Inspect it:
+This writes `.vibecode\current\context_pack.md`, a task-specific runtime artifact. Inspect it:
 
 ```powershell
 Get-Content C:\path\to\example-repo\.vibecode\current\context_pack.md
@@ -210,7 +210,9 @@ The context pack contains:
 - **Working rule** — minimal-change reminder
 
 The pack is automatically truncated to ~32 000 characters if the repository is large;
-lower-priority sections are dropped first and a notice is added.
+lower-priority sections are dropped first and a notice is added. Generate a fresh context
+pack for each agent task instead of relying on old `.vibecode\current\context_pack.md`
+content.
 
 Alternative forms of the `context` command:
 
@@ -246,17 +248,19 @@ Get-Content C:\path\to\example-repo\.vibecode\current\opencode_prompt.md
 
 ### Step 7 — export-agents (optional)
 
-Write `AGENTS.md` agent instructions to the repository root:
+Write stable agent instructions to the repository root:
 
 ```powershell
 python -m vibecode.cli export-agents C:\path\to\example-repo
 ```
 
 This writes:
-- `AGENTS.md` in the repository root (created if absent; updated if Vibecode-managed; skipped if externally managed unless `--force` is given)
-- `.vibecode\generated\AGENTS.generated.md` — always updated
+- root `AGENTS.md` - stable agent instruction for the repository; created if absent, updated if Vibecode-managed, and skipped if manual unless `--force` is given
+- `.vibecode\generated\AGENTS.generated.md` - generated export output that is ignored and always updated
 
-Generated AGENTS export output is ignored. Regenerate a task-specific context pack for each new task instead of relying on old `.vibecode\current\context_pack.md` content.
+`export-agents` must not overwrite a manual root `AGENTS.md` without `--force`.
+Future agents should read root `AGENTS.md`, then generate a task-specific
+`.vibecode\current\context_pack.md` for each task.
 
 ---
 

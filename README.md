@@ -137,7 +137,7 @@ The PRD-style form is also supported:
 python -m vibecode.cli context C:\path\to\example-repo --task "Update context panel copy"
 ```
 
-`context` writes `.vibecode/current/context_pack.md`, a derived runtime artifact for the current task.
+`context` writes `.vibecode/current/context_pack.md`, a task-specific runtime artifact for the current task. Future agent sessions should generate a fresh context pack instead of relying on old `.vibecode/current/*` output.
 
 Export agent instructions:
 
@@ -145,7 +145,13 @@ Export agent instructions:
 python -m vibecode.cli export-agents .
 ```
 
-`export-agents` writes `.vibecode/generated/AGENTS.generated.md` and creates or updates root `AGENTS.md` only when it is absent or Vibecode-managed. A manual root `AGENTS.md` is not silently overwritten without `--force`. Generated export output remains ignored, and task-specific context should be regenerated for each task.
+Agent-facing files have different lifecycles:
+
+- Root `AGENTS.md` is stable agent instruction for the repository.
+- `.vibecode/current/context_pack.md` is task-specific runtime output.
+- `.vibecode/generated/AGENTS.generated.md` is generated export output and remains ignored.
+
+`export-agents` writes `.vibecode/generated/AGENTS.generated.md` and creates or updates root `AGENTS.md` only when it is absent or Vibecode-managed. A manual root `AGENTS.md` is not overwritten without `--force`.
 
 Generated indexes and runtime/current files are not source of truth. Regenerate `.vibecode/index/*` and `.vibecode/current/*` before giving the context to another agent. Human-maintained project rules live under `.vibecode/project.yaml`, `.vibecode/architecture/`, `.vibecode/checks/`, `.vibecode/handoff/`, and `.vibecode/history/`.
 
