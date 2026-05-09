@@ -18,6 +18,7 @@ for any local repository, and using the safe OpenCode workflow to run agent-assi
 - **`check`** — run required checks from `.vibecode/checks/required_checks.yaml`
 - **`handoff-check`** — validate handoff files (NOW/NEXT/BLOCKERS) and architecture-change recording
 - **`export-agents`** — write `AGENTS.md` with pre-edit and post-edit agent instructions
+- **`project add/use/list/remove/current`** — register and manage named projects in a local registry
 
 ## What Vibecode does not do
 
@@ -75,6 +76,64 @@ vibecode --help
 $env:PYTHONDONTWRITEBYTECODE = '1'
 python -m pytest -p no:cacheprovider
 ```
+
+---
+
+## Two workflows
+
+Vibecode supports two complementary workflows. Use whichever fits the task.
+
+### 1. Explicit-path workflow
+
+Pass the repository root on the command line every time. No setup required.
+
+```powershell
+python -m vibecode.cli init   C:\path\to\repo --id my_repo
+python -m vibecode.cli index  C:\path\to\repo
+python -m vibecode.cli map    C:\path\to\repo
+python -m vibecode.cli context "Update login flow" --repo C:\path\to\repo
+python -m vibecode.cli run    C:\path\to\repo --task "Update login flow" --profile safe
+```
+
+### 2. Registry workflow
+
+Register projects once by name, then omit the path in future commands.
+The registry lives at `~/.vibecode/projects.yaml` — it is local machine state
+and is never committed to version control.
+
+```powershell
+# Register (once per machine)
+python -m vibecode.cli project add STOCKS C:\DATA\PROJECTS\STOCKS
+
+# Set the active project
+python -m vibecode.cli project use STOCKS
+
+# Now path is optional — active project is used automatically
+python -m vibecode.cli index
+python -m vibecode.cli map
+python -m vibecode.cli context "Update login flow"
+python -m vibecode.cli run --task "Update login flow" --profile safe
+```
+
+Registry commands:
+
+| Command | Action |
+|---|---|
+| `vibecode project add <name> <path>` | Register a project by name |
+| `vibecode project use <name>` | Set the active project |
+| `vibecode project list` | List all registered projects (`*` marks the active one) |
+| `vibecode project current` | Show the currently active project name and path |
+| `vibecode project remove <name>` | Remove a project from the registry |
+
+When a command needs a repo root, resolution order is:
+
+1. Explicit `--repo` or positional path argument
+2. Active project from the registry
+3. Current working directory (`.`)
+
+The context command (`vibecode context "task"`) follows the same resolution:
+if no `--repo` is given, it tries the registry's active project, then falls
+back to `.`.
 
 ---
 
@@ -237,6 +296,9 @@ Alternative forms of the `context` command:
 ```powershell
 # PRD-style: repo root as positional, task as --task
 python -m vibecode.cli context C:\path\to\example-repo --task "Add rate limiting to the auth endpoint"
+
+# Registry workflow: no path needed when a project is active
+python -m vibecode.cli context "Add rate limiting to the auth endpoint"
 ```
 
 ### Step 7 — run-plan (preview)
@@ -376,7 +438,7 @@ Get-ChildItem C:\path\to\example-repo\.vibecode\logs\index_runs\ | Sort-Object L
 
 ### Run metadata
 
-After a `vibecode run`, session metadata is written under `.vibecode/runs/<session_id>/summary.json`:
+After a `vibecode run`, session metadata is written under `.vibecode\runs\<session_id>\summary.json`:
 
 ```powershell
 Get-ChildItem C:\path\to\example-repo\.vibecode\runs\ -Directory | Sort-Object LastWriteTime -Descending | Select-Object -First 1 | Get-ChildItem | Get-Content
@@ -463,6 +525,10 @@ The summary includes overall status, agent exit code, guard results, check resul
 - `.vibecode/generated/*`
 - `.vibecode/logs/*`
 
+**Registry files** (local machine state — never commit):
+- `~/.vibecode/projects.yaml` — registered project names and paths
+- `~/.vibecode/.active_project` — the currently active project name
+
 ---
 
 ## Next steps after the quickstart
@@ -479,3 +545,7 @@ The summary includes overall status, agent exit code, guard results, check resul
    - `vibecode run . --task "task" --profile safe` to execute the agent loop
    - `vibecode guard .`, `vibecode check .`, `vibecode handoff-check .` for post-run audit
    - Review session metadata in `.vibecode/runs/<session_id>/summary.json`
+7. For multi-repo setups, register each project once and switch with `vibecode project use`:
+   - `vibecode project add STOCKS C:\DATA\PROJECTS\STOCKS`
+   - `vibecode project use STOCKS`
+   - `vibecode context "Add rate limiting"` (no path needed)

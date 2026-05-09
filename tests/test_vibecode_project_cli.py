@@ -233,3 +233,105 @@ def test_project_current_shows_active(tmp_path, tmp_registry, capsys):
     out = capsys.readouterr().out
     assert "myproj" in out
     assert str(repo.resolve()) in out
+
+
+# ---------------------------------------------------------------------------
+# Registry workflow integration
+# ---------------------------------------------------------------------------
+
+
+def _init_repo(repo: Path) -> None:
+    """Create a minimal .vibecode structure so index/map/context work."""
+    vdir = repo / ".vibecode"
+    vdir.mkdir()
+    (vdir / "project.yaml").write_text(
+        "project:\n  id: testproj\n  name: Test\n", encoding="utf-8"
+    )
+    (vdir / "index").mkdir()
+    (vdir / "index" / "file_inventory.json").write_text('{"files": []}\n', encoding="utf-8")
+    (vdir / "current").mkdir()
+    (vdir / "architecture").mkdir()
+    (vdir / "architecture" / "INVARIANTS.md").write_text(
+        "# Invariants\n\n- Test.\n", encoding="utf-8"
+    )
+    (vdir / "checks").mkdir()
+    (vdir / "checks" / "required_checks.yaml").write_text("checks: []\n", encoding="utf-8")
+    (vdir / "index" / "repo_tree.generated.md").write_text("# tree\n", encoding="utf-8")
+    (vdir / "index" / "test_map.json").write_text('{"rules": []}\n', encoding="utf-8")
+    (vdir / "index" / "symbol_map.json").write_text('{"files": []}\n', encoding="utf-8")
+    (vdir / "index" / "dependency_map.json").write_text('{"dependencies": []}\n', encoding="utf-8")
+    (vdir / "index" / "entrypoints.md").write_text("# Entrypoints\n", encoding="utf-8")
+    (vdir / "index" / "risky_files.md").write_text("# Risky\n", encoding="utf-8")
+
+
+def test_registry_workflow_index_map_context(tmp_path, tmp_registry, capsys):
+    """Full registry workflow: add, use, then run commands without a path."""
+    repo = tmp_path / "myrepo"
+    repo.mkdir()
+    _init_repo(repo)
+
+    # Register the project.
+    rc = main(["project", "add", "MYREPO", str(repo)])
+    assert rc == 0
+
+    # Set it as active.
+    rc = main(["project", "use", "MYREPO"])
+    assert rc == 0
+    assert tmp_registry._active_name() == "MYREPO"
+
+    # index without an explicit path — should use the registry.
+    rc = main(["index"])
+    assert rc == 0
+
+    # map without an explicit path — should use the registry.
+    rc = main(["map"])
+    assert rc == 0
+    out = capsys.readouterr().out
+    assert "myrepo" in out or "Test" in out
+
+    # context without --repo — should use the registry.
+    rc = main(["context", "test task"])
+    assert rc == 0
+
+    pack = repo / ".vibecode" / "current" / "context_pack.md"
+    assert pack.exists()
+    content = pack.read_text(encoding="utf-8")
+    assert "## Current task" in content
+    assert "test task" in content
+
+
+def test_registry_workflow_context_explicit_path_overrides_registry(
+    tmp_path, tmp_registry, capsys
+):
+    """Explicit --repo still takes priority over the active registry entry."""
+    repo_a = tmp_path / "repo_a"
+    repo_a.mkdir()
+    _init_repo(repo_a)
+
+    repo_b = tmp_path / "repo_b"
+    repo_b.mkdir()
+    _init_repo(repo_b)
+
+    # Register both, set repo_a as active.
+    main(["project", "add", "PROJA", str(repo_a)])
+    main(["project", "add", "PROJB", str(repo_b)])
+    main(["project", "use", "PROJA"])
+
+    # Explicitly pass repo_b — should use repo_b, not the active PROJA.
+    rc = main(["context", "task", "--repo", str(repo_b)])
+    assert rc == 0
+
+    pack = repo_b / ".vibecode" / "current" / "context_pack.md"
+    assert pack.exists()
+
+
+def test_registry_workflow_pick_resolves_path(tmp_path, tmp_registry):
+    """ProjectRegistry.pick(None) resolves to the active project's path."""
+    repo = tmp_path / "work"
+    repo.mkdir()
+
+    main(["project", "add", "WORK", str(repo)])
+    main(["project", "use", "WORK"])
+
+    resolved = tmp_registry.pick(None)
+    assert resolved == repo.resolve()

@@ -195,7 +195,7 @@
     {
       "title": "Update docs for project registry workflow",
       "description": "Purpose: document the ergonomic workflow without replacing explicit-path commands.\n\nDocs should show:\n- explicit path workflow still works\n- registry workflow with `vibecode project add STOCKS C:\\DATA\\PROJECTS\\STOCKS`, `vibecode project use STOCKS`, and `vibecode context --task \"...\"`\n- registry lives outside repo\n- registry is local machine state, not committed\n\nAcceptance:\n- README/QUICKSTART are concise.\n- Docs do not imply GUI exists.",
-      "completed": false
+      "completed": true
     },
     {
       "title": "Add end-to-end smoke for controlled agent preparation",

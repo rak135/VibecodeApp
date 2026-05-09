@@ -111,75 +111,81 @@ the host OS.
 
 
 
-Index a repository:
+### Explicit-path workflow
+
+Every command can accept an explicit repository root on the command line:
 
 ```powershell
-python -m vibecode.cli index C:\path\to\example-repo
-```
-
-Validate Vibecode artifacts:
-
-```powershell
-python -m vibecode.cli validate C:\path\to\example-repo
-```
-
-Print a compact repository map:
-
-```powershell
-python -m vibecode.cli map C:\path\to\example-repo
-```
-
-Generate a context pack:
-
-```powershell
+python -m vibecode.cli index  C:\path\to\example-repo
+python -m vibecode.cli map    C:\path\to\example-repo
 python -m vibecode.cli context "Update context panel copy" --repo C:\path\to\example-repo
+python -m vibecode.cli run    C:\path\to\example-repo --task "Update context panel copy" --profile safe
 ```
 
-This writes `.vibecode\current\context_pack.md`, a task-specific runtime artifact.
-To also export an OpenCode-compatible prompt wrapper, add `--platform opencode`:
+This is the simplest way to get started and works without any prior setup.
+
+
+
+### Registry workflow
+
+If you work with multiple repositories, you can register them by name once and
+then refer to them without typing the full path every time.  The registry is a
+local file (``~/.vibecode/projects.yaml``) — it is **not** committed to any
+repository and lives outside all project folders.
+
+**1. Register a project:**
 
 ```powershell
-python -m vibecode.cli context "Update context panel copy" --repo C:\path\to\example-repo --platform opencode
+python -m vibecode.cli project add STOCKS C:\DATA\PROJECTS\STOCKS
 ```
 
-This additionally writes `.vibecode\current\opencode_prompt.md` with pre-edit and post-edit instructions.
-`vibecode` does **not** launch OpenCode — passing the prompt to an external agent is a manual step.
-
-Preview a full agent run without launching it:
+**2. Set the active project:**
 
 ```powershell
-python -m vibecode.cli run-plan C:\path\to\example-repo --task "Update context panel copy"
+python -m vibecode.cli project use STOCKS
 ```
 
-`run-plan` checks preconditions (git status, index freshness, OpenCode availability, permission profile)
-and writes `.vibecode\current\run_plan.json`.
-
-Run an agent session:
+**3. Run commands without an explicit path** — they fall back to the active
+project from the registry:
 
 ```powershell
-python -m vibecode.cli run C:\path\to\example-repo --task "Update context panel copy" --profile safe
+python -m vibecode.cli index
+python -m vibecode.cli map
+python -m vibecode.cli context "Update login flow"
+python -m vibecode.cli run --task "Update login flow" --profile safe
 ```
 
-`run` orchestrates the full loop: generate context pack → invoke the platform command with the prompt on stdin →
-run post-run guard, required checks, and handoff validation → write session metadata.
-Use `--profile safe` (default), `fast`, or `audit` to control permission levels.
-Use `--allow-dirty` to run with uncommitted changes (warn only, no error).
-Use `--no-index` to skip automatic index generation.
-
-Execute a post-run audit:
+**Other registry commands:**
 
 ```powershell
-python -m vibecode.cli guard C:\path\to\example-repo [--strict]
-python -m vibecode.cli check C:\path\to\example-repo
-python -m vibecode.cli handoff-check C:\path\to\example-repo [--json]
+python -m vibecode.cli project list       # Show all registered projects (* = active)
+python -m vibecode.cli project current    # Show the currently active project
+python -m vibecode.cli project remove STOCKS  # Unregister a project
 ```
 
-These can also be run independently outside of a `run` session.
+Key points:
 
-Export agent instructions:
+- The registry lives at ``~/.vibecode/projects.yaml`` (overridable via the
+  ``VIBECODE_HOME`` environment variable).
+- The active project is tracked in ``~/.vibecode/.active_project``, a plain
+  text sidecar file.
+- Registry state is local to your machine and is never committed to version
+  control.
+- Every command that accepts ``--repo`` (or a positional repo root) will use
+  the active project as a fallback when no path is given.
+
+
+
+### Quick reference
 
 ```powershell
-python -m vibecode.cli export-agents .
+# Explicit path (works without any setup)
+python -m vibecode.cli context "my task" --repo C:\path\to\repo
+
+# Registry workflow (set once, use many times)
+python -m vibecode.cli project add MYREPO C:\path\to\repo
+python -m vibecode.cli project use MYREPO
+python -m vibecode.cli context "my task"        # uses MYREPO automatically
 ```
 
 Agent-facing files have different lifecycles:
@@ -191,6 +197,8 @@ Agent-facing files have different lifecycles:
 `export-agents` writes `.vibecode/generated/AGENTS.generated.md` and creates or updates root `AGENTS.md` only when it is absent or Vibecode-managed. A manual root `AGENTS.md` is not overwritten without `--force`.
 
 Generated indexes and runtime/current files are not source of truth. Regenerate `.vibecode/index/*` and `.vibecode/current/*` before giving the context to another agent. Human-maintained project rules live under `.vibecode/project.yaml`, `.vibecode/architecture/`, `.vibecode/checks/`, `.vibecode/handoff/`, and `.vibecode/history/`.
+
+
 
 <p align="right">(<a href="#readme-top">back to top</a>)</p>
 
