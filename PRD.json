@@ -175,7 +175,7 @@
     {
       "title": "Keep canonical CLI command set small and consistent",
       "description": "Purpose: prevent CLI bloat and command-name drift.\n\nScope:\n- Audit CLI parser/help/docs/tests.\n- Keep canonical commands: `init`, `index`, `map`, `context`, `validate`, `export-agents`, `guard`, `check`, `handoff-check`, `run`, and `project` once registry exists.\n- Do not add aliases unless documented.\n\nAcceptance:\n- README, QUICKSTART, CLI help, and tests use consistent command names.\n- No stale command names like `generate-context` unless supported as documented alias.",
-      "completed": false
+      "completed": true
     },
     {
       "title": "Implement project registry storage",

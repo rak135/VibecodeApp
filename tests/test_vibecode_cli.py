@@ -91,6 +91,30 @@ def test_map_without_index_exits_nonzero_and_suggests_index(tmp_path, capsys):
     assert "vibecode index" in err
 
 
+def test_handoff_check_help_exits_zero():
+    with pytest.raises(SystemExit) as exc_info:
+        main(["handoff-check", "--help"])
+    assert exc_info.value.code == 0
+
+
+def test_run_help_exits_zero():
+    with pytest.raises(SystemExit) as exc_info:
+        main(["run", "--help"])
+    assert exc_info.value.code == 0
+
+
+def test_run_plan_help_exits_zero():
+    with pytest.raises(SystemExit) as exc_info:
+        main(["run-plan", "--help"])
+    assert exc_info.value.code == 0
+
+
+def test_export_agents_help_exits_zero():
+    with pytest.raises(SystemExit) as exc_info:
+        main(["export-agents", "--help"])
+    assert exc_info.value.code == 0
+
+
 def test_no_command_returns_zero():
     assert main([]) == 0
 

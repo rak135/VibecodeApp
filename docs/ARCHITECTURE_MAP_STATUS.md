@@ -27,7 +27,7 @@ This document is the short implementation-status companion to the Architecture M
 - Relevant-file scoring hardening exists.
 - Root `AGENTS.md` exists.
 - Safe AGENTS export workflow exists.
-- Guard rule engine implemented; guard/check/handoff-check CLI commands pending. OpenCode run adapter, project registry not started.
+- Guard rule engine implemented; guard/check/handoff-check CLI commands exist. OpenCode run adapter, project registry not started.
 - Tests pass in the latest hygiene audit.
 - Generated indexes and runtime/current artifacts are stale until regenerated.
 - Regenerate generated/current artifacts before the next agent run.

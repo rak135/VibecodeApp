@@ -16,11 +16,13 @@ The current control layer is deterministic and filesystem-based.
 - `vibecode validate` checks `.vibecode/` structure and generated artifacts.
 - `vibecode map` reads generated indexes and renders them for humans.
 - `vibecode context` generates task-specific context packs.
+- `vibecode guard`, `vibecode check`, `vibecode handoff-check` handle post-run audit.
+- `vibecode run` orchestrates the full agent loop.
+- `vibecode export-agents` writes agent-facing instructions to AGENTS.md.
 - Root `AGENTS.md` and `vibecode export-agents` provide agent-facing instructions and safe export support.
 
 ## Not implemented yet
 
-- Guard, check, and handoff-check CLI commands (guard rule engine implemented; CLI commands pending)
 - OpenCode run adapter
 - Project registry
 - GUI work
