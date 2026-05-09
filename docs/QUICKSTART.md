@@ -256,6 +256,8 @@ This writes:
 - `AGENTS.md` in the repository root (created if absent; updated if Vibecode-managed; skipped if externally managed unless `--force` is given)
 - `.vibecode\generated\AGENTS.generated.md` — always updated
 
+Generated AGENTS export output is ignored. Regenerate a task-specific context pack for each new task instead of relying on old `.vibecode\current\context_pack.md` content.
+
 ---
 
 ## Inspecting output files

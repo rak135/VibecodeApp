@@ -1,39 +1,8 @@
 # Now
 
-- Repo hygiene cleanup is complete; generated/runtime artifacts are ignored/untracked.
-- Repo tree source package expansion is complete.
-- Relevant-file scoring has been improved and cleaned up:
-  - Task keywords, source/test pairing, arch-doc references, handoff/history/dependency/git signals, generated-file penalties all active.
-  - Generic tokens (e.g. "file", "improve") no longer produce strong false-positive boosts.
-  - Architecture-doc overboosting reduced; only domain-specific keyword matches fire.
-  - Required checks deduplicated by command string in context_pack.md.
-  - Hub/entrypoint files (cli.py, config.py, project.py) suppressed for non-CLI tasks.
-  - Dependency boost threshold raised (12) to block generic dep fan-out.
-  - Token-based path matching implemented; "pack" no longer matches "package.json".
-- Context-pack relevance verified for "Improve relevant-file scoring": scoring.py and test_relevant_files.py rank #1/#2; cli.py is absent from scored results.
-- Phrase routing implemented in scoring.py:
-  - `context` added to `_LOW_VALUE_TOKENS`; broad directory-level token no longer gives +10 to every file under vibecode/context/.
-  - `_PHRASE_ROUTES` constant maps compound task phrases (e.g. "context pack", "repo tree", "platform export", "agents export", "required checks", "guard") to specific file-path patterns.
-  - `_active_phrase_patterns()` helper computes active patterns from task keywords each run.
-  - Matched files receive `_PHRASE_BOOST` (+12), producing a "phrase route match" reason.
-  - `platform_registry.py` no longer outranks `renderer.py` for context-pack rendering tasks.
-  - `context/__init__` added to "context pack" phrase route (targets cmd_context entry point).
-- Hub/gateway file isolation strengthened in scoring.py:
-  - Arch-doc cross-references to hub files suppressed for non-hub tasks; arch docs mentioning a scoring keyword no longer lift cli.py via a false +3 reference boost.
-  - Extension match suppressed for hub files in non-hub tasks; hub files no longer appear via bare language-extension signal.
-  - `_DEP_FANOUT_CAP = 5`: each high-scoring source now boosts at most 5 connected files, preventing widely-imported utility modules from scattering boosts.
-  - `_DEP_RECEIVE_THRESHOLD = 4`: dep boost targets must reach score ≥ 4 (more than a bare +2 extension match) before receiving a dep boost, ensuring only files with own relevance are amplified.
-  - 3 new tests (W–Y) added: hub absent from non-CLI results, fan-out cap, dep receive threshold; 718 total tests pass.
-- Scenario lockdown tests added (Z1–Z6, 7 new tests); 725 total tests pass:
-  - Ignored/generated files now hard-excluded upfront (records filtered by `_is_ignored` before scoring); keyword boosts no longer let generated artifacts (e.g. `repo_tree.generated.md`) slip into results.
-  - Z1: "Improve relevant-file scoring" — scoring.py + test_relevant_files.py in top 2, no generated/runtime paths.
-  - Z2: "Improve repo tree rendering" — repo_tree.py + its test in top 2, generated md excluded, outscores renderer.py.
-  - Z3: "Improve context pack rendering" — renderer.py + test_context_pack.py present; platform_registry.py score < renderer.py score.
-  - Z4: "Add OpenCode prompt export behavior" — platform_export, platform_registry, test_platform_export all present; platform_export outscores renderer.py.
-  - Z5: "Add root AGENTS.md" — agents_export.py + test_agents_export.py present via "agents" phrase route; agents_export outscores renderer.py.
-- Z6a/Z6b: "Implement guard command" — PROTECTED_AREAS.md appears via phrase route when no guard files exist; guard.py + test_vibecode_guard.py rank at top when guard files are present.
-- `export-agents` command hardened (safe and predictable):
-  - Always writes to `.vibecode/generated/AGENTS.generated.md`.
-  - Returns exit code 1 with a clear message when root `AGENTS.md` exists and is not Vibecode-managed (no `--force`).
-  - Returns 0 for: no existing AGENTS.md, managed AGENTS.md update, `--force` overwrite.
-  - 3 new CLI tests added (managed update returns 0, manual-without-force returns non-zero, generated always written); 730 total tests pass.
+- Architecture-map and context-pack core exists.
+- Relevant-file scoring hardening is implemented and tested.
+- Root `AGENTS.md` exists.
+- AGENTS export safety is implemented, tested, and committed.
+- Generated/runtime files are ignored and are not source of truth.
+- Current focus is documentation/control-layer hygiene before protected paths policy.

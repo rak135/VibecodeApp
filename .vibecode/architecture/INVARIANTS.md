@@ -8,9 +8,9 @@
 
 ## Implementation scope
 
-- Architecture Map Core implements architecture-map/index generation only.
+- Current control-layer scope covers architecture-map/index generation, context packs, and AGENTS export.
 - No UI work before architecture-map core is stable.
-- No OpenCode runtime integration before context pack generation is verified.
+- No guard/check/handoff-check/OpenCode run/project registry work before protected paths policy exists.
 
 ## File ownership
 

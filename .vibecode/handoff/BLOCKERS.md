@@ -1,4 +1,5 @@
 # Blockers
 
 - No hard technical blocker.
-- Pairing fan-out: many unrelated test files still score 7 (paired+ext) for unrelated tasks, ranking alongside architecture docs. Not a blocker, but refinement opportunity.
+- Do not start guard/check/OpenCode/project registry work before protected paths policy exists.
+- Do not treat generated/current files as source of truth.

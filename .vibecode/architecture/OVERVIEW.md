@@ -1,12 +1,12 @@
 # Architecture Overview
 
-VibecodeApp is a local CLI for building repository architecture maps before coding agents edit a project.
-The Architecture Map Core is intentionally deterministic and filesystem-based.
+VibecodeApp is a local CLI for preparing repositories before coding agents edit a project.
+The current control layer is deterministic and filesystem-based.
 
 ## Control layer role
 
 - VibecodeApp owns project orientation artifacts, not code editing.
-- Coding agents may consume Vibecode context, but VibecodeApp does not launch them in this scope.
+- Coding agents may consume Vibecode context, but VibecodeApp does not launch them yet.
 - Human-maintained architecture docs define project truth that generated indexes must reflect.
 
 ## Current implementation scope
@@ -15,12 +15,14 @@ The Architecture Map Core is intentionally deterministic and filesystem-based.
 - `vibecode index` scans files and writes generated architecture-map indexes.
 - `vibecode validate` checks `.vibecode/` structure and generated artifacts.
 - `vibecode map` reads generated indexes and renders them for humans.
-- `vibecode context` will generate task-scoped context packs after the scoring and renderer tasks are complete.
+- `vibecode context` generates task-specific context packs.
+- Root `AGENTS.md` and `vibecode export-agents` provide agent-facing instructions and safe export support.
 
-## Out of scope until context packs are verified
+## Not implemented yet
 
+- protected paths policy/schema
+- guard/check/handoff enforcement
+- OpenCode run adapter
+- project registry
 - GUI work
-- OpenCode runtime integration
 - MCP server integration
-- automatic commits
-- autonomous agent orchestration

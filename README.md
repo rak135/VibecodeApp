@@ -139,6 +139,14 @@ python -m vibecode.cli context C:\path\to\example-repo --task "Update context pa
 
 `context` writes `.vibecode/current/context_pack.md`, a derived runtime artifact for the current task.
 
+Export agent instructions:
+
+```powershell
+python -m vibecode.cli export-agents .
+```
+
+`export-agents` writes `.vibecode/generated/AGENTS.generated.md` and creates or updates root `AGENTS.md` only when it is absent or Vibecode-managed. A manual root `AGENTS.md` is not silently overwritten without `--force`. Generated export output remains ignored, and task-specific context should be regenerated for each task.
+
 Generated indexes and runtime/current files are not source of truth. Regenerate `.vibecode/index/*` and `.vibecode/current/*` before giving the context to another agent. Human-maintained project rules live under `.vibecode/project.yaml`, `.vibecode/architecture/`, `.vibecode/checks/`, `.vibecode/handoff/`, and `.vibecode/history/`.
 
 <p align="right">(<a href="#readme-top">back to top</a>)</p>

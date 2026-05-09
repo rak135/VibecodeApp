@@ -4,18 +4,20 @@
 
 - `.vibecode/architecture/*.md`
 - `.vibecode/checks/*.yaml`
-- `.vibecode/decisions/*.md`
-- `.vibecode/handoff/*.md` if they describe project-level state
+- `.vibecode/handoff/*.md`
+- `.vibecode/history/README.md`
+- `.vibecode/index/README.md`
+- `.vibecode/index/schema.json`
 
 ## Generated and ignored
 
-- `.vibecode/index/*.generated.*`
 - `.vibecode/current/*`
 - `.vibecode/generated/*`
+- `.vibecode/logs/*`
 - `.vibecode/runs/*`
 - `.vibecode/tmp/*`
 - `.vibecode/cache/*`
-- `.vibecode/logs/*`
+- `.vibecode/index/*.generated.*`
 
 ## Rule
 
