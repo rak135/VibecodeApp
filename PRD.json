@@ -135,7 +135,7 @@
     {
       "title": "Add OpenCode availability detection",
       "description": "Purpose: prepare for run adapter by detecting whether OpenCode is installed without launching a coding session.\n\nScope:\n- Add small adapter module, for example `vibecode/adapters/opencode.py`.\n- Add tests with fake PATH or monkeypatch.\n\nBehavior:\n- Detect configured OpenCode command or default `opencode`.\n- Provide clear status: available, missing, command failed.\n- Do not start an agent session.\n\nAcceptance:\n- Missing OpenCode produces actionable error.\n- Tests do not require real OpenCode installed.",
-      "completed": false
+      "completed": true
     },
     {
       "title": "Add OpenCode permission profile templates",
