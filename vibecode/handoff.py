@@ -4,6 +4,7 @@ from __future__ import annotations
 
 from dataclasses import dataclass, field
 from pathlib import Path
+from typing import Iterable
 
 from vibecode.paths import to_posix_str
 
@@ -79,7 +80,33 @@ def _is_heading_only(content: str) -> bool:
     return non_empty[0].strip().startswith("#")
 
 
-def validate_handoff_files(root: Path) -> HandoffResult:
+_ARCHITECTURE_PREFIX = ".vibecode/architecture/"
+_HANDOFF_PATHS = (
+    ".vibecode/handoff/NOW.md",
+    ".vibecode/handoff/NEXT.md",
+    ".vibecode/handoff/BLOCKERS.md",
+)
+
+
+def _is_architecture_doc(path: str) -> bool:
+    return path.startswith(_ARCHITECTURE_PREFIX) and path.endswith(".md")
+
+
+def _is_handoff_or_history(path: str) -> bool:
+    if path in _HANDOFF_PATHS:
+        return True
+    return (
+        path.startswith(".vibecode/history/")
+        and path.endswith(".md")
+        and "/" not in path.removeprefix(".vibecode/history/")
+    )
+
+
+def validate_handoff_files(
+    root: Path,
+    *,
+    diff: Iterable[str] = (),
+) -> HandoffResult:
     """Validate the three handoff files for empty/placeholder/useless content.
 
     Rules:
@@ -89,6 +116,9 @@ def validate_handoff_files(root: Path) -> HandoffResult:
     - Placeholder phrases (TODO, TBD, placeholder, HTML comments) fail.
     - Empty bullets (``- `` with no text) fail.
     - Heading-only content (just ``# Title`` with no body) fails.
+    - If any ``.vibecode/architecture/*.md`` file appears in *diff*, at least one
+      handoff or history file must also appear in *diff* (architecture truth
+      changes must be recorded alongside).
     """
     result = HandoffResult(root=root)
 
@@ -96,7 +126,37 @@ def validate_handoff_files(root: Path) -> HandoffResult:
     _validate_single(result, root, "NEXT.md", "next")
     _validate_single(result, root, "BLOCKERS.md", "blockers")
 
+    diff_paths = tuple(diff)
+    _validate_architecture_change_recorded(result, diff_paths)
+
     return result
+
+
+def _validate_architecture_change_recorded(
+    result: HandoffResult,
+    diff_paths: tuple[str, ...],
+) -> None:
+    architecture_changes = [p for p in diff_paths if _is_architecture_doc(p)]
+    if not architecture_changes:
+        return
+
+    has_handoff_or_history = any(
+        _is_handoff_or_history(p) for p in diff_paths
+    )
+    if has_handoff_or_history:
+        return
+
+    for path in architecture_changes:
+        result.issues.append(
+            HandoffIssue(
+                file=path,
+                message=(
+                    f"Architecture file '{path}' changed; update "
+                    f".vibecode/handoff/NOW.md or add a summary to "
+                    f".vibecode/history/*.md to record the change."
+                ),
+            )
+        )
 
 
 def _validate_single(result: HandoffResult, root: Path, filename: str, label: str) -> None:

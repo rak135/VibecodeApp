@@ -110,7 +110,7 @@
     {
       "title": "Implement handoff architecture-change validation",
       "description": "Purpose: ensure architecture truth changes are reflected in handoff or history.\n\nScope:\n- Extend handoff validation utility with git diff input.\n- Tests.\n\nBehavior:\n- If `.vibecode/architecture/*.md` changed, validation requires handoff file changed with relevant mention, or history summary added, or explicit override in future CLI.\n- If only source/test changed, architecture handoff requirement does not apply.\n\nAcceptance:\n- Architecture change without handoff fails.\n- Architecture change with handoff passes.\n- Message is clear and actionable.",
-      "completed": false
+      "completed": true
     },
     {
       "title": "Add handoff-check CLI command",

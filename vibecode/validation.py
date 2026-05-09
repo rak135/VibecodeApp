@@ -20,6 +20,11 @@ try:
 except ImportError:
     validate_handoff_files = None
 
+try:
+    from vibecode.git_state import inspect_git_state
+except ImportError:
+    inspect_git_state = None
+
 _SCHEMA = "vibecode/validation-report/v1"
 
 _GENERATED_JSON = (
@@ -249,9 +254,22 @@ def _validate_write_rules(root: Path, items: list[ValidationItem]) -> None:
 def _validate_handoff(root: Path, items: list[ValidationItem]) -> None:
     if validate_handoff_files is None:
         return
-    result = validate_handoff_files(root)
+    diff = _get_changed_paths(root)
+    result = validate_handoff_files(root, diff=diff)
     for issue in result.issues:
         items.append(_warn(issue.message, issue.file))
+
+
+def _get_changed_paths(root: Path) -> tuple[str, ...]:
+    if inspect_git_state is None:
+        return ()
+    try:
+        state = inspect_git_state(root)
+        if state.is_git_repo:
+            return state.diff_name_only + state.staged_diff_name_only
+    except Exception:
+        pass
+    return ()
 
 
 def _report(root: Path, items: list[ValidationItem]) -> dict:
