@@ -6,12 +6,14 @@ import json
 from pathlib import Path
 from typing import NamedTuple
 
+from vibecode.config import load_protected_path_records
 from vibecode.context.scoring import score_relevant_files
 from vibecode.indexer.code_intelligence import DEFAULT_PROVIDER as _code_intelligence_provider
 from vibecode.project import TEMPLATE_UNFILLED_MARKER
 
 ARCHITECTURE_DIR = Path(".vibecode") / "architecture"
 CHECKS_PATH = Path(".vibecode") / "checks" / "required_checks.yaml"
+PROTECTED_PATHS_PATH = Path(".vibecode") / "checks" / "protected_paths.yaml"
 CURRENT_CONTEXT_PACK = Path(".vibecode") / "current" / "context_pack.md"
 HANDOFF_NOW_PATH = Path(".vibecode") / "handoff" / "NOW.md"
 INDEX_DIR = Path(".vibecode") / "index"
@@ -69,7 +71,7 @@ def render_context_pack(
         _Section("relevant_files", "## Relevant files with reasons", _relevant_files(root, task), priority=4),
         _Section("index_status", "## Generated index status", _generated_index_status(root), priority=9),
         _Section("required_checks", "## Required checks", _required_checks(root), priority=5),
-        _Section("protected", "## Risky/protected files not allowed or requiring confirmation", _do_not_touch(root), priority=3),
+        _Section("protected", "## Protected paths / edit constraints", _protected_path_constraints(root), priority=3),
         _Section("handoff", "## Handoff required", _handoff_expectations(root), priority=10),
         _Section("working_rule", "## Working rule", [
             "- Make the smallest task-relevant change.",
@@ -287,17 +289,52 @@ def _required_checks(repo_root: Path) -> list[str]:
     return lines or [f"- See `{CHECKS_PATH.as_posix()}`."]
 
 
-def _do_not_touch(repo_root: Path) -> list[str]:
-    lines = [
-        "- Do not edit `.vibecode/current/*`; it is runtime/session output.",
-        "- Do not treat `.vibecode/index/*` as source of truth; regenerate indexes instead.",
-        "- Do not overwrite `.vibecode/architecture/*.md`, `.vibecode/checks/*.yaml`, or `.vibecode/handoff/*.md` unless the task explicitly asks for truth-doc changes.",
-    ]
-    protected = repo_root / ARCHITECTURE_DIR / "PROTECTED_AREAS.md"
-    if protected.is_file():
-        bullets = _markdown_bullets(protected.read_text(encoding="utf-8", errors="replace"))
-        lines.extend(bullets)
+def _protected_path_constraints(repo_root: Path) -> list[str]:
+    policy_path = repo_root / PROTECTED_PATHS_PATH
+    if not policy_path.is_file():
+        return [
+            f"- Missing `{PROTECTED_PATHS_PATH.as_posix()}`; ask before editing protected areas."
+        ]
+    try:
+        records = load_protected_path_records(repo_root / ".vibecode")
+    except ValueError as exc:
+        return [f"- `{PROTECTED_PATHS_PATH.as_posix()}` could not be loaded: {exc}"]
+    if not records:
+        return [f"- `{PROTECTED_PATHS_PATH.as_posix()}` defines no protected paths."]
+
+    lines = [f"Policy source: `{PROTECTED_PATHS_PATH.as_posix()}`."]
+    for record in records:
+        scope = _explicit_scope_label(
+            record.path,
+            record.rule,
+            record.explicit_task_scope_required,
+        )
+        tests = ", ".join(f"`{test}`" for test in record.required_tests) or "not specified"
+        lines.append(
+            f"- `{record.path}`: rule: {record.rule}; explicit task scope: {scope}; "
+            f"required tests: {tests}"
+        )
     return lines
+
+
+def _explicit_scope_label(path: str, rule: str, configured: bool | None) -> str:
+    if _is_not_manually_editable(path, rule):
+        return "not manually editable"
+    if configured is not None:
+        return "required" if configured else "not required"
+    return "required"
+
+
+def _is_not_manually_editable(path: str, rule: str) -> bool:
+    text = f"{path} {rule}".lower()
+    markers = (
+        ".generated.",
+        ".vibecode/current",
+        ".vibecode/logs",
+        "runtime",
+        "regenerate",
+    )
+    return any(marker in text for marker in markers)
 
 
 def _required_checks_from_test_map(repo_root: Path) -> list[str]:

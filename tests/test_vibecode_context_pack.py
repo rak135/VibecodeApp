@@ -55,6 +55,17 @@ def test_context_command_writes_agent_ready_context_pack(tmp_path):
         "    command: python -m vibecode.cli context --help\n"
         "    required: true\n",
     )
+    _write(
+        tmp_path / ".vibecode" / "checks" / "protected_paths.yaml",
+        "protected_paths:\n"
+        "  - path: \".vibecode/current/*\"\n"
+        "    rule: \"Runtime/session state; do not commit or treat as source truth.\"\n"
+        "  - path: \"vibecode/context/renderer.py\"\n"
+        "    rule: \"Context-pack rendering controls agent-facing output.\"\n"
+        "    required_tests:\n"
+        "      - python -m pytest tests/test_vibecode_context_pack.py\n"
+        "    explicit_task_scope_required: true\n",
+    )
     _write(tmp_path / ".vibecode" / "handoff" / "NOW.md", "# Now\n\nContext pack task.\n")
     _write(tmp_path / ".vibecode" / "index" / "file_inventory.json", '{"files": []}\n')
     _write(
@@ -82,7 +93,7 @@ def test_context_command_writes_agent_ready_context_pack(tmp_path):
     assert "## Must preserve / invariants" in content
     assert "## Relevant architecture" in content
     assert "## Relevant files with reasons" in content
-    assert "## Risky/protected files not allowed or requiring confirmation" in content
+    assert "## Protected paths / edit constraints" in content
     assert "## Handoff required" in content
     assert "## Working rule" in content
     assert "- Human-maintained architecture docs are source-controlled." in content
@@ -96,7 +107,10 @@ def test_context_command_writes_agent_ready_context_pack(tmp_path):
     assert "context command help: `python -m vibecode.cli context --help`" in content
     # The test-map's global "python -m pytest" must be deduped (already in yaml checks).
     assert "test map required check: `python -m pytest`" not in content
-    assert "Do not edit `.vibecode/current/*`" in content
+    assert "`.vibecode/current/*`: rule: Runtime/session state" in content
+    assert "explicit task scope: not manually editable" in content
+    assert "`vibecode/context/renderer.py`: rule: Context-pack rendering" in content
+    assert "required tests: `python -m pytest tests/test_vibecode_context_pack.py`" in content
     assert "Generated indexes are derived" in content
     assert "# long source line 199" not in content
 
@@ -233,6 +247,35 @@ def test_high_priority_sections_present_before_lower_in_output(tmp_path):
     architecture_pos = content.index("## Relevant architecture")
 
     assert task_pos < invariants_pos < architecture_pos
+
+
+def test_context_pack_renders_protected_path_policy_details(tmp_path):
+    _write(
+        tmp_path / ".vibecode" / "checks" / "protected_paths.yaml",
+        "protected_paths:\n"
+        "  - path: \".vibecode/index/*.generated.*\"\n"
+        "    rule: \"Regenerate through index commands instead of manual edits.\"\n"
+        "  - path: \"vibecode/context/renderer.py\"\n"
+        "    rule: \"Context rendering changes require tests.\"\n"
+        "    required_tests:\n"
+        "      - python -m pytest tests/test_vibecode_context_pack.py\n"
+        "    explicit_task_scope_required: true\n",
+    )
+    _write(
+        tmp_path / ".vibecode" / "architecture" / "INVARIANTS.md",
+        "# Invariants\n\n- Generated indexes are not source of truth.\n",
+    )
+    _write(tmp_path / ".vibecode" / "index" / "file_inventory.json", '{"files": []}\n')
+
+    content = render_context_pack(tmp_path, "show protected paths")
+
+    assert "## Protected paths / edit constraints" in content
+    assert "Policy source: `.vibecode/checks/protected_paths.yaml`." in content
+    assert "`.vibecode/index/*.generated.*`: rule: Regenerate through index commands" in content
+    assert "explicit task scope: not manually editable" in content
+    assert "`vibecode/context/renderer.py`: rule: Context rendering changes require tests." in content
+    assert "explicit task scope: required" in content
+    assert "required tests: `python -m pytest tests/test_vibecode_context_pack.py`" in content
 
 
 # ---------------------------------------------------------------------------

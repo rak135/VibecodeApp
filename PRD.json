@@ -45,7 +45,7 @@
     {
       "title": "Expose protected paths in context pack",
       "description": "Purpose: make agents see protected paths before editing.\n\nPrerequisite:\nProtected paths policy file exists and can be loaded.\n\nScope:\n- Update context rendering to include protected paths from `.vibecode/checks/protected_paths.yaml`.\n- Do not implement guard enforcement yet.\n- Keep output compact.\n\nRequired output:\nContext pack includes a section like `## Protected paths / edit constraints` with path, reason/rule, required tests if defined, and whether explicit task scope is required.\n\nAcceptance:\n- Protected paths appear in context pack.\n- Generated/runtime paths are clearly labeled as not manually editable.\n- Tests cover rendering.",
-      "completed": false
+      "completed": true
     },
     {
       "title": "Implement git diff collection utility",

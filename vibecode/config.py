@@ -29,6 +29,8 @@ class ProjectConfig:
 class ProtectedPathRule:
     path: str
     rule: str
+    required_tests: tuple[str, ...] = ()
+    explicit_task_scope_required: bool | None = None
 
 
 DEFAULT_PROTECTED_PATH_RULES = (
@@ -214,7 +216,34 @@ def load_protected_path_records(vibecode_dir: Path) -> list[ProtectedPathRule]:
             raise ValueError(
                 f"protected_paths.yaml: entry #{index} requires non-empty string field 'rule'"
             )
-        normalized.append(ProtectedPathRule(path=path_value.strip(), rule=rule.strip()))
+        required_tests = record.get("required_tests")
+        if required_tests is None:
+            required_tests = ()
+        elif isinstance(required_tests, str):
+            required_tests = (required_tests.strip(),)
+        elif isinstance(required_tests, list):
+            required_tests = tuple(
+                str(item).strip() for item in required_tests if str(item).strip()
+            )
+        else:
+            raise ValueError(
+                f"protected_paths.yaml: entry #{index} field 'required_tests' "
+                "must be a string or list"
+            )
+        explicit_scope = record.get("explicit_task_scope_required")
+        if explicit_scope is not None and not isinstance(explicit_scope, bool):
+            raise ValueError(
+                f"protected_paths.yaml: entry #{index} field "
+                "'explicit_task_scope_required' must be a boolean"
+            )
+        normalized.append(
+            ProtectedPathRule(
+                path=path_value.strip(),
+                rule=rule.strip(),
+                required_tests=tuple(required_tests),
+                explicit_task_scope_required=explicit_scope,
+            )
+        )
     return normalized
 
 

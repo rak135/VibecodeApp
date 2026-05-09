@@ -7,4 +7,5 @@
 - Generated/runtime files are ignored and are not source of truth.
 - Agent-facing docs now distinguish stable root `AGENTS.md`, task-specific context packs, and ignored generated AGENTS export output.
 - Protected paths policy definition is implemented with loader/schema tests.
-- Next focus can move to guard enforcement using the protected paths policy.
+- Context packs now render protected path edit constraints from `.vibecode/checks/protected_paths.yaml`.
+- Guard enforcement is still not implemented.
