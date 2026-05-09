@@ -94,7 +94,8 @@ def test_context_command_writes_agent_ready_context_pack(tmp_path):
     assert "`.vibecode/architecture/STRUCTURE.md`" in content
     assert "unit tests: `python -m pytest`" in content
     assert "context command help: `python -m vibecode.cli context --help`" in content
-    assert "test map required check: `python -m pytest`" in content
+    # The test-map's global "python -m pytest" must be deduped (already in yaml checks).
+    assert "test map required check: `python -m pytest`" not in content
     assert "Do not edit `.vibecode/current/*`" in content
     assert "Generated indexes are derived" in content
     assert "# long source line 199" not in content
@@ -338,3 +339,39 @@ def test_long_file_path_and_symbols_appear_not_full_content(tmp_path):
     # Full file content must NOT be embedded — check unique identifiable lines.
     assert "implementation detail line 100" not in content
     assert "implementation detail line 199" not in content
+
+
+# ---------------------------------------------------------------------------
+# Required-checks deduplication test
+# ---------------------------------------------------------------------------
+
+
+def test_required_checks_are_deduplicated(tmp_path):
+    """D: Commands in required_checks.yaml must not appear again from test_map.json."""
+    _write(
+        tmp_path / ".vibecode" / "checks" / "required_checks.yaml",
+        "checks:\n"
+        "  - name: unit tests\n"
+        "    command: python -m pytest\n"
+        "    required: true\n"
+        "  - name: cli help\n"
+        "    command: python -m vibecode.cli --help\n"
+        "    required: true\n",
+    )
+    # test_map global rule repeats the same pytest command.
+    _write(
+        tmp_path / ".vibecode" / "index" / "test_map.json",
+        '{"rules": [{"path_pattern": "**", "required_checks": ["python -m pytest"]}]}\n',
+    )
+    _write(
+        tmp_path / ".vibecode" / "architecture" / "INVARIANTS.md",
+        "# Invariants\n\n- Generated indexes are not source of truth.\n",
+    )
+    _write(tmp_path / ".vibecode" / "index" / "file_inventory.json", '{"files": []}\n')
+
+    from vibecode.context.renderer import render_context_pack
+    content = render_context_pack(tmp_path, "run tests")
+
+    # Each command must appear exactly once in the rendered output.
+    assert content.count("python -m pytest") == 1
+    assert "test map required check: `python -m pytest`" not in content

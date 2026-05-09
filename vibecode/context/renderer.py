@@ -247,9 +247,21 @@ def _generated_index_status(repo_root: Path) -> list[str]:
     return lines
 
 
+def _extract_command(check_line: str) -> str:
+    """Extract the backtick-quoted command string from a check line, or '' if none."""
+    start = check_line.find("`")
+    if start == -1:
+        return ""
+    end = check_line.find("`", start + 1)
+    if end == -1:
+        return ""
+    return check_line[start + 1 : end]
+
+
 def _required_checks(repo_root: Path) -> list[str]:
     checks_path = repo_root / CHECKS_PATH
     lines: list[str] = []
+    seen_commands: set[str] = set()
     if checks_path.is_file():
         for line in checks_path.read_text(encoding="utf-8", errors="replace").splitlines():
             stripped = line.strip()
@@ -259,10 +271,15 @@ def _required_checks(repo_root: Path) -> list[str]:
                 command = stripped.removeprefix("command:").strip()
                 if lines:
                     lines[-1] = f"{lines[-1]}: `{command}`"
+                    seen_commands.add(command)
 
     test_map_checks = _required_checks_from_test_map(repo_root)
     for check in test_map_checks:
-        if check not in lines:
+        cmd = _extract_command(check)
+        if cmd and cmd not in seen_commands:
+            seen_commands.add(cmd)
+            lines.append(check)
+        elif not cmd and check not in lines:
             lines.append(check)
 
     if not lines:

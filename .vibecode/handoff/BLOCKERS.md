@@ -1,4 +1,4 @@
 # Blockers
 
 - No hard technical blocker.
-- Agent-readiness is limited until docs, status, and current generated files are aligned.
+- Pairing fan-out: many unrelated test files still score 7 (paired+ext) for unrelated tasks, ranking alongside architecture docs. Not a blocker, but refinement opportunity.
