@@ -252,6 +252,41 @@ def create_parser() -> argparse.ArgumentParser:
         help="Open items or next steps.",
     )
 
+    # project
+    project_parser = subparsers.add_parser(
+        "project", help="Manage registered projects by name."
+    )
+    project_sub = project_parser.add_subparsers(
+        dest="project_subcommand", metavar="SUBCOMMAND"
+    )
+
+    # project add
+    project_add_parser = project_sub.add_parser(
+        "add", help="Register a project by name and path."
+    )
+    project_add_parser.add_argument("name", help="Project name.")
+    project_add_parser.add_argument(
+        "path", help="Repository root directory for the project."
+    )
+
+    # project use
+    project_use_parser = project_sub.add_parser(
+        "use", help="Set the active project by name."
+    )
+    project_use_parser.add_argument("name", help="Project name to activate.")
+
+    # project list
+    project_sub.add_parser("list", help="List all registered projects.")
+
+    # project remove
+    project_remove_parser = project_sub.add_parser(
+        "remove", help="Remove a registered project by name."
+    )
+    project_remove_parser.add_argument("name", help="Project name to remove.")
+
+    # project current
+    project_sub.add_parser("current", help="Show the currently active project.")
+
     # export-agents
     export_agents_parser = subparsers.add_parser(
         "export-agents", help="Export agent instructions to AGENTS.md."
@@ -379,6 +414,10 @@ def _dispatch(args, parser) -> int:
         _require_root_exists(args.repo_root)
         from vibecode.context.agents_export import cmd_export_agents
         return cmd_export_agents(args)
+
+    if args.command == "project":
+        from vibecode.project_cli import cmd_project
+        return cmd_project(args)
 
     parser.print_help()
     return 1

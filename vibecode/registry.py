@@ -183,10 +183,12 @@ class ProjectRegistry:
 
     def set_active(self, name: str) -> None:
         """Mark *name* as the currently active project."""
-        entries = self.load()
-        for e in entries:
-            e.name == name  # noqa: B018  # keep linter happy — left for clarity
-        self.save(entries)  # active flag stored in dedicated file to avoid churn
+        entry = self.get(name)
+        if entry is None:
+            raise ValueError(f"Unknown project: {name!r}")
+        self._set_active_name(name)
+        entry.touch()
+        self.add(entry)
 
     # -- Helpers -------------------------------------------------------------
 

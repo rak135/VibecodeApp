@@ -185,7 +185,7 @@
     {
       "title": "Add project registry CLI commands",
       "description": "Purpose: expose project registry via CLI.\n\nCommands:\n- `vibecode project add <name> <path>`\n- `vibecode project use <name>`\n- `vibecode project list`\n- `vibecode project remove <name>`\n- `vibecode project current`\n\nScope:\n- Update CLI parser and tests.\n- Do not integrate all existing commands with active project yet.\n\nAcceptance:\n- Commands work with temp registry in tests.\n- Duplicate names require explicit overwrite or fail clearly.\n- Removing active project clears or updates active selection safely.",
-      "completed": false
+      "completed": true
     },
     {
       "title": "Allow commands to use active project when repo is omitted",
