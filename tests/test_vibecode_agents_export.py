@@ -38,7 +38,7 @@ def test_render_agents_block_references_context_pack():
 def test_render_agents_block_references_architecture_files():
     block = render_agents_block()
     assert "INVARIANTS.md" in block
-    assert "MODULE_BOUNDARIES.md" in block
+    assert "STRUCTURE.md" in block
 
 
 def test_render_agents_block_references_handoff():
