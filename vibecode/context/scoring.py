@@ -243,7 +243,7 @@ def score_relevant_files(
     """
 
     root = repo_root.resolve()
-    records = _load_records(root, inventory)
+    records = [r for r in _load_records(root, inventory) if not _is_ignored(r["path"])]
     paths = [record["path"] for record in records]
     path_set = set(paths)
     task_keywords = _task_keywords(task)
@@ -289,10 +289,6 @@ def score_relevant_files(
         score = 0
         reasons: list[str] = []
         risk_level = str(record.get("risk_level") or "").lower()
-
-        if _is_ignored(rel):
-            score -= 20
-            reasons.append("generated/vendor/cache penalty")
 
         path_lower = rel.lower()
         filename_orig = PurePosixPath(rel).name

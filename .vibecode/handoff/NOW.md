@@ -24,3 +24,11 @@
   - `_DEP_FANOUT_CAP = 5`: each high-scoring source now boosts at most 5 connected files, preventing widely-imported utility modules from scattering boosts.
   - `_DEP_RECEIVE_THRESHOLD = 4`: dep boost targets must reach score ≥ 4 (more than a bare +2 extension match) before receiving a dep boost, ensuring only files with own relevance are amplified.
   - 3 new tests (W–Y) added: hub absent from non-CLI results, fan-out cap, dep receive threshold; 718 total tests pass.
+- Scenario lockdown tests added (Z1–Z6, 7 new tests); 725 total tests pass:
+  - Ignored/generated files now hard-excluded upfront (records filtered by `_is_ignored` before scoring); keyword boosts no longer let generated artifacts (e.g. `repo_tree.generated.md`) slip into results.
+  - Z1: "Improve relevant-file scoring" — scoring.py + test_relevant_files.py in top 2, no generated/runtime paths.
+  - Z2: "Improve repo tree rendering" — repo_tree.py + its test in top 2, generated md excluded, outscores renderer.py.
+  - Z3: "Improve context pack rendering" — renderer.py + test_context_pack.py present; platform_registry.py score < renderer.py score.
+  - Z4: "Add OpenCode prompt export behavior" — platform_export, platform_registry, test_platform_export all present; platform_export outscores renderer.py.
+  - Z5: "Add root AGENTS.md" — agents_export.py + test_agents_export.py present via "agents" phrase route; agents_export outscores renderer.py.
+  - Z6a/Z6b: "Implement guard command" — PROTECTED_AREAS.md appears via phrase route when no guard files exist; guard.py + test_vibecode_guard.py rank at top when guard files are present.

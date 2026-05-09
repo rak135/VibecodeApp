@@ -812,3 +812,197 @@ def test_dep_boost_requires_target_own_relevance(tmp_path):
     assert "dependency connection" not in unrelated_reasons, (
         "unrelated_helper.py must not receive a dep boost without own relevance"
     )
+
+
+# ---------------------------------------------------------------------------
+# Scenario lockdown tests — Z1 through Z6
+# These tests lock in expected scoring quality for the six representative
+# task strings so future changes cannot silently degrade context packs.
+# ---------------------------------------------------------------------------
+
+
+def test_scenario_improve_relevant_file_scoring(tmp_path):
+    """Z1: 'Improve relevant-file scoring' must surface scoring.py and its test in the
+    top two results and must not include any generated or runtime paths."""
+    _write(
+        tmp_path / ".vibecode" / "architecture" / "MODULE_BOUNDARIES.md",
+        "Scoring lives in `vibecode/context/scoring.py`.\n"
+        "CLI (`vibecode/cli.py`) must not implement scoring.\n",
+    )
+    inventory = _inventory(
+        "vibecode/context/scoring.py",
+        "tests/test_vibecode_relevant_files.py",
+        "vibecode/context/renderer.py",
+        "vibecode/cli.py",
+        ".vibecode/current/context_pack.md",
+        ".vibecode/index/relevant_files.generated.json",
+        ".ralphy/state.json",
+    )
+
+    results = score_relevant_files(
+        tmp_path, "Improve relevant-file scoring", inventory=inventory, limit=10
+    )
+    paths = _paths(results)
+
+    assert "vibecode/context/scoring.py" in paths[:2]
+    assert "tests/test_vibecode_relevant_files.py" in paths[:2]
+    assert ".vibecode/current/context_pack.md" not in paths
+    assert ".vibecode/index/relevant_files.generated.json" not in paths
+    assert ".ralphy/state.json" not in paths
+
+
+def test_scenario_improve_repo_tree_rendering(tmp_path):
+    """Z2: 'Improve repo tree rendering' must surface repo_tree.py and its test at the
+    top; repo_tree.py must outscore unrelated files like renderer.py."""
+    inventory = _inventory(
+        "vibecode/indexer/repo_tree.py",
+        "tests/test_vibecode_repo_tree.py",
+        "vibecode/context/renderer.py",
+        "vibecode/cli.py",
+        ".vibecode/index/repo_tree.generated.md",
+    )
+
+    results = score_relevant_files(
+        tmp_path, "Improve repo tree rendering", inventory=inventory, limit=10
+    )
+    paths = _paths(results)
+    scored = {r["path"]: r["score"] for r in results}
+
+    assert "vibecode/indexer/repo_tree.py" in paths[:2]
+    assert "tests/test_vibecode_repo_tree.py" in paths
+    assert ".vibecode/index/repo_tree.generated.md" not in paths
+    repo_tree_score = scored.get("vibecode/indexer/repo_tree.py", 0)
+    renderer_score = scored.get("vibecode/context/renderer.py", 0)
+    assert repo_tree_score > renderer_score, (
+        f"repo_tree.py ({repo_tree_score}) must outscore renderer.py ({renderer_score})"
+    )
+
+
+def test_scenario_improve_context_pack_rendering(tmp_path):
+    """Z3: 'Improve context pack rendering' must surface renderer.py and
+    test_context_pack.py; platform_registry.py must not outrank renderer.py."""
+    inventory = _inventory(
+        "vibecode/context/renderer.py",
+        "vibecode/context/scoring.py",
+        "tests/test_vibecode_context_pack.py",
+        "vibecode/context/platform_registry.py",
+        "vibecode/cli.py",
+    )
+
+    results = score_relevant_files(
+        tmp_path, "Improve context pack rendering", inventory=inventory, limit=10
+    )
+    paths = _paths(results)
+    scored = {r["path"]: r["score"] for r in results}
+
+    assert "vibecode/context/renderer.py" in paths
+    assert "tests/test_vibecode_context_pack.py" in paths
+    renderer_score = scored.get("vibecode/context/renderer.py", 0)
+    registry_score = scored.get("vibecode/context/platform_registry.py", 0)
+    assert renderer_score > registry_score, (
+        f"renderer.py ({renderer_score}) must outscore platform_registry.py ({registry_score})"
+    )
+
+
+def test_scenario_add_opencode_prompt_export(tmp_path):
+    """Z4: 'Add OpenCode prompt export behavior' must surface platform_export.py,
+    platform_registry.py, and their test; they must outrank unrelated files."""
+    inventory = _inventory(
+        "vibecode/context/platform_export.py",
+        "vibecode/context/platform_registry.py",
+        "tests/test_vibecode_platform_export.py",
+        "vibecode/context/renderer.py",
+        "vibecode/cli.py",
+    )
+
+    results = score_relevant_files(
+        tmp_path, "Add OpenCode prompt export behavior", inventory=inventory, limit=10
+    )
+    paths = _paths(results)
+    scored = {r["path"]: r["score"] for r in results}
+
+    assert "vibecode/context/platform_export.py" in paths
+    assert "vibecode/context/platform_registry.py" in paths
+    assert "tests/test_vibecode_platform_export.py" in paths
+    export_score = scored.get("vibecode/context/platform_export.py", 0)
+    renderer_score = scored.get("vibecode/context/renderer.py", 0)
+    assert export_score > renderer_score, (
+        f"platform_export.py ({export_score}) must outscore renderer.py ({renderer_score})"
+    )
+
+
+def test_scenario_add_root_agents_md(tmp_path):
+    """Z5: 'Add root AGENTS.md' must surface agents_export.py and its test via the
+    single-token 'agents' phrase route; they must outscore unrelated files."""
+    inventory = _inventory(
+        "vibecode/context/agents_export.py",
+        "tests/test_vibecode_agents_export.py",
+        "vibecode/context/renderer.py",
+        "vibecode/context/platform_export.py",
+    )
+
+    results = score_relevant_files(
+        tmp_path, "Add root AGENTS.md", inventory=inventory, limit=10
+    )
+    paths = _paths(results)
+    scored = {r["path"]: r["score"] for r in results}
+
+    assert "vibecode/context/agents_export.py" in paths
+    assert "tests/test_vibecode_agents_export.py" in paths
+    agents_score = scored.get("vibecode/context/agents_export.py", 0)
+    renderer_score = scored.get("vibecode/context/renderer.py", 0)
+    assert agents_score > renderer_score, (
+        f"agents_export.py ({agents_score}) must outscore renderer.py ({renderer_score})"
+    )
+    assert "phrase route match" in _reasons(results, "vibecode/context/agents_export.py")
+
+
+def test_scenario_implement_guard_command_no_guard_files(tmp_path):
+    """Z6a: 'Implement guard command' with no guard source files — PROTECTED_AREAS.md
+    must appear as supporting context via the 'guard'→'protected' phrase route."""
+    _write(
+        tmp_path / ".vibecode" / "architecture" / "PROTECTED_AREAS.md",
+        "Protected paths must not be edited without explicit task scope.\n",
+    )
+    inventory = _inventory(
+        ".vibecode/architecture/PROTECTED_AREAS.md",
+        ".vibecode/checks/required_checks.yaml",
+        "vibecode/cli.py",
+        "vibecode/context/scoring.py",
+    )
+
+    results = score_relevant_files(
+        tmp_path, "Implement guard command", inventory=inventory, limit=10
+    )
+    paths = _paths(results)
+
+    assert ".vibecode/architecture/PROTECTED_AREAS.md" in paths, (
+        "PROTECTED_AREAS.md must appear as supporting context for a guard task"
+    )
+    assert "phrase route match" in _reasons(results, ".vibecode/architecture/PROTECTED_AREAS.md")
+
+
+def test_scenario_implement_guard_command_with_guard_files(tmp_path):
+    """Z6b: 'Implement guard command' with guard source files — guard.py and its test
+    must rank at the top, outscoring unrelated implementation files."""
+    inventory = _inventory(
+        "vibecode/guard.py",
+        "tests/test_vibecode_guard.py",
+        ".vibecode/architecture/PROTECTED_AREAS.md",
+        "vibecode/cli.py",
+        "vibecode/context/scoring.py",
+    )
+
+    results = score_relevant_files(
+        tmp_path, "Implement guard command", inventory=inventory, limit=10
+    )
+    paths = _paths(results)
+    scored = {r["path"]: r["score"] for r in results}
+
+    assert "vibecode/guard.py" in paths[:3]
+    assert "tests/test_vibecode_guard.py" in paths
+    guard_score = scored.get("vibecode/guard.py", 0)
+    scoring_score = scored.get("vibecode/context/scoring.py", 0)
+    assert guard_score > scoring_score, (
+        f"guard.py ({guard_score}) must outscore scoring.py ({scoring_score}) for guard task"
+    )
