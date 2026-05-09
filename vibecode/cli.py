@@ -134,6 +134,55 @@ def create_parser() -> argparse.ArgumentParser:
         help="Write a JSON report to .vibecode/current/handoff_check.json.",
     )
 
+    # history
+    history_parser = subparsers.add_parser(
+        "history", help="Manage durable history summaries."
+    )
+    history_sub = history_parser.add_subparsers(
+        dest="history_subcommand", metavar="SUBCOMMAND"
+    )
+
+    # history new
+    history_new_parser = history_sub.add_parser(
+        "new", help="Create a new history summary for a task."
+    )
+    history_new_parser.add_argument(
+        "--repo",
+        default=None,
+        help="Repository root directory (default: current directory).",
+    )
+    history_new_parser.add_argument(
+        "--task", default="", help="Short description of the task or change."
+    )
+    history_new_parser.add_argument(
+        "--author", default="", help="Author name or email."
+    )
+    history_new_parser.add_argument(
+        "--changed-files",
+        default="",
+        help="Markdown list of changed files and why.",
+    )
+    history_new_parser.add_argument(
+        "--behavior-changed",
+        default="",
+        help="Description of behavioural impact.",
+    )
+    history_new_parser.add_argument(
+        "--tests-run",
+        default="",
+        help="Test results summary.",
+    )
+    history_new_parser.add_argument(
+        "--decisions",
+        default="",
+        help="Key architectural or design choices.",
+    )
+    history_new_parser.add_argument(
+        "--follow-up",
+        default="",
+        help="Open items or next steps.",
+    )
+
     # export-agents
     export_agents_parser = subparsers.add_parser(
         "export-agents", help="Export agent instructions to AGENTS.md."
@@ -239,6 +288,10 @@ def _dispatch(args, parser) -> int:
         _require_root_exists(args.repo_root)
         from vibecode.handoff import cmd_handoff_check
         return cmd_handoff_check(args)
+
+    if args.command == "history":
+        from vibecode.history import cmd_history
+        return cmd_history(args)
 
     if args.command == "export-agents":
         args.repo_root = normalise_root(args.repo_root)

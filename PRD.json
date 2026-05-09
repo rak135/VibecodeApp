@@ -125,7 +125,7 @@
     {
       "title": "Implement history summary template writer",
       "description": "Purpose: provide a safe way to create durable history summaries without dumping raw logs.\n\nScope:\n- Add internal utility and optional CLI command such as `vibecode history new <repo> --task \"<task>\"`.\n- If CLI scope is too large, implement utility plus tests only.\n- Do not integrate with OpenCode run yet.\n\nBehavior:\n- Creates `.vibecode/history/YYYYMMDD-HHMM-task-summary.md`.\n- Filename is sanitized.\n- File contains headings: Task, Changed files, Behavior changed, Tests run, Decisions, Follow-up.\n- Does not automatically create a summary for every trivial command.\n\nAcceptance:\n- Tests validate filename format and template content.\n- Does not overwrite existing summaries.\n- History summaries are human-maintained and may be committed when meaningful.",
-      "completed": false
+      "completed": true
     },
     {
       "title": "Integrate handoff/history requirements into context pack",

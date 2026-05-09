@@ -1,4 +1,4 @@
-"""Tests for history summary validation."""
+"""Tests for history summary creation and validation."""
 
 from __future__ import annotations
 
@@ -8,6 +8,8 @@ from vibecode.history import (
     HistoryIssue,
     HistoryResult,
     REQUIRED_SECTIONS,
+    _sanitise_filename,
+    create_summary,
     validate_history_dir,
     validate_history_file,
 )
@@ -221,3 +223,148 @@ def test_history_result_passing_dict(tmp_path):
 
     assert d["passed"] is True
     assert d["issues"] == []
+
+
+# ── create_summary utility ────────────────────────────────────────────────
+
+
+def test_create_summary_generates_file(tmp_path):
+    """create_summary produces a markdown file with all required sections."""
+    repo = tmp_path / "repo"
+    repo.mkdir()
+
+    dest = create_summary(repo, task="Add user login")
+
+    assert dest.exists()
+    content = dest.read_text(encoding="utf-8")
+    assert "# Add user login" in content
+    assert "### Task" in content
+    assert "### Changed files" in content
+    assert "### Behavior changed" in content
+    assert "### Tests run" in content
+    assert "### Decisions" in content
+    assert "### Follow-up" in content
+
+
+def test_create_summary_includes_date(tmp_path):
+    """The generated summary includes a Date line."""
+    repo = tmp_path / "repo"
+    repo.mkdir()
+
+    dest = create_summary(repo, task="Test date")
+    content = dest.read_text(encoding="utf-8")
+    assert "Date: " in content
+
+
+def test_create_summary_includes_author_when_given(tmp_path):
+    """Author line is included only when provided."""
+    repo = tmp_path / "repo"
+    repo.mkdir()
+
+    dest = create_summary(repo, task="Test", author="Alice <alice@example.com>")
+    content = dest.read_text(encoding="utf-8")
+    assert "Author: Alice <alice@example.com>" in content
+
+    dest2 = create_summary(repo, task="Test no author")
+    content2 = dest2.read_text(encoding="utf-8")
+    assert "Author:" not in content2
+
+
+def test_create_summary_fills_sections(tmp_path):
+    """Provided section content appears in the generated file."""
+    repo = tmp_path / "repo"
+    repo.mkdir()
+
+    dest = create_summary(
+        repo,
+        task="Refactor auth",
+        changed_files="- `auth.py`: Extracted login logic.\n",
+        behavior_changed="Login now returns 401 instead of 500.",
+        tests_run="`tests/test_auth.py`: 15 passed.",
+        decisions="Use bcrypt over SHA-256 for passwords.",
+        follow_up="- Add rate limiting.\n",
+    )
+    content = dest.read_text(encoding="utf-8")
+    assert "- `auth.py`: Extracted login logic." in content
+    assert "Login now returns 401 instead of 500." in content
+    assert "`tests/test_auth.py`: 15 passed." in content
+    assert "Use bcrypt over SHA-256 for passwords." in content
+    assert "- Add rate limiting." in content
+
+
+def test_create_summary_uses_placeholder_for_empty_sections(tmp_path):
+    """Empty section content gets a placeholder."""
+    repo = tmp_path / "repo"
+    repo.mkdir()
+
+    dest = create_summary(repo, task="Empty sections")
+    content = dest.read_text(encoding="utf-8")
+    assert "_Not yet filled._" in content
+
+
+def test_create_summary_does_not_overwrite(tmp_path):
+    """Calling create_summary twice produces two distinct files."""
+    repo = tmp_path / "repo"
+    repo.mkdir()
+
+    dest1 = create_summary(repo, task="First")
+    dest2 = create_summary(repo, task="Second")
+
+    assert dest1 != dest2
+    assert dest1.exists()
+    assert dest2.exists()
+
+
+def test_create_summary_sanitises_filename(tmp_path):
+    """The task string is sanitised to produce a safe filename."""
+    repo = tmp_path / "repo"
+    repo.mkdir()
+
+    dest = create_summary(repo, task="Fix: broken <html> & CSS!")
+    assert dest.name.startswith("20")  # timestamp prefix
+    assert "fix" in dest.stem.lower() or "broken" in dest.stem.lower() or "css" in dest.stem.lower()
+    assert "!" not in dest.name
+    assert "<" not in dest.name
+    assert ">" not in dest.name
+    assert "&" not in dest.name
+
+
+def test_sanitise_filename_lowercases_and_replaces_spaces():
+    assert _sanitise_filename("My Task") == "my-task"
+
+
+def test_sanitise_filename_removes_special_chars():
+    assert _sanitise_filename("fix: broken <thing>") == "fix-broken-thing"
+
+
+def test_sanitise_filename_caps_length():
+    long_task = "x" * 200
+    result = _sanitise_filename(long_task)
+    assert len(result) <= 80
+
+
+def test_sanitise_filename_collapses_multiple_dashes():
+    assert _sanitise_filename("a  b   c") == "a-b-c"
+
+
+# ── CLI: vibecode history new ─────────────────────────────────────────────
+
+
+def test_history_new_cli_creates_file(tmp_path, capsys):
+    """vibecode history new creates a summary file."""
+    from vibecode.cli import main
+
+    repo = tmp_path / "repo"
+    (repo / ".vibecode").mkdir(parents=True)
+
+    rc = main(["history", "new", "--repo", str(repo), "--task", "Add tests"])
+    assert rc == 0
+
+    history_dir = repo / ".vibecode" / "history"
+    files = list(history_dir.glob("*.md"))
+    assert len(files) == 1
+    assert files[0].name.startswith("20")
+
+    content = files[0].read_text(encoding="utf-8")
+    assert "# Add tests" in content
+    assert "### Task" in content

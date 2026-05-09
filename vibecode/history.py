@@ -1,8 +1,11 @@
-"""History summary validation for .vibecode/history/*.md files."""
+"""History summary creation and validation for .vibecode/history/*.md files."""
 
 from __future__ import annotations
 
+import re
+import sys
 from dataclasses import dataclass, field
+from datetime import datetime
 from pathlib import Path
 
 
@@ -173,6 +176,147 @@ def validate_history_dir(root: Path) -> HistoryResult:
         result.issues.extend(validate_history_file(path, root))
 
     return result
+
+
+def _sanitise_filename(task: str) -> str:
+    """Convert a task description into a safe, lowercase filename slug."""
+    slug = task.lower().strip().replace(" ", "-")
+    slug = re.sub(r"[^a-z0-9\-_]", "", slug)
+    slug = re.sub(r"-{2,}", "-", slug)
+    return slug[:80]  # cap length to keep filenames reasonable
+
+
+def _next_summary_path(history_dir: Path, slug: str) -> Path:
+    """Return the next available history summary path using a timestamp prefix.
+
+    Format: ``YYYYMMDD-HHMM-task-slug.md``
+    If a file with the same name already exists, append ``-N`` before ``.md``.
+    """
+    now = datetime.now()
+    stamp = now.strftime("%Y%m%d-%H%M")
+    stem = f"{stamp}-{slug}"
+    candidate = history_dir / f"{stem}.md"
+    counter = 1
+    while candidate.exists():
+        candidate = history_dir / f"{stem}-{counter}.md"
+        counter += 1
+    return candidate
+
+
+def create_summary(
+    repo_root: Path,
+    task: str,
+    *,
+    changed_files: str = "",
+    behavior_changed: str = "",
+    tests_run: str = "",
+    decisions: str = "",
+    follow_up: str = "",
+    author: str = "",
+) -> Path:
+    """Create a durable history summary in ``.vibecode/history/``.
+
+    Generates a timestamped markdown file with the required section headings,
+    pre-filled with the provided content.  Does **not** overwrite an existing
+    summary — if a file with the same timestamp slug already exists a suffix
+    ``-N`` is appended.
+
+    Parameters
+    ----------
+    repo_root:
+        Repository root directory (will be resolved).
+    task:
+        Short description of the task or change.
+    changed_files:
+        Markdown list of files changed and why.
+    behavior_changed:
+        Description of behavioural impact.
+    tests_run:
+        Test results summary.
+    decisions:
+        Key architectural or design choices.
+    follow_up:
+        Open items or next steps.
+    author:
+        Optional author name / email.
+
+    Returns
+    -------
+    Path
+        The path of the created summary file.
+
+    Raises
+    ------
+    FileExistsError
+        If the target file somehow exists and cannot be uniquified (unlikely).
+    """
+    root = repo_root.resolve()
+    history_dir = root / ".vibecode" / "history"
+    history_dir.mkdir(parents=True, exist_ok=True)
+
+    slug = _sanitise_filename(task)
+    dest = _next_summary_path(history_dir, slug)
+
+    # Build the structured content
+    now = datetime.now()
+    date_str = now.strftime("%Y-%m-%d")
+
+    header = f"# {task}\n\n"
+    header += f"Date: {date_str}\n"
+    if author:
+        header += f"Author: {author}\n"
+    header += "\n"
+
+    sections = [
+        ("Task", task),
+        ("Changed files", changed_files),
+        ("Behavior changed", behavior_changed),
+        ("Tests run", tests_run),
+        ("Decisions", decisions),
+        ("Follow-up", follow_up),
+    ]
+
+    body_parts = [header]
+    for name, content in sections:
+        body_parts.append(f"### {name}\n")
+        body_parts.append(content.strip() if content else "_Not yet filled._")
+        body_parts.append("\n")
+
+    dest.write_text("".join(body_parts), encoding="utf-8")
+    return dest
+
+
+def cmd_history(args) -> int:
+    """CLI entry point for ``vibecode history new``."""
+    sub = getattr(args, "history_subcommand", None)
+
+    if sub == "new":
+        repo_arg = getattr(args, "repo", None)
+        repo = Path(repo_arg).resolve() if repo_arg else Path.cwd().resolve()
+        task = getattr(args, "task", "")
+        author = getattr(args, "author", "")
+
+        changed_files = getattr(args, "changed_files", "") or ""
+        behavior_changed = getattr(args, "behavior_changed", "") or ""
+        tests_run = getattr(args, "tests_run", "") or ""
+        decisions = getattr(args, "decisions", "") or ""
+        follow_up = getattr(args, "follow_up", "") or ""
+
+        dest = create_summary(
+            repo,
+            task,
+            changed_files=changed_files,
+            behavior_changed=behavior_changed,
+            tests_run=tests_run,
+            decisions=decisions,
+            follow_up=follow_up,
+            author=author,
+        )
+        print(f"History summary written: {dest}", file=sys.stderr)
+        return 0
+
+    # No recognised subcommand
+    return 1
 
 
 def cmd_history_check(args) -> int:
