@@ -130,7 +130,7 @@
     {
       "title": "Integrate handoff/history requirements into context pack",
       "description": "Purpose: ensure agents know when and how to update handoff/history.\n\nScope:\n- Update context renderer and tests.\n\nContext pack should say:\n- Handoff files are required for meaningful changes.\n- Architecture truth changes require handoff or history.\n- History summaries are durable memory, not run logs.\n- `.vibecode/runs/*` remains ignored runtime state.\n\nAcceptance:\n- Context pack includes concise handoff/history rules.\n- It does not dump all history content.\n- Tests cover rendering.",
-      "completed": false
+      "completed": true
     },
     {
       "title": "Add OpenCode availability detection",

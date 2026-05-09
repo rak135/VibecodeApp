@@ -524,3 +524,60 @@ def test_context_pack_preserves_invariant_ordering(tmp_path):
     handoff_pos = content.index("## Handoff required")
 
     assert task_pos < invariants_pos < architecture_pos < handoff_pos
+
+
+# ---------------------------------------------------------------------------
+# Handoff/history rules in context pack
+# ---------------------------------------------------------------------------
+
+
+def test_handoff_section_requires_handoff_files(tmp_path):
+    """Context pack states that handoff files are required for meaningful changes."""
+    _minimal_repo(tmp_path)
+    _write(tmp_path / ".vibecode" / "checks" / "required_checks.yaml", "checks: []\n")
+    _write(tmp_path / ".vibecode" / "handoff" / "NOW.md", "# Now\n\n- current work.\n")
+
+    content = render_context_pack(tmp_path, "some task")
+
+    assert "Handoff files (NOW.md, NEXT.md, BLOCKERS.md) are required" in content
+
+
+def test_handoff_section_includes_history_durable_memory_rule(tmp_path):
+    """Context pack states that history summaries are durable memory, not run logs."""
+    _minimal_repo(tmp_path)
+    _write(tmp_path / ".vibecode" / "checks" / "required_checks.yaml", "checks: []\n")
+    _write(tmp_path / ".vibecode" / "handoff" / "NOW.md", "# Now\n\n- current work.\n")
+
+    content = render_context_pack(tmp_path, "some task")
+
+    assert "History summaries are durable project memory" in content
+    assert "not run logs or chat transcripts" in content
+
+
+def test_handoff_section_architecture_change_requires_handoff(tmp_path):
+    """Context pack states architecture truth changes require handoff or history."""
+    _minimal_repo(tmp_path)
+    _write(tmp_path / ".vibecode" / "checks" / "required_checks.yaml", "checks: []\n")
+    _write(tmp_path / ".vibecode" / "handoff" / "NOW.md", "# Now\n\n- current work.\n")
+
+    content = render_context_pack(tmp_path, "some task")
+
+    assert "architecture truth changes" in content
+    assert "update committed architecture docs" in content
+
+
+def test_runs_dir_not_manually_editable(tmp_path):
+    """.vibecode/runs/* is treated as not manually editable in context pack."""
+    _write(
+        tmp_path / ".vibecode" / "checks" / "protected_paths.yaml",
+        "protected_paths:\n"
+        '  - path: ".vibecode/runs/*"\n'
+        '    rule: "Runtime output; do not edit manually."\n',
+    )
+    _write(tmp_path / ".vibecode" / "architecture" / "INVARIANTS.md", "\n")
+    _write(tmp_path / ".vibecode" / "index" / "file_inventory.json", '{"files": []}\n')
+
+    content = render_context_pack(tmp_path, "some task")
+
+    assert "not manually editable" in content
+    assert ".vibecode/runs" in content

@@ -332,6 +332,7 @@ def _is_not_manually_editable(path: str, rule: str) -> bool:
         ".generated.",
         ".vibecode/current",
         ".vibecode/logs",
+        ".vibecode/runs",
         "runtime",
         "regenerate",
     )
@@ -360,8 +361,10 @@ def _handoff_expectations(repo_root: Path) -> list[str]:
     lines = [
         "- Keep edits scoped to files relevant to the task.",
         "- Report changed files and checks run.",
+        "- Handoff files (NOW.md, NEXT.md, BLOCKERS.md) are required for meaningful changes.",
         "- If architecture truth changes, update committed architecture docs in the same handoff.",
         "- For significant changes, add a summary to `.vibecode/history/` (see `history/README.md`).",
+        "- History summaries are durable project memory, not run logs or chat transcripts.",
         "- Update `NOW.md` before starting a new task session; describe current work in progress.",
         "- Update `NEXT.md` when queuing follow-up work; remove items that are started or done.",
         "- Update `BLOCKERS.md` when blockers appear or are resolved; do not leave stale entries.",
