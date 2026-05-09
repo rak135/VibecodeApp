@@ -13,6 +13,7 @@ from datetime import datetime, timezone
 from pathlib import Path
 from typing import Any
 
+from vibecode.adapters.opencode import check_opencode
 from vibecode.config import load_config
 from vibecode.git_state import GitState, inspect_git_state
 
@@ -38,9 +39,11 @@ class RunPlan:
     context_pack_path: str | None
     opencode_prompt_path: str | None
     permission_profile: str | None
-    preflight_warnings: tuple[RunPlanWarning, ...]
-    preflight_errors: tuple[RunPlanWarning, ...]
     commands: tuple[str, ...]
+    opencode_available: bool | None = None
+    opencode_message: str | None = None
+    preflight_warnings: tuple[RunPlanWarning, ...] = ()
+    preflight_errors: tuple[RunPlanWarning, ...] = ()
     # Additional metadata for downstream consumers
     metadata: dict[str, Any] = field(default_factory=dict)
 
@@ -50,6 +53,7 @@ def build_run_plan(
     task: str,
     platform: str = "opencode",
     profile_name: str | None = None,
+    allow_dirty: bool = False,
 ) -> RunPlan:
     """Assemble a run plan for *repo_root* without launching any agent.
 
@@ -64,6 +68,9 @@ def build_run_plan(
     profile_name:
         Permission profile name (e.g. ``"safe"``, ``"fast"``, ``"audit"``).
         If ``None``, ``"safe"`` is assumed.
+    allow_dirty:
+        If ``True``, dirty working tree is allowed (warning only).
+        If ``False``, a dirty working tree produces a hard error.
 
     Returns
     -------
@@ -86,12 +93,21 @@ def build_run_plan(
             dirty_paths = git_state.changed_paths
             if dirty:
                 count = len(dirty_paths)
-                warnings.append(RunPlanWarning(
-                    "warn",
-                    f"Git working tree is dirty — {count} changed file(s): "
-                    + ", ".join(dirty_paths[:8])
-                    + (" ..." if count > 8 else ""),
-                ))
+                if allow_dirty:
+                    warnings.append(RunPlanWarning(
+                        "warn",
+                        f"Git working tree is dirty — {count} changed file(s): "
+                        + ", ".join(dirty_paths[:8])
+                        + (" ..." if count > 8 else ""),
+                    ))
+                else:
+                    errors.append(RunPlanWarning(
+                        "error",
+                        f"Git working tree is dirty — {count} changed file(s): "
+                        + ", ".join(dirty_paths[:8])
+                        + (" ..." if count > 8 else "")
+                        + "  Commit or stash changes first, or pass --allow-dirty.",
+                    ))
         else:
             warnings.append(RunPlanWarning(
                 "warn", "Directory is not a git repository."
@@ -203,10 +219,26 @@ def build_run_plan(
                 f"Unknown permission profile '{profile_name}'.",
             ))
 
-    # --- 6. Assemble commands that would be run ----------------------------
+    # --- 6. OpenCode availability check ---------------------------------------
+    opencode_available: bool | None = None
+    opencode_message: str | None = None
+
+    if platform == "opencode":
+        opencode_status = check_opencode()
+        opencode_available = bool(opencode_status)
+        opencode_message = opencode_status.message
+        if not opencode_status:
+            errors.append(RunPlanWarning(
+                "error",
+                f"OpenCode not available: {opencode_status.message}",
+            ))
+
+    # --- 7. Assemble commands that would be run ----------------------------
     commands: list[str] = []
-    if dirty:
+    if dirty and not allow_dirty:
         commands.append("# Repo is dirty — commit or stash changes first for a clean run.")
+    if not opencode_available and platform == "opencode":
+        commands.append("# OpenCode is not available — install it or set OPENCODE_COMMAND.")
     commands.append(f"# Platform: {platform}")
     commands.append(f"# Permission profile: {profile_name}")
     if context_pack_path:
@@ -229,6 +261,8 @@ def build_run_plan(
         context_pack_path=context_pack_path,
         opencode_prompt_path=opencode_prompt_path,
         permission_profile=permission_profile,
+        opencode_available=opencode_available,
+        opencode_message=opencode_message,
         preflight_warnings=preflight_warnings,
         preflight_errors=preflight_errors,
         commands=tuple(commands),
@@ -270,6 +304,11 @@ def render_run_plan(plan: RunPlan) -> str:
     lines.append(f"  Context pack path:  {plan.context_pack_path or '(not available)'}")
     lines.append(f"  OpenCode prompt:    {plan.opencode_prompt_path or '(not available)'}")
 
+    if plan.opencode_available is False:
+        lines.append(f"  OpenCode status:    NOT AVAILABLE")
+        if plan.opencode_message:
+            lines.append(f"                    {plan.opencode_message}")
+
     if plan.preflight_errors:
         lines.append("")
         lines.append("ERRORS:")
@@ -298,13 +337,16 @@ def cmd_run_plan(args) -> int:
     task = getattr(args, "task", None) or ""
     platform = getattr(args, "platform", "opencode")
     profile = getattr(args, "profile", None)
+    allow_dirty = getattr(args, "allow_dirty", False)
 
     if not repo_arg:
         print("Error: repo root is required.", file=__import__("sys").stderr)
         return 1
 
     root = Path(repo_arg).resolve()
-    plan = build_run_plan(root, task=task, platform=platform, profile_name=profile)
+    plan = build_run_plan(
+        root, task=task, platform=platform, profile_name=profile, allow_dirty=allow_dirty,
+    )
 
     output = render_run_plan(plan)
     print(output)
@@ -323,6 +365,8 @@ def cmd_run_plan(args) -> int:
         "context_pack_path": plan.context_pack_path,
         "opencode_prompt_path": plan.opencode_prompt_path,
         "permission_profile": plan.permission_profile,
+        "opencode_available": plan.opencode_available,
+        "opencode_message": plan.opencode_message,
         "preflight_warnings": [
             {"level": w.level, "message": w.message} for w in plan.preflight_warnings
         ],

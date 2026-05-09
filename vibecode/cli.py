@@ -159,6 +159,12 @@ def create_parser() -> argparse.ArgumentParser:
         default=None,
         help="Permission profile name (default: safe).",
     )
+    run_plan_parser.add_argument(
+        "--allow-dirty",
+        action="store_true",
+        default=False,
+        help="Allow running even with uncommitted changes (warn only, no error).",
+    )
 
     # history
     history_parser = subparsers.add_parser(

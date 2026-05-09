@@ -150,7 +150,7 @@
     {
       "title": "Implement OpenCode run preflight",
       "description": "Purpose: prevent running agents into a dirty/stale state without warning.\n\nScope:\n- OpenCode run adapter preflight only.\n- Do not launch OpenCode unless explicitly part of this task after preflight is tested.\n\nPreflight checks:\n- repo is git repo\n- `.vibecode/project.yaml` exists\n- generated index exists and is fresh or can be regenerated\n- current git status is clean or user explicitly allows dirty state\n- required permission profile exists\n- OpenCode command is available\n- generated/runtime files are ignored\n\nAcceptance:\n- Dirty repo blocks or warns according to flag.\n- Stale/missing index is detected.\n- Preflight has tests using fake repos.\n- No real OpenCode required in tests.",
-      "completed": false
+      "completed": true
     },
     {
       "title": "Implement OpenCode run adapter with fake runner tests",

@@ -5,6 +5,7 @@ from __future__ import annotations
 import json
 import subprocess
 from pathlib import Path
+from unittest.mock import patch
 
 import pytest
 
@@ -629,3 +630,236 @@ class TestBuildRunPlanContextPackPath:
         plan = build_run_plan(tmp_path, task="test", platform="something_else")
 
         assert plan.opencode_prompt_path is None
+
+
+# ---------------------------------------------------------------------------
+# build_run_plan — allow_dirty flag
+# ---------------------------------------------------------------------------
+
+
+class TestBuildRunPlanAllowDirty:
+    def test_dirty_repo_with_allow_dirty_is_warning(self, tmp_path):
+        """allow_dirty=True turns dirty-tree from error to warning."""
+        _init_repo(tmp_path)
+        _write(tmp_path / "src" / "app.py", "print('hello')\n")
+        _commit_all(tmp_path)
+        _minimal_vibecode(tmp_path)
+        _commit_all(tmp_path)
+
+        # Make a change after commit
+        _write(tmp_path / "src" / "app.py", "print('changed')\n")
+
+        plan = build_run_plan(tmp_path, task="test task", allow_dirty=True)
+
+        assert plan.dirty is True
+        # Should NOT have dirty in errors — it should be a warning instead
+        dirty_errors = [e for e in plan.preflight_errors if "dirty" in e.message.lower()]
+        assert len(dirty_errors) == 0
+
+        dirty_warnings = [w for w in plan.preflight_warnings if "dirty" in w.message.lower()]
+        assert len(dirty_warnings) >= 1
+
+    def test_dirty_repo_without_allow_dirty_is_error(self, tmp_path):
+        """allow_dirty=False (default) makes dirty-tree a hard error."""
+        _init_repo(tmp_path)
+        _write(tmp_path / "src" / "app.py", "print('hello')\n")
+        _commit_all(tmp_path)
+        _minimal_vibecode(tmp_path)
+        _commit_all(tmp_path)
+
+        # Make a change after commit
+        _write(tmp_path / "src" / "app.py", "print('changed')\n")
+
+        plan = build_run_plan(tmp_path, task="test task", allow_dirty=False)
+
+        assert plan.dirty is True
+        dirty_errors = [e for e in plan.preflight_errors if "dirty" in e.message.lower()]
+        assert len(dirty_errors) >= 1
+        assert "--allow-dirty" in dirty_errors[0].message
+
+
+# ---------------------------------------------------------------------------
+# build_run_plan — OpenCode availability
+# ---------------------------------------------------------------------------
+
+
+class TestBuildRunPlanOpenCode:
+    @patch("vibecode.adapters.opencode.shutil.which", return_value=None)
+    def test_opencode_missing_adds_error(self, _which, tmp_path):
+        """OpenCode not on PATH produces an error in the plan."""
+        _init_repo(tmp_path)
+        _minimal_vibecode(tmp_path)
+        _commit_all(tmp_path)
+
+        plan = build_run_plan(tmp_path, task="test task", platform="opencode")
+
+        opencode_errors = [
+            e for e in plan.preflight_errors if "OpenCode" in e.message
+        ]
+        assert len(opencode_errors) >= 1
+        assert plan.opencode_available is False
+
+    @patch("vibecode.adapters.opencode.shutil.which", return_value="/usr/bin/opencode")
+    @patch("vibecode.adapters.opencode.subprocess.run")
+    def test_opencode_available_no_error(self, mock_run, _which, tmp_path):
+        """OpenCode available on PATH does not produce an error."""
+        mock_run.return_value = MagicMock(
+            returncode=0, stdout="OpenCode 1.0.0\n", stderr=""
+        )
+        _init_repo(tmp_path)
+        _minimal_vibecode(tmp_path)
+        _commit_all(tmp_path)
+
+        plan = build_run_plan(tmp_path, task="test task", platform="opencode")
+
+        assert plan.opencode_available is True
+        opencode_errors = [
+            e for e in plan.preflight_errors if "OpenCode" in e.message
+        ]
+        assert len(opencode_errors) == 0
+
+    @patch("vibecode.adapters.opencode.shutil.which", return_value=None)
+    def test_non_opencode_platform_skips_availability_check(self, _which, tmp_path):
+        """Non-opencode platforms should not check OpenCode availability."""
+        _init_repo(tmp_path)
+        _minimal_vibecode(tmp_path)
+        _commit_all(tmp_path)
+
+        plan = build_run_plan(tmp_path, task="test task", platform="custom")
+
+        # OpenCode fields should be None when platform is not opencode
+        assert plan.opencode_available is None
+        assert plan.opencode_message is None
+
+    @patch("vibecode.adapters.opencode.shutil.which", return_value=None)
+    def test_opencode_unavailable_shows_in_commands(self, _which, tmp_path):
+        """When OpenCode is unavailable, the commands section should mention it."""
+        _init_repo(tmp_path)
+        _minimal_vibecode(tmp_path)
+        _commit_all(tmp_path)
+
+        plan = build_run_plan(tmp_path, task="test task", platform="opencode")
+
+        command_text = "\n".join(plan.commands)
+        assert "OpenCode" in command_text
+        assert "not available" in command_text.lower() or "install" in command_text.lower()
+
+    @patch("vibecode.adapters.opencode.shutil.which", return_value=None)
+    def test_opencode_error_in_render(self, _which, tmp_path):
+        """Rendered run plan should show OpenCode not available."""
+        _init_repo(tmp_path)
+        _minimal_vibecode(tmp_path)
+        _commit_all(tmp_path)
+
+        plan = build_run_plan(tmp_path, task="test task", platform="opencode")
+        text = render_run_plan(plan)
+
+        assert "NOT AVAILABLE" in text
+
+
+# ---------------------------------------------------------------------------
+# build_run_plan — combined dirty + OpenCode
+# ---------------------------------------------------------------------------
+
+
+class TestBuildRunPlanCombined:
+    @patch("vibecode.adapters.opencode.shutil.which", return_value=None)
+    def test_dirty_and_opencode_missing_produces_multiple_errors(self, _which, tmp_path):
+        """Both dirty repo and missing OpenCode should produce multiple errors."""
+        _init_repo(tmp_path)
+        _write(tmp_path / "src" / "app.py", "print('hello')\n")
+        _commit_all(tmp_path)
+        _minimal_vibecode(tmp_path)
+        _commit_all(tmp_path)
+
+        _write(tmp_path / "src" / "app.py", "print('changed')\n")
+
+        plan = build_run_plan(tmp_path, task="test task", platform="opencode")
+
+        error_levels = [e.level for e in plan.preflight_errors]
+        assert error_levels.count("error") >= 2  # dirty + opencode missing
+
+
+# ---------------------------------------------------------------------------
+# CLI: vibecode run-plan — allow-dirty flag
+# ---------------------------------------------------------------------------
+
+
+class TestRunPlanCLIAllowDirty:
+    @patch("vibecode.adapters.opencode.shutil.which", return_value=None)
+    def test_allow_dirty_flag_passed_through(self, _which, tmp_path, capsys):
+        """--allow-dirty flag should suppress dirty-tree error."""
+        _init_repo(tmp_path)
+        _minimal_vibecode(tmp_path)
+        _write(tmp_path / "app.py", "x = 1\n")
+        _commit_all(tmp_path)
+        _write(tmp_path / "app.py", "x = 2\n")  # dirty
+
+        rc = main(["run-plan", str(tmp_path), "--allow-dirty"])
+        out = capsys.readouterr().out
+
+        assert rc == 1  # still error because OpenCode is missing
+        assert "DIRTY" in out
+        assert "ERROR" in out  # OpenCode error remains
+        # Should NOT have a dirty error if --allow-dirty was used
+        # (dirty should appear as WARN, not ERROR)
+        lines = out.split("\n")
+        dirty_error_lines = [l for l in lines if "dirty" in l.lower() and "ERROR" in l.upper()]
+        assert len(dirty_error_lines) == 0
+
+    @patch("vibecode.adapters.opencode.shutil.which", return_value=None)
+    def test_without_allow_dirty_shows_error(self, _which, tmp_path, capsys):
+        """Without --allow-dirty, dirty repo shows error."""
+        _init_repo(tmp_path)
+        _minimal_vibecode(tmp_path)
+        _write(tmp_path / "app.py", "x = 1\n")
+        _commit_all(tmp_path)
+        _write(tmp_path / "app.py", "x = 2\n")  # dirty
+
+        rc = main(["run-plan", str(tmp_path)])
+        out = capsys.readouterr().out
+
+        assert rc == 1
+        # Should contain dirty error
+        assert "DIRTY" in out
+
+
+# ---------------------------------------------------------------------------
+# RunPlan dataclass — new fields
+# ---------------------------------------------------------------------------
+
+
+class TestRunPlanOpenCodeFields:
+    def test_opencode_fields_default_to_none(self):
+        plan = RunPlan(
+            repo_root="/tmp",
+            task="test",
+            dirty=False,
+            dirty_paths=(),
+            index_fresh=False,
+            index_age_seconds=None,
+            context_pack_path=None,
+            opencode_prompt_path=None,
+            permission_profile=None,
+            commands=(),
+        )
+        assert plan.opencode_available is None
+        assert plan.opencode_message is None
+
+    def test_opencode_fields_can_be_set(self):
+        plan = RunPlan(
+            repo_root="/tmp",
+            task="test",
+            dirty=False,
+            dirty_paths=(),
+            index_fresh=False,
+            index_age_seconds=None,
+            context_pack_path=None,
+            opencode_prompt_path=None,
+            permission_profile=None,
+            opencode_available=True,
+            opencode_message="OpenCode 1.0.0",
+            commands=(),
+        )
+        assert plan.opencode_available is True
+        assert plan.opencode_message == "OpenCode 1.0.0"
