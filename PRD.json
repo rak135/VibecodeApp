@@ -115,7 +115,7 @@
     {
       "title": "Add handoff-check CLI command",
       "description": "Purpose: expose handoff validation as `vibecode handoff-check <repo>`.\n\nScope:\n- Update CLI parser/dispatch.\n- Add tests.\n\nBehavior:\n- Checks NOW/NEXT/BLOCKERS.\n- Checks architecture-change handoff requirement using current git diff.\n- Returns non-zero when handoff is invalid.\n- Writes optional report to `.vibecode/current/handoff_check.json` if useful.\n\nAcceptance:\n- CLI help includes handoff-check.\n- Placeholder handoff fails.\n- Valid handoff passes.\n- Architecture doc change without handoff fails.",
-      "completed": false
+      "completed": true
     },
     {
       "title": "Define history summary policy",

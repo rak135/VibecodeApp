@@ -2,10 +2,13 @@
 
 from __future__ import annotations
 
+import json
+import sys
 from dataclasses import dataclass, field
 from pathlib import Path
 from typing import Iterable
 
+from vibecode.git_state import inspect_git_state
 from vibecode.paths import to_posix_str
 
 
@@ -203,3 +206,39 @@ def _strip_heading_and_comments(content: str) -> str:
             continue
         lines.append(line)
     return "\n".join(lines)
+
+
+def cmd_handoff_check(args) -> int:
+    """CLI entry point for ``vibecode handoff-check``."""
+    repo_root: Path = Path(args.repo_root).resolve()
+    write_json: bool = getattr(args, "json", False)
+
+    if not repo_root.is_dir():
+        print(f"Error: Repository root does not exist: {repo_root}", file=sys.stderr)
+        return 1
+
+    # Get git diff (changed file paths) including untracked new files
+    git_state = inspect_git_state(repo_root)
+    if not git_state.is_git_repo:
+        print("Error: not a git repository.", file=sys.stderr)
+        return 1
+    diff_paths = git_state.diff_name_only + git_state.untracked_paths
+
+    result = validate_handoff_files(repo_root, diff=diff_paths)
+
+    if write_json:
+        out_dir = repo_root / ".vibecode" / "current"
+        out_dir.mkdir(parents=True, exist_ok=True)
+        report_path = out_dir / "handoff_check.json"
+        report_path.write_text(
+            json.dumps(result.as_dict(), indent=2) + "\n", encoding="utf-8"
+        )
+
+    if result.passed:
+        print("Handoff check passed.")
+        return 0
+
+    print(f"Handoff check failed ({len(result.issues)} issue(s)):", file=sys.stderr)
+    for issue in result.issues:
+        print(f"  • {issue.file}: {issue.message}", file=sys.stderr)
+    return 1

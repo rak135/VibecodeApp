@@ -116,6 +116,24 @@ def create_parser() -> argparse.ArgumentParser:
         help="Repository root directory (default: current directory).",
     )
 
+    # handoff-check
+    handoff_parser = subparsers.add_parser(
+        "handoff-check",
+        help="Validate handoff files (NOW/NEXT/BLOCKERS) and check architecture-change recording.",
+    )
+    handoff_parser.add_argument(
+        "repo_root",
+        nargs="?",
+        default=".",
+        help="Repository root directory (default: current directory).",
+    )
+    handoff_parser.add_argument(
+        "--json",
+        action="store_true",
+        default=False,
+        help="Write a JSON report to .vibecode/current/handoff_check.json.",
+    )
+
     # export-agents
     export_agents_parser = subparsers.add_parser(
         "export-agents", help="Export agent instructions to AGENTS.md."
@@ -215,6 +233,12 @@ def _dispatch(args, parser) -> int:
         _require_root_exists(args.repo_root)
         from vibecode.check import cmd_check
         return cmd_check(args)
+
+    if args.command == "handoff-check":
+        args.repo_root = normalise_root(args.repo_root)
+        _require_root_exists(args.repo_root)
+        from vibecode.handoff import cmd_handoff_check
+        return cmd_handoff_check(args)
 
     if args.command == "export-agents":
         args.repo_root = normalise_root(args.repo_root)
