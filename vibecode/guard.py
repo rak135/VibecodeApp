@@ -4,6 +4,7 @@ from __future__ import annotations
 
 from dataclasses import dataclass
 from fnmatch import fnmatchcase
+from pathlib import PurePosixPath
 
 from vibecode.config import DEFAULT_PROTECTED_PATH_RULES, ProtectedPathRule
 from vibecode.git_state import GitState
@@ -22,6 +23,8 @@ ARCHITECTURE_TRUTH_RECORD_RULE_ID = "architecture-truth-record"
 ARCHITECTURE_TRUTH_RECORD_MESSAGE = (
     "Architecture truth changed and must be recorded in handoff or history."
 )
+SOURCE_TEST_BALANCE_RULE_ID = "source-test-change-balance"
+SOURCE_TEST_BALANCE_MESSAGE = "Source and test changes should usually move together."
 README_ALLOWED_GENERATED_BLOCK_MARKERS: tuple[tuple[str, str], ...] = (
     (
         "<!-- vibecode:readme:generated:start -->",
@@ -36,6 +39,25 @@ _GENERATED_RUNTIME_PREFIXES: tuple[str, ...] = (
     ".vibecode/runs/",
     ".vibecode/tmp/",
     ".vibecode/cache/",
+)
+_SOURCE_EXTENSIONS: frozenset[str] = frozenset({
+    ".py",
+    ".pyi",
+    ".js",
+    ".jsx",
+    ".ts",
+    ".tsx",
+})
+_DOC_EXTENSIONS: frozenset[str] = frozenset({".md", ".mdx", ".rst", ".txt", ".adoc"})
+_TS_TEST_SUFFIXES: tuple[str, ...] = (
+    ".test.ts",
+    ".test.tsx",
+    ".spec.ts",
+    ".spec.tsx",
+    ".test.js",
+    ".test.jsx",
+    ".spec.js",
+    ".spec.jsx",
 )
 
 
@@ -63,7 +85,12 @@ class GuardResult:
         return all(finding.severity != "error" for finding in self.findings)
 
 
-def evaluate_guard(git_state: GitState, *, task: str = "") -> GuardResult:
+def evaluate_guard(
+    git_state: GitState,
+    *,
+    task: str = "",
+    test_map: dict | None = None,
+) -> GuardResult:
     """Evaluate all internal guard rules against collected git state."""
 
     policy_result = check_protected_path_changes(
@@ -81,6 +108,11 @@ def evaluate_guard(git_state: GitState, *, task: str = "") -> GuardResult:
     architecture_truth_result = check_architecture_truth_recorded(
         git_state.changed_paths
     )
+    source_test_result = check_source_test_change_balance(
+        git_state.changed_paths,
+        task=task,
+        test_map=test_map,
+    )
     return GuardResult(
         findings=_dedupe_findings(
             (
@@ -88,7 +120,90 @@ def evaluate_guard(git_state: GitState, *, task: str = "") -> GuardResult:
                 *generated_result.findings,
                 *readme_result.findings,
                 *architecture_truth_result.findings,
+                *source_test_result.findings,
             )
+        )
+    )
+
+
+def check_source_test_change_balance(
+    changed_paths: tuple[str, ...] | list[str],
+    *,
+    task: str = "",
+    test_map: dict | None = None,
+) -> GuardResult:
+    """Warn when source and test changes do not move together."""
+
+    paths = tuple(
+        path
+        for path in (_normalise_path(raw_path) for raw_path in changed_paths)
+        if path and not _is_generated_runtime_path(path)
+    )
+    if not paths:
+        return GuardResult()
+
+    source_paths = tuple(path for path in paths if _is_source_path(path))
+    test_paths = tuple(path for path in paths if _is_test_path(path))
+    if not source_paths and not test_paths:
+        return GuardResult()
+    if test_paths and not source_paths:
+        if _task_is_test_only(task):
+            return GuardResult()
+        return GuardResult(
+            findings=(
+                GuardFinding(
+                    rule_id=SOURCE_TEST_BALANCE_RULE_ID,
+                    path=_summarise_paths(test_paths),
+                    severity="warning",
+                    message=(
+                        "Tests changed without source changes. If this is test-only "
+                        "work, make that explicit in the task."
+                    ),
+                    rule=SOURCE_TEST_BALANCE_MESSAGE,
+                    recommended_fix=(
+                        "Include the related source change, or note that this is a "
+                        "test-only task."
+                    ),
+                ),
+            )
+        )
+
+    unmatched_sources: list[str] = []
+    suggestions: list[str] = []
+    for source_path in source_paths:
+        paired_tests = _paired_tests_for_source(source_path, test_map)
+        if paired_tests:
+            suggestions.extend(paired_tests)
+            if any(test in test_paths for test in paired_tests):
+                continue
+        elif test_paths:
+            continue
+        else:
+            suggestions.extend(_suggested_tests_for_source(source_path))
+        unmatched_sources.append(source_path)
+
+    if not unmatched_sources:
+        return GuardResult()
+
+    fix = "Add or update a matching test."
+    suggested = _unique_paths(suggestions)[:4]
+    if suggested:
+        fix = f"Add or update matching tests, such as {_format_path_list(suggested)}."
+
+    return GuardResult(
+        findings=(
+            GuardFinding(
+                rule_id=SOURCE_TEST_BALANCE_RULE_ID,
+                path=_summarise_paths(tuple(unmatched_sources)),
+                severity="warning",
+                message=(
+                    "Source changed without corresponding test changes: "
+                    f"{_format_path_list(tuple(unmatched_sources)[:3])}."
+                ),
+                rule=SOURCE_TEST_BALANCE_MESSAGE,
+                recommended_fix=fix,
+                required_tests=tuple(suggested),
+            ),
         )
     )
 
@@ -340,6 +455,35 @@ def _is_architecture_doc_path(path: str) -> bool:
     return "/" not in path.removeprefix(".vibecode/architecture/")
 
 
+def _is_source_path(path: str) -> bool:
+    if _is_test_path(path) or _is_documentation_path(path):
+        return False
+    return PurePosixPath(path).suffix in _SOURCE_EXTENSIONS
+
+
+def _is_test_path(path: str) -> bool:
+    suffix = PurePosixPath(path).suffix
+    name = PurePosixPath(path).name
+    parts = path.split("/")
+    if suffix == ".py":
+        return (
+            name.startswith("test_")
+            or name.endswith("_test.py")
+            or "tests" in parts[:-1]
+        )
+    if suffix in {".js", ".jsx", ".ts", ".tsx"}:
+        return any(name.endswith(test_suffix) for test_suffix in _TS_TEST_SUFFIXES) or (
+            "__tests__" in parts[:-1]
+        )
+    return False
+
+
+def _is_documentation_path(path: str) -> bool:
+    if path == "README.md" or path.startswith("docs/"):
+        return True
+    return PurePosixPath(path).suffix in _DOC_EXTENSIONS
+
+
 def _has_architecture_truth_record(paths: tuple[str, ...]) -> bool:
     return any(
         path == ".vibecode/handoff/NOW.md"
@@ -371,6 +515,64 @@ def _task_allows_readme_change(task: str) -> bool:
     return bool(_words(task) & {"readme", "docs", "doc", "documentation"})
 
 
+def _task_is_test_only(task: str) -> bool:
+    words = _words(task)
+    return bool({"test", "tests"} & words) and "only" in words
+
+
+def _paired_tests_for_source(source_path: str, test_map: dict | None) -> tuple[str, ...]:
+    if not isinstance(test_map, dict):
+        return ()
+    matched: list[str] = []
+    for rule in test_map.get("rules", []):
+        if not isinstance(rule, dict):
+            continue
+        pattern = _normalise_path(str(rule.get("path_pattern", "")))
+        if not pattern or pattern == "**" or not _path_matches_rule(source_path, pattern):
+            continue
+        checks = rule.get("required_checks", [])
+        if not isinstance(checks, list):
+            continue
+        for check in checks:
+            path = _normalise_path(str(check))
+            if path and _is_test_path(path):
+                matched.append(path)
+    return tuple(_unique_paths(matched))
+
+
+def _suggested_tests_for_source(source_path: str) -> tuple[str, ...]:
+    path = PurePosixPath(source_path)
+    stem = path.stem
+    suffix = path.suffix
+    if suffix == ".py":
+        return (f"tests/test_{stem}.py",)
+    if suffix in {".js", ".jsx", ".ts", ".tsx"}:
+        return (path.with_name(f"{stem}.test{suffix}").as_posix(),)
+    return ()
+
+
+def _unique_paths(paths: tuple[str, ...] | list[str]) -> tuple[str, ...]:
+    seen: set[str] = set()
+    unique: list[str] = []
+    for raw_path in paths:
+        path = _normalise_path(raw_path)
+        if not path or path in seen:
+            continue
+        seen.add(path)
+        unique.append(path)
+    return tuple(unique)
+
+
+def _summarise_paths(paths: tuple[str, ...]) -> str:
+    if len(paths) <= 3:
+        return ", ".join(paths)
+    return f"{', '.join(paths[:3])} (+{len(paths) - 3} more)"
+
+
+def _format_path_list(paths: tuple[str, ...]) -> str:
+    return ", ".join(f"`{path}`" for path in paths)
+
+
 def _format_required_tests(required_tests: tuple[str, ...]) -> str:
     return ", ".join(f"`{test}`" for test in required_tests)
 
@@ -385,7 +587,10 @@ def _dedupe_findings(findings: tuple[GuardFinding, ...]) -> tuple[GuardFinding, 
     seen: set[tuple[str, ...]] = set()
     for finding in findings:
         key = (finding.severity, finding.path)
-        if finding.rule_id == ARCHITECTURE_TRUTH_RECORD_RULE_ID:
+        if finding.rule_id in {
+            ARCHITECTURE_TRUTH_RECORD_RULE_ID,
+            SOURCE_TEST_BALANCE_RULE_ID,
+        }:
             key = (*key, finding.rule_id)
         if key in seen:
             continue

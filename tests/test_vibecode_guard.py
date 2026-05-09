@@ -12,6 +12,7 @@ from vibecode.guard import (
     check_generated_runtime_changes,
     check_protected_path_changes,
     check_readme_changes,
+    check_source_test_change_balance,
     evaluate_guard,
 )
 
@@ -90,7 +91,7 @@ def test_generator_behavior_task_still_fails_for_tracked_generated_file():
 def test_evaluate_guard_consumes_git_state_changed_paths():
     state = GitState(
         is_git_repo=True,
-        changed_paths=("src/app.py", ".vibecode/index/repo_tree.generated.md"),
+        changed_paths=("docs/app.md", ".vibecode/index/repo_tree.generated.md"),
         untracked_paths=(),
     )
 
@@ -100,6 +101,75 @@ def test_evaluate_guard_consumes_git_state_changed_paths():
     assert tuple(finding.path for finding in result.findings) == (
         ".vibecode/index/repo_tree.generated.md",
     )
+
+
+def test_source_only_change_warns_with_suggested_tests():
+    test_map = {
+        "rules": [
+            {
+                "path_pattern": "vibecode/guard.py",
+                "required_checks": ["tests/test_vibecode_guard.py"],
+            }
+        ]
+    }
+
+    result = check_source_test_change_balance(
+        ("vibecode/guard.py",),
+        test_map=test_map,
+    )
+
+    finding = result.findings[0]
+    assert result.passed is True
+    assert finding.rule_id == "source-test-change-balance"
+    assert finding.severity == "warning"
+    assert "Source changed without corresponding test changes" in finding.message
+    assert "tests/test_vibecode_guard.py" in finding.recommended_fix
+    assert finding.required_tests == ("tests/test_vibecode_guard.py",)
+
+
+def test_test_only_change_warns_unless_task_is_explicitly_test_only():
+    result = check_source_test_change_balance(
+        ("tests/test_vibecode_guard.py",),
+        task="update guard behavior",
+    )
+
+    finding = result.findings[0]
+    assert result.passed is True
+    assert finding.severity == "warning"
+    assert "Tests changed without source changes" in finding.message
+    assert "test-only" in finding.message
+
+    explicit = check_source_test_change_balance(
+        ("tests/test_vibecode_guard.py",),
+        task="test-only cleanup for guard coverage",
+    )
+    assert explicit.findings == ()
+
+
+def test_paired_source_and_test_change_does_not_warn():
+    test_map = {
+        "rules": [
+            {
+                "path_pattern": "vibecode/guard.py",
+                "required_checks": ["tests/test_vibecode_guard.py"],
+            }
+        ]
+    }
+
+    result = check_source_test_change_balance(
+        ("vibecode/guard.py", "tests/test_vibecode_guard.py"),
+        test_map=test_map,
+    )
+
+    assert result.passed is True
+    assert result.findings == ()
+
+
+def test_docs_only_change_does_not_require_tests():
+    result = check_source_test_change_balance(("docs/QUICKSTART.md", "README.md"))
+
+    assert result.passed is True
+    assert result.findings == ()
 
 
 def test_readme_change_is_allowed_during_docs_task():

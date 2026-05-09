@@ -13,3 +13,4 @@
 - Protected path guard evaluation now reports protected path scope failures, required tests, generated-artifact hard failures, and handoff/explanation requirements.
 - README guard evaluation now treats root `README.md` as manual-only unless the task explicitly mentions README/docs; docs files such as `docs/QUICKSTART.md` are not blocked.
 - Architecture truth guard evaluation now requires same-change handoff/history acknowledgement for `.vibecode/architecture/*.md` changes.
+- Guard evaluation now warns when source and test changes are not paired, using test-map suggestions when available and allowing explicit test-only work.

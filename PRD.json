@@ -75,7 +75,7 @@
     {
       "title": "Implement source/test mismatch guard warnings",
       "description": "Purpose: warn when source changes occur without corresponding test changes, or tests change without source changes.\n\nScope:\n- Guard rule internals.\n- This rule should usually warn, not hard fail.\n\nBehavior:\n- Source changed without tests: warning with suggested tests.\n- Tests changed without source: warning unless task is explicitly test-only.\n- Use existing test_map/source pairing where possible.\n- Do not require tests for docs-only changes.\n\nAcceptance:\n- Tests cover source-only, test-only, source+test, and docs-only.\n- Warnings are clear and not overbearing.",
-      "completed": false
+      "completed": true
     },
     {
       "title": "Add guard CLI command",
