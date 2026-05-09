@@ -336,8 +336,11 @@ class TestCmdRunEndToEnd:
 
     def test_run_missing_opencode_command(self, capsys):
         """When OpenCode binary is not on PATH, should fail clearly."""
-        # Ensure fake bin is NOT on PATH.
-        self.monkeypatch.setenv("PATH", "/nonexistent/path")
+        # Monkeypatch so the OpenCode command cannot be resolved,
+        # but leave PATH intact so git still works.
+        self.monkeypatch.setattr(
+            "vibecode.run._get_opencode_command", lambda *a, **kw: None
+        )
 
         rc = main(["run", str(self.repo), "--task", "no opencode"])
 

@@ -810,12 +810,12 @@ class TestCmdRunWithPostChecks:
         # Use a script outside the repo so it doesn't dirty the git tree
         fake_bin = tmp_path / ".." / "fake_bin"
         fake_bin.mkdir(parents=True, exist_ok=True)
-        _fake_check_script(fake_bin, exit_code=0)
+        check_script = _fake_check_script(fake_bin, exit_code=0)
         _write(
             checks_dir / "required_checks.yaml",
             "checks:\n"
             "  - name: fake check\n"
-            f"    command: {fake_bin / 'fake_check'}\n"
+            f"    command: {sys.executable} {check_script}\n"
             "    required: true\n",
         )
         # Create handoff files
@@ -833,14 +833,29 @@ class TestCmdRunWithPostChecks:
         fake_bin = (self.repo / ".." / "fake_bin").resolve()
         fake_bin.mkdir(parents=True, exist_ok=True)
         script = _fake_opencode_script(fake_bin, exit_code=exit_code, stdout=stdout, stderr=stderr)
-        self.monkeypatch.setenv("OPENCODE_COMMAND", f"{sys.executable} {script}")
+        # Set OPENCODE_COMMAND to the .cmd wrapper path directly so it is
+        # executed by the shell (not parsed as a Python file argument).
+        self.monkeypatch.setenv("OPENCODE_COMMAND", str(script))
         return script
 
     def _make_fake_check(self, exit_code: int = 0) -> Path:
         fake_bin = self.repo / ".." / "fake_bin"
         fake_bin.mkdir(parents=True, exist_ok=True)
         script = _fake_check_script(fake_bin, exit_code=exit_code)
-        self.monkeypatch.setenv("PATH", str(fake_bin) + os.pathsep + os.environ.get("PATH", ""))
+        # Use sys.executable to invoke the script so it works cross-platform.
+        self.monkeypatch.setenv(
+            "PATH", str(fake_bin) + os.pathsep + os.environ.get("PATH", "")
+        )
+        # Rewrite required_checks.yaml to invoke the script with the real Python
+        # interpreter, ensuring it works on all platforms (not just Linux).
+        checks_dir = self.repo / ".vibecode" / "checks"
+        _write(
+            checks_dir / "required_checks.yaml",
+            "checks:\n"
+            "  - name: fake check\n"
+            f"    command: {sys.executable} {script}\n"
+            "    required: true\n",
+        )
         return script
 
     def test_successful_run_all_checks_pass(self):
@@ -979,7 +994,11 @@ class TestCmdRunWithPostChecks:
 
     def test_run_with_missing_opencode_does_not_crash(self, monkeypatch, capsys):
         """Run with no OpenCode command should fail gracefully, no crash from post-checks."""
-        monkeypatch.setenv("PATH", "/nonexistent")
+        # Monkeypatch so the OpenCode command cannot be resolved,
+        # but leave PATH intact so git still works.
+        monkeypatch.setattr(
+            "vibecode.run._get_opencode_command", lambda *a, **kw: None
+        )
 
         rc = main(["run", str(self.repo), "--task", "no opencode"])
 

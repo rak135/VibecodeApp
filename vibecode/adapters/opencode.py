@@ -49,53 +49,70 @@ def check_opencode(command: str | None = None) -> OpenCodeStatus:
     """
     resolved = command or _default_command()
 
+    # Handle compound commands (e.g. "python /path/to/opencode.py")
+    # by splitting and checking only the binary portion with shutil.which.
+    parts = resolved.split()
+    binary = parts[0]
+    extra_args = parts[1:]
+
     # 1. Check if the binary exists on PATH.
-    binary_path = shutil.which(resolved)
+    binary_path = shutil.which(binary)
     if binary_path is None:
         return OpenCodeStatus(
             available=False,
             command=resolved,
             message=(
-                f"OpenCode command '{resolved}' not found on PATH. "
+                f"OpenCode command '{binary}' not found on PATH. "
                 "Install OpenCode or set the OPENCODE_COMMAND environment "
                 "variable to the correct binary path."
             ),
         )
 
     # 2. Verify it responds to --version without launching a session.
-    try:
-        result = subprocess.run(
-            [binary_path, "--version"],
-            capture_output=True,
-            text=True,
-            timeout=10,
-        )
-    except subprocess.TimeoutExpired:
+    #    Only do a direct --version check for simple (non-compound) commands,
+    #    since compound commands (e.g. "python wrapper.cmd") may not support
+    #    --version or may need shell execution to work properly.
+    if not extra_args:
+        try:
+            result = subprocess.run(
+                [binary_path, "--version"],
+                capture_output=True,
+                text=True,
+                timeout=10,
+            )
+        except subprocess.TimeoutExpired:
+            return OpenCodeStatus(
+                available=False,
+                command=resolved,
+                message=f"OpenCode command '{binary}' timed out during version check.",
+            )
+        except OSError as exc:
+            return OpenCodeStatus(
+                available=False,
+                command=resolved,
+                message=f"OpenCode command '{binary}' failed to execute: {exc}",
+            )
+
+        if result.returncode != 0:
+            return OpenCodeStatus(
+                available=False,
+                command=resolved,
+                message=(
+                    f"OpenCode command '{binary}' returned exit code "
+                    f"{result.returncode} (stderr: {result.stderr.strip() or 'none'})"
+                ),
+            )
+
+        version = result.stdout.strip() or "(unknown version)"
         return OpenCodeStatus(
-            available=False,
+            available=True,
             command=resolved,
-            message=f"OpenCode command '{resolved}' timed out during version check.",
-        )
-    except OSError as exc:
-        return OpenCodeStatus(
-            available=False,
-            command=resolved,
-            message=f"OpenCode command '{resolved}' failed to execute: {exc}",
+            message=f"OpenCode found: {version} (at {binary_path})",
         )
 
-    if result.returncode != 0:
-        return OpenCodeStatus(
-            available=False,
-            command=resolved,
-            message=(
-                f"OpenCode command '{resolved}' returned exit code "
-                f"{result.returncode} (stderr: {result.stderr.strip() or 'none'})"
-            ),
-        )
-
-    version = result.stdout.strip() or "(unknown version)"
+    # Compound command — binary exists, so consider it available.
     return OpenCodeStatus(
         available=True,
         command=resolved,
-        message=f"OpenCode found: {version} (at {binary_path})",
+        message=f"OpenCode command found: {resolved}",
     )

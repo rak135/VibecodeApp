@@ -160,7 +160,7 @@
     {
       "title": "Run post-OpenCode guard and check pipeline",
       "description": "Purpose: make `vibecode run` useful as a controlled agent workflow, not just a launcher.\n\nPrerequisites:\n- guard command exists\n- check command exists\n- handoff-check exists\n- OpenCode run adapter exists\n\nPost-run flow:\n1. collect git diff summary\n2. run `vibecode guard`\n3. run `vibecode check`\n4. run `vibecode handoff-check`\n5. write run summary to `.vibecode/runs/<timestamp>/summary.json`\n6. print concise result\n\nAcceptance:\n- Hard guard failure causes run to be marked failed.\n- Required check failure causes run to be marked failed.\n- Missing handoff causes run to be marked incomplete.\n- Tests use fake OpenCode and fake checks.",
-      "completed": false
+      "completed": true
     },
     {
       "title": "Add OpenCode run diff summary",
