@@ -2,12 +2,13 @@
 
 from __future__ import annotations
 
+import sys
 from dataclasses import dataclass
 from fnmatch import fnmatchcase
-from pathlib import PurePosixPath
+from pathlib import Path, PurePosixPath
 
-from vibecode.config import DEFAULT_PROTECTED_PATH_RULES, ProtectedPathRule
-from vibecode.git_state import GitState
+from vibecode.config import DEFAULT_PROTECTED_PATH_RULES, ProtectedPathRule, load_config
+from vibecode.git_state import GitState, inspect_git_state
 from vibecode.paths import strip_to_posix
 
 
@@ -605,3 +606,95 @@ def _normalised_set(paths: tuple[str, ...]) -> frozenset[str]:
 
 def _normalise_path(path: str) -> str:
     return strip_to_posix(str(path).strip())
+
+
+def cmd_guard(args) -> int:
+    """Run guard checks on the repository and report findings."""
+    repo_root = Path(args.repo_root).resolve()
+    vibecode_dir = repo_root / ".vibecode"
+
+    # Check for project.yaml
+    project_yaml = vibecode_dir / "project.yaml"
+    if not project_yaml.exists():
+        print(
+            f"Error: .vibecode/project.yaml not found in {repo_root}. "
+            "Run `vibecode init` to initialise the project.",
+            file=sys.stderr,
+        )
+        return 1
+
+    # Load config
+    try:
+        config = load_config(vibecode_dir)
+    except Exception as exc:
+        print(f"Error loading project config: {exc}", file=sys.stderr)
+        return 1
+
+    # Check git repo
+    try:
+        git_state = inspect_git_state(repo_root)
+    except FileNotFoundError:
+        print("Error: repository root does not exist.", file=sys.stderr)
+        return 1
+
+    if not git_state.is_git_repo:
+        print("Error: not a git repository.", file=sys.stderr)
+        return 1
+
+    if git_state.error:
+        print(f"Git error: {git_state.error}", file=sys.stderr)
+
+    # Evaluate guard rules
+    result = evaluate_guard(
+        git_state,
+        task="",
+        test_map=None,
+    )
+
+    # Also check against project-level protected path rules
+    if config.protected_path_records:
+        project_result = check_protected_path_changes(
+            git_state.changed_paths,
+            config.protected_path_records,
+            task="",
+            untracked_paths=git_state.untracked_paths,
+        )
+        result = GuardResult(
+            findings=_dedupe_findings(
+                (*result.findings, *project_result.findings)
+            )
+        )
+
+    errors = tuple(f for f in result.findings if f.severity == "error")
+    warnings = tuple(f for f in result.findings if f.severity == "warning")
+
+    if not result.findings:
+        print("Guard check passed. No violations found.")
+        return 0
+
+    if errors:
+        print(f"\n{'=' * 60}", file=sys.stderr)
+        print(f"  HARD FAILURES ({len(errors)})", file=sys.stderr)
+        print(f"{'=' * 60}", file=sys.stderr)
+        for finding in errors:
+            print(f"\n  [{finding.rule_id}] {finding.path}", file=sys.stderr)
+            print(f"  {finding.message}", file=sys.stderr)
+            if finding.recommended_fix:
+                print(f"  Fix: {finding.recommended_fix}", file=sys.stderr)
+
+    if warnings:
+        print(f"\n{'=' * 60}", file=sys.stderr)
+        print(f"  WARNINGS ({len(warnings)})", file=sys.stderr)
+        print(f"{'=' * 60}", file=sys.stderr)
+        for finding in warnings:
+            print(f"\n  [{finding.rule_id}] {finding.path}", file=sys.stderr)
+            print(f"  {finding.message}", file=sys.stderr)
+            if finding.recommended_fix:
+                print(f"  Fix: {finding.recommended_fix}", file=sys.stderr)
+
+    strict: bool = getattr(args, "strict", False)
+    if errors:
+        return 1
+    if strict and warnings:
+        return 1
+    return 0

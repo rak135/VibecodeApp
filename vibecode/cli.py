@@ -88,6 +88,23 @@ def create_parser() -> argparse.ArgumentParser:
         help="Repository root directory (default: current directory).",
     )
 
+    # guard
+    guard_parser = subparsers.add_parser(
+        "guard", help="Check git diff against guard rules."
+    )
+    guard_parser.add_argument(
+        "repo_root",
+        nargs="?",
+        default=".",
+        help="Repository root directory (default: current directory).",
+    )
+    guard_parser.add_argument(
+        "--strict",
+        action="store_true",
+        default=False,
+        help="Treat warnings as hard failures (non-zero exit).",
+    )
+
     # export-agents
     export_agents_parser = subparsers.add_parser(
         "export-agents", help="Export agent instructions to AGENTS.md."
@@ -175,6 +192,12 @@ def _dispatch(args, parser) -> int:
         _require_root_exists(args.repo_root)
         from vibecode.validation import cmd_validate
         return cmd_validate(args)
+
+    if args.command == "guard":
+        args.repo_root = normalise_root(args.repo_root)
+        _require_root_exists(args.repo_root)
+        from vibecode.guard import cmd_guard
+        return cmd_guard(args)
 
     if args.command == "export-agents":
         args.repo_root = normalise_root(args.repo_root)

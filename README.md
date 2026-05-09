@@ -35,7 +35,7 @@ Non-goals:
 - no custom coding agent
 - no GUI
 - no MCP server
-- no OpenCode run adapter
+- no OpenCode run adapter (prompt export exists as manual workflow; runtime integration is a future phase)
 - no auto-commit or auto-approve behavior
 - no LLM API calls
 

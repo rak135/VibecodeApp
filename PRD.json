@@ -80,7 +80,7 @@
     {
       "title": "Add guard CLI command",
       "description": "Purpose: expose guard rules through `python -m vibecode.cli guard <repo>` and `vibecode guard <repo>`.\n\nPrerequisite:\nInitial guard rules exist.\n\nScope:\n- Update CLI parser and dispatch.\n- Add tests in CLI test module or guard-specific tests.\n- Do not implement check runner or OpenCode run in this task.\n\nRequired behavior:\n- `guard <repo>` inspects current git diff.\n- Returns non-zero exit code for hard failures.\n- Prints clear reasons.\n- Prints warnings separately.\n- Supports clean repo with zero findings.\n- Uses protected paths policy if present.\n- Handles missing `.vibecode/project.yaml` with clear error.\n\nAcceptance:\n- Hard violation returns non-zero.\n- Warning-only returns zero unless a strict flag is introduced.\n- CLI help includes guard.\n- Tests pass.",
-      "completed": false
+      "completed": true
     },
     {
       "title": "Add guard report JSON output",

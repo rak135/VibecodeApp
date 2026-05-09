@@ -221,7 +221,11 @@ Alternative forms of the `context` command:
 python -m vibecode.cli context C:\path\to\example-repo --task "Add rate limiting to the auth endpoint"
 ```
 
-### Step 6 — OpenCode prompt export
+### Step 6 — OpenCode prompt export (preview)
+
+> **Preview feature.** OpenCode prompt export prepares a file you can pass to an
+> external agent manually. **Vibecode does not launch OpenCode.** Automated
+> OpenCode runtime integration is a planned future phase.
 
 Wrap the context pack in OpenCode-compatible pre/post-edit instructions:
 

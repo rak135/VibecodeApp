@@ -418,3 +418,88 @@ def test_required_checks_are_deduplicated(tmp_path):
     # Each command must appear exactly once in the rendered output.
     assert content.count("python -m pytest") == 1
     assert "test map required check: `python -m pytest`" not in content
+
+
+# ---------------------------------------------------------------------------
+# Context-pack quality regression tests
+# ---------------------------------------------------------------------------
+
+
+def test_context_pack_contains_all_required_sections(tmp_path):
+    """Regression: context pack must always include these core sections."""
+    _minimal_repo(tmp_path)
+    _write(tmp_path / ".vibecode" / "checks" / "required_checks.yaml", "checks: []\n")
+
+    content = render_context_pack(tmp_path, "regression test")
+
+    assert "## Current task" in content
+    assert "## Project" in content
+    assert "## Must preserve / invariants" in content
+    assert "## Relevant files with reasons" in content
+    assert "## Generated index status" in content
+    assert "## Required checks" in content
+    assert "## Protected paths / edit constraints" in content
+    assert "## Handoff required" in content
+    assert "## Working rule" in content
+
+
+def test_context_pack_does_not_contain_raw_source_files(tmp_path):
+    """Regression: context pack must never embed full source file content."""
+    _minimal_repo(tmp_path)
+    _write(tmp_path / ".vibecode" / "checks" / "required_checks.yaml", "checks: []\n")
+    # Create a source file with identifiable long content.
+    long_content = "\n".join(f"# line {i}: {'x' * 80}" for i in range(500))
+    _write(tmp_path / "vibecode" / "big_module.py", long_content)
+    _write(
+        tmp_path / ".vibecode" / "index" / "file_inventory.json",
+        '{"files": [{"path": "vibecode/big_module.py"}]}\n',
+    )
+
+    content = render_context_pack(tmp_path, "regression test")
+
+    # Must reference the file, but not contain its full content.
+    assert "big_module.py" in content
+    assert "line 499:" not in content
+
+
+def test_context_pack_does_not_reference_generated_files_as_source(tmp_path):
+    """Regression: generated/index files must not appear as relevant source files
+    (they may appear as policy paths or required-check references, which is fine)."""
+    _minimal_repo(tmp_path)
+    _write(tmp_path / ".vibecode" / "checks" / "required_checks.yaml", "checks: []\n")
+    _write(
+        tmp_path / ".vibecode" / "index" / "file_inventory.json",
+        '{"files": [{"path": ".vibecode/index/file_inventory.json"}]}\n',
+    )
+
+    content = render_context_pack(tmp_path, "regression test")
+
+    # The file inventory path should not appear in the "Relevant files" section.
+    # It may appear elsewhere (e.g. policy source paths) which is fine.
+    relevant_section_start = content.index("## Relevant files with reasons")
+    relevant_section_end = content.find("##", relevant_section_start + 1)
+    relevant_section = content[relevant_section_start:relevant_section_end]
+    assert ".vibecode/index/file_inventory.json" not in relevant_section
+
+
+def test_context_pack_preserves_invariant_ordering(tmp_path):
+    """Regression: task section must appear before architecture, which must appear before handoff."""
+    _minimal_repo(tmp_path)
+    _write(tmp_path / ".vibecode" / "checks" / "required_checks.yaml", "checks: []\n")
+    _write(
+        tmp_path / ".vibecode" / "architecture" / "STRUCTURE.md",
+        "# Structure\n\n- some detail.\n",
+    )
+    _write(
+        tmp_path / ".vibecode" / "handoff" / "NOW.md",
+        "# Now\n\n- current work.\n",
+    )
+
+    content = render_context_pack(tmp_path, "ordering check")
+
+    task_pos = content.index("## Current task")
+    invariants_pos = content.index("## Must preserve / invariants")
+    architecture_pos = content.index("## Relevant architecture")
+    handoff_pos = content.index("## Handoff required")
+
+    assert task_pos < invariants_pos < architecture_pos < handoff_pos

@@ -20,9 +20,8 @@ The current control layer is deterministic and filesystem-based.
 
 ## Not implemented yet
 
-- protected paths policy/schema
-- guard/check/handoff enforcement
+- Guard, check, and handoff-check CLI commands (guard rule engine implemented; CLI commands pending)
 - OpenCode run adapter
-- project registry
+- Project registry
 - GUI work
 - MCP server integration

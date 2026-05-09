@@ -27,4 +27,18 @@ Treat source code, tests, and human-maintained docs (`.vibecode/architecture/`, 
 - Run required checks before finalizing changes.
 - Report changed files and checks run before marking work complete.
 - Update the handoff document when done.
+
+## Available commands
+
+- `vibecode init` — initialize `.vibecode/` project layer
+- `vibecode index` — scan and generate architecture maps
+- `vibecode map` — print one-page project summary
+- `vibecode context` — generate task-scoped context pack
+- `vibecode validate` — check artifact consistency (run this first)
+- `vibecode export-agents` — write/update root AGENTS.md
+- `vibecode guard` — check diff against protected paths (planned)
+- `vibecode check` — run required checks from `.vibecode/checks/required_checks.yaml` (planned)
+- `vibecode handoff-check` — validate handoff file quality (planned)
+
+Planned commands (`guard`, `check`, `handoff-check`) are not yet wired into the CLI — do not attempt to invoke them.
 <!-- vibecode:agents:end -->

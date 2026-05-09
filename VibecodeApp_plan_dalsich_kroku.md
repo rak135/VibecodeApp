@@ -29,9 +29,10 @@ Nejbližší priorita není GUI ani OpenCode integrace. Nejbližší priorita je
   - entrypoints,
   - risky/protected files.
 - Context pack generator.
-- OpenCode prompt export.
+- OpenCode prompt export (preview — CLI existuje, runtime adapter ne).
 - AGENTS export support.
 - Validace `.vibecode` artefaktů.
+- Guard rule engine (protected paths, generated/runtime edits — zatím bez CLI command).
 - Silná test suite.
 
 ### Co to zatím není
@@ -40,8 +41,7 @@ Nejbližší priorita není GUI ani OpenCode integrace. Nejbližší priorita je
 - Nespouští to OpenCode.
 - Nespouští to Codex.
 - Nemá to MCP server.
-- Nemá to guard command.
-- Nemá to check runner.
+- Nemá guard/check/handoff-check CLI commands (rule engine existuje, wiring chybí).
 - Nemá to project registry.
 - Nemá to plnohodnotnou memory vrstvu.
 - Nemá to skutečné řízení agent runu od začátku do konce.
@@ -63,9 +63,9 @@ Pokud se začne stavět GUI nebo agent runtime dřív, než bude pevné jádro m
 
 ---
 
-# Fáze 1 — Zlepšit architektonickou mapu
+# Fáze 1 — Zlepšit architektonickou mapu (✅ kompletní)
 
-## 1.1 Zlepšit `repo_tree.generated.md`
+## 1.1 Zlepšit `repo_tree.generated.md` (✅ kompletní)
 
 Aktuální repo tree je užitečný začátek, ale nesmí zůstat mělkým stromem. Musí fungovat jako orientační mapa pro agenta.
 
@@ -123,76 +123,9 @@ tests/
 
 ---
 
-## 1.2 Dotáhnout relevant-file scoring
+# Fáze 2 — Agent-facing instrukce (✅ kompletní)
 
-Relevant-file scoring je klíčový, protože určuje, co agent dostane jako pravděpodobně důležité soubory pro konkrétní task.
-
-### Cíl
-
-Scoring má být deterministický. Žádné LLM scoring v této fázi.
-
-### Signály
-
-Scoring má používat:
-
-- task keywords,
-- path/filename match,
-- architecture docs references,
-- source/test pairing,
-- recent git changes,
-- dependency-map connections,
-- handoff references,
-- history references,
-- protected/risk weight,
-- explicit exclusion generated/runtime/vendor/cache souborů.
-
-### Acceptance criteria
-
-Pro task:
-
-```text
-Improve repo tree rendering
-```
-
-musí top relevant files zahrnout například:
-
-- `vibecode/indexer/repo_tree.py`,
-- `tests/test_vibecode_repo_tree.py`,
-- relevantní docs/status/PRD soubor.
-
-Pokud scoring vybere hlavně README, pyproject a náhodné testy, scoring je slabý.
-
----
-
-## 1.3 Zpřísnit kvalitu context packu
-
-Context pack už existuje. Teď je potřeba zajistit, že reálně pomáhá agentovi a není to jen hezký markdown.
-
-### Context pack musí obsahovat
-
-- task,
-- konkrétní invarianty,
-- architektonické shrnutí,
-- relevantní soubory s důvody,
-- generated index status,
-- required checks,
-- risky/protected files,
-- do-not-touch sekci,
-- handoff expectations.
-
-### Acceptance criteria
-
-- Context pack je použitelný jako úvodní prompt pro OpenCode/Codex bez dalších ručních vysvětlivek.
-- Neobsahuje celé dlouhé soubory.
-- Neobsahuje generated/runtime šum.
-- Varuje při stale indexu.
-- Vysvětluje, proč jsou vybrané soubory relevantní.
-
----
-
-# Fáze 2 — Agent-facing instrukce
-
-## 2.1 Přidat root `AGENTS.md`
+## 2.1 Přidat root `AGENTS.md` (✅ kompletní)
 
 Root `AGENTS.md` má být krátký, konkrétní a nesmí se stát druhým README.
 
@@ -226,7 +159,7 @@ Required checks are listed in:
 
 ---
 
-## 2.2 Ujasnit AGENTS export workflow
+## 2.2 Ujasnit AGENTS export workflow (✅ kompletní)
 
 Export už existuje, ale workflow musí být bezpečné.
 
@@ -244,11 +177,11 @@ Export už existuje, ale workflow musí být bezpečné.
 
 ---
 
-# Fáze 3 — Guard layer
+# Fáze 3 — Guard layer (stav: rule engine hotov, CLI pending)
 
-Bez guard layer bude VibecodeApp pořád jen context generator. Guard layer je rozdíl mezi „agent dostal dobrý prompt“ a „agent nesmí rozbít pravidla bez zachycení“.
+Bez guard layer bude VibecodeApp pořád jen context generator. Guard layer je rozdíl mezi „agent dostal dobrý prompt" a „agent nesmí rozbít pravidla bez zachycení“.
 
-## 3.1 Přidat `guard` command
+## 3.1 Přidat `guard` command (🔨 ve vývoji)
 
 ### Cíl
 
@@ -277,7 +210,7 @@ zkontroluje aktuální git diff proti projektovým pravidlům.
 
 ---
 
-## 3.2 Přidat protected paths policy
+## 3.2 Přidat protected paths policy (✅ kompletní)
 
 ### Soubor
 
@@ -311,7 +244,7 @@ protected_paths:
 
 ---
 
-## 3.3 Přidat required checks runner
+## 3.3 Přidat required checks runner (🔨 ve vývoji)
 
 ### Cíl
 
@@ -333,18 +266,18 @@ Výsledek uložit do ignored runtime souboru:
 
 ### Acceptance criteria
 
-- Check runner nespouští vágní “tests”.
+- Check runner nespouští vágní "tests".
 - Spouští konkrétní commandy.
 - Ukládá exit code, stdout/stderr summary a timestamp.
 - Test pokrývá passing i failing command.
 
 ---
 
-# Fáze 4 — Handoff enforcement
+# Fáze 4 — Handoff enforcement (stav: pravidla definována, implementace pending)
 
 Handoff soubory existují, ale zatím nejsou tvrdě vynucené.
 
-## 4.1 Přidat handoff validator
+## 4.1 Přidat handoff validator (🔨 ve vývoji)
 
 ### Cíl
 
@@ -420,11 +353,11 @@ Po významném runu vznikne komprimovaný history zápis.
 
 ---
 
-# Fáze 5 — OpenCode adapter
+# Fáze 5 — OpenCode adapter (pouze preview prompt export)
 
 OpenCode integraci nepřidávat dřív, než jsou mapa, scoring, guard a handoff dostatečně pevné.
 
-## 5.1 Přímý OpenCode run adapter
+## 5.1 Přímý OpenCode run adapter (⚠️ pouze preview export — ne runtime)
 
 ### Cíl
 
@@ -452,40 +385,6 @@ python -m vibecode.cli run <repo> --platform opencode --task "..."
 - VibecodeApp nespustí agenta do špinavého nebo stale stavu bez jasného varování.
 - Run metadata jsou uložena do ignored runtime složky.
 - Source truth soubory nejsou automaticky měněny bez explicitního důvodu.
-
----
-
-## 5.2 Permission profiles
-
-### Cíl
-
-Definovat bezpečnostní profily pro externí agenty.
-
-### Příklad
-
-```text
-audit
-- read only
-- no edit
-- no write
-
-safe
-- read allow
-- grep/glob allow
-- edit ask
-- bash ask
-- generated files deny
-
-fast
-- edit allow
-- bash ask
-- guard after run
-```
-
-### Acceptance criteria
-
-- Citlivý projekt lze spustit v read-only audit režimu.
-- Safe režim nenechá agenta nepozorovaně sahat do protected/generated souborů.
 
 ---
 
@@ -620,7 +519,7 @@ guard_diff
 
 Přidat až po jasném use-casu.
 
-Možné použití:
+### Možné použití:
 
 ```text
 find_symbol
@@ -823,19 +722,16 @@ Tohle všechno může počkat. Pokud se to přidá teď, projekt se rozpadne do 
 Nejbližší konkrétní úkol:
 
 ```text
-Improve repo_tree.generated.md so it becomes a real architecture orientation map.
+Add guard CLI command (`vibecode guard <repo>`) — rule engine exists, CLI wiring needed.
 ```
 
 Tvrdá acceptance:
 
-- ukazuje hlavní source moduly,
-- ukazuje context/indexer/test oblasti,
-- neklasifikuje `vibecode/` jako tests,
-- ukazuje důležité soubory druhé úrovně,
-- nezahrnuje generated/runtime bordel,
-- má test na aktuální VibecodeApp repo nebo fixture repo.
+- má CLI command v `vibecode/cli.py`,
+- vrací non-zero při tvrdém porušení,
+- má testy pro protected paths a generated/runtime změny.
 
-Až potom má smysl řešit relevant-file scoring, root `AGENTS.md`, guard layer a OpenCode adapter.
+Až potom má smysl řešit check runner, handoff-check a OpenCode adapter.
 
 ---
 
