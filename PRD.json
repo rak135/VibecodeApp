@@ -70,7 +70,7 @@
     {
       "title": "Implement architecture-change handoff guard",
       "description": "Purpose: require handoff/history acknowledgement when architecture truth changes.\n\nScope:\n- Guard rule internals and tests.\n\nBehavior:\nIf changed files include `.vibecode/architecture/*.md`, guard requires at least one of `.vibecode/handoff/NOW.md` changed with a relevant note, `.vibecode/history/*.md` changed with a relevant summary, or an explicit override flag in future CLI.\n\nAcceptance:\n- Architecture doc changes without handoff/history fail guard.\n- Architecture doc changes with handoff/history pass.\n- Message explains that architecture truth changed and must be recorded.",
-      "completed": false
+      "completed": true
     },
     {
       "title": "Implement source/test mismatch guard warnings",

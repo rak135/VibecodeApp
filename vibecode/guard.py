@@ -18,6 +18,10 @@ README_RULE_ID = "readme-manual-only"
 README_MANUAL_ONLY_MESSAGE = (
     "README.md is manual-only until generated block markers are introduced."
 )
+ARCHITECTURE_TRUTH_RECORD_RULE_ID = "architecture-truth-record"
+ARCHITECTURE_TRUTH_RECORD_MESSAGE = (
+    "Architecture truth changed and must be recorded in handoff or history."
+)
 README_ALLOWED_GENERATED_BLOCK_MARKERS: tuple[tuple[str, str], ...] = (
     (
         "<!-- vibecode:readme:generated:start -->",
@@ -74,12 +78,16 @@ def evaluate_guard(git_state: GitState, *, task: str = "") -> GuardResult:
         untracked_paths=git_state.untracked_paths,
     )
     readme_result = check_readme_changes(git_state.changed_paths, task=task)
+    architecture_truth_result = check_architecture_truth_recorded(
+        git_state.changed_paths
+    )
     return GuardResult(
         findings=_dedupe_findings(
             (
                 *policy_result.findings,
                 *generated_result.findings,
                 *readme_result.findings,
+                *architecture_truth_result.findings,
             )
         )
     )
@@ -199,6 +207,49 @@ def check_readme_changes(
     return GuardResult(findings=tuple(findings))
 
 
+def check_architecture_truth_recorded(
+    changed_paths: tuple[str, ...] | list[str],
+    *,
+    override: bool = False,
+) -> GuardResult:
+    """Require handoff/history acknowledgement for architecture truth changes."""
+
+    if override:
+        return GuardResult()
+
+    paths = tuple(
+        path
+        for path in (_normalise_path(raw_path) for raw_path in changed_paths)
+        if path
+    )
+    architecture_paths = tuple(path for path in paths if _is_architecture_doc_path(path))
+    if not architecture_paths or _has_architecture_truth_record(paths):
+        return GuardResult()
+
+    return GuardResult(
+        findings=tuple(
+            GuardFinding(
+                rule_id=ARCHITECTURE_TRUTH_RECORD_RULE_ID,
+                path=path,
+                severity="error",
+                message=(
+                    f"{ARCHITECTURE_TRUTH_RECORD_MESSAGE} Offending path: {path}"
+                ),
+                rule=(
+                    "Changes to .vibecode/architecture/*.md must be recorded in "
+                    ".vibecode/handoff/NOW.md or .vibecode/history/*.md."
+                ),
+                recommended_fix=(
+                    "Add a relevant note to .vibecode/handoff/NOW.md or a relevant "
+                    "summary in .vibecode/history/*.md, or use the future explicit "
+                    "override flag when available."
+                ),
+            )
+            for path in architecture_paths
+        )
+    )
+
+
 def _generated_policy_finding(path: str, rule: ProtectedPathRule) -> GuardFinding:
     return GuardFinding(
         rule_id="protected-path-generated",
@@ -283,6 +334,24 @@ def _requires_handoff_explanation(policy_path: str) -> bool:
     ))
 
 
+def _is_architecture_doc_path(path: str) -> bool:
+    if not path.startswith(".vibecode/architecture/") or not path.endswith(".md"):
+        return False
+    return "/" not in path.removeprefix(".vibecode/architecture/")
+
+
+def _has_architecture_truth_record(paths: tuple[str, ...]) -> bool:
+    return any(
+        path == ".vibecode/handoff/NOW.md"
+        or (
+            path.startswith(".vibecode/history/")
+            and path.endswith(".md")
+            and "/" not in path.removeprefix(".vibecode/history/")
+        )
+        for path in paths
+    )
+
+
 def _task_mentions_scope(task: str, path: str, rule_path: str) -> bool:
     task_words = _words(task)
     if not task_words:
@@ -313,9 +382,11 @@ def _words(value: str) -> set[str]:
 
 def _dedupe_findings(findings: tuple[GuardFinding, ...]) -> tuple[GuardFinding, ...]:
     deduped: list[GuardFinding] = []
-    seen: set[tuple[str, str]] = set()
+    seen: set[tuple[str, ...]] = set()
     for finding in findings:
         key = (finding.severity, finding.path)
+        if finding.rule_id == ARCHITECTURE_TRUTH_RECORD_RULE_ID:
+            key = (*key, finding.rule_id)
         if key in seen:
             continue
         seen.add(key)

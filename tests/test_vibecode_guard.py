@@ -5,8 +5,10 @@ from __future__ import annotations
 from vibecode.config import ProtectedPathRule
 from vibecode.git_state import GitState
 from vibecode.guard import (
+    ARCHITECTURE_TRUTH_RECORD_MESSAGE,
     GENERATED_RUNTIME_MESSAGE,
     README_MANUAL_ONLY_MESSAGE,
+    check_architecture_truth_recorded,
     check_generated_runtime_changes,
     check_protected_path_changes,
     check_readme_changes,
@@ -140,6 +142,103 @@ def test_evaluate_guard_applies_readme_policy():
     assert tuple(finding.rule_id for finding in result.findings) == (
         "readme-manual-only",
     )
+
+
+def test_architecture_doc_change_requires_handoff_or_history_record():
+    result = check_architecture_truth_recorded(
+        (".vibecode/architecture/INVARIANTS.md",)
+    )
+
+    finding = result.findings[0]
+    assert result.passed is False
+    assert finding.rule_id == "architecture-truth-record"
+    assert finding.path == ".vibecode/architecture/INVARIANTS.md"
+    assert finding.severity == "error"
+    assert ARCHITECTURE_TRUTH_RECORD_MESSAGE in finding.message
+    assert "handoff" in finding.recommended_fix
+    assert "history" in finding.recommended_fix
+
+
+def test_architecture_doc_change_passes_with_handoff_now_record():
+    result = check_architecture_truth_recorded(
+        (
+            ".vibecode/architecture/INVARIANTS.md",
+            ".vibecode/handoff/NOW.md",
+        )
+    )
+
+    assert result.passed is True
+    assert result.findings == ()
+
+
+def test_architecture_doc_change_passes_with_history_summary():
+    result = check_architecture_truth_recorded(
+        (
+            ".vibecode/architecture/INVARIANTS.md",
+            ".vibecode/history/architecture-summary.md",
+        )
+    )
+
+    assert result.passed is True
+    assert result.findings == ()
+
+
+def test_architecture_doc_change_allows_future_explicit_override():
+    result = check_architecture_truth_recorded(
+        (".vibecode/architecture/INVARIANTS.md",),
+        override=True,
+    )
+
+    assert result.passed is True
+    assert result.findings == ()
+
+
+def test_evaluate_guard_fails_architecture_change_without_record():
+    state = GitState(
+        is_git_repo=True,
+        changed_paths=(".vibecode/architecture/INVARIANTS.md",),
+        untracked_paths=(),
+    )
+
+    result = evaluate_guard(state, task="update architecture truth")
+
+    assert result.passed is False
+    assert "architecture-truth-record" in {
+        finding.rule_id for finding in result.findings
+    }
+
+
+def test_evaluate_guard_keeps_architecture_record_message_when_unscoped():
+    state = GitState(
+        is_git_repo=True,
+        changed_paths=(".vibecode/architecture/INVARIANTS.md",),
+        untracked_paths=(),
+    )
+
+    result = evaluate_guard(state, task="update app logic")
+
+    messages = "\n".join(finding.message for finding in result.findings)
+    assert result.passed is False
+    assert "Protected path changed without explicit task scope" in messages
+    assert ARCHITECTURE_TRUTH_RECORD_MESSAGE in messages
+
+
+def test_evaluate_guard_passes_architecture_change_with_record():
+    state = GitState(
+        is_git_repo=True,
+        changed_paths=(
+            ".vibecode/architecture/INVARIANTS.md",
+            ".vibecode/handoff/NOW.md",
+        ),
+        untracked_paths=(),
+    )
+
+    result = evaluate_guard(state, task="update architecture handoff truth")
+
+    assert result.passed is True
+    assert "architecture-truth-record" not in {
+        finding.rule_id for finding in result.findings
+    }
 
 
 def test_protected_architecture_change_requires_explicit_task_scope():
