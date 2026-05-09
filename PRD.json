@@ -165,7 +165,7 @@
     {
       "title": "Add OpenCode run diff summary",
       "description": "Purpose: show user what changed after an agent run.\n\nScope:\n- Add diff summary utility or reuse git diff collection.\n- Integrate into run output.\n\nSummary should include changed files, added/deleted files, source/test/docs/generated categories, protected path touches, whether generated/runtime files changed, and suggested next action.\n\nAcceptance:\n- Summary is human-readable.\n- JSON summary is stored in run metadata.\n- Tests cover representative diffs.",
-      "completed": false
+      "completed": true
     },
     {
       "title": "Document OpenCode run workflow",

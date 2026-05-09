@@ -6,7 +6,9 @@ Flow:
   3. Generate the context pack and platform prompt.
   4. Invoke the configured platform command with the prompt on stdin.
   5. Capture stdout / stderr / exit code.
-  6. Write session metadata under .vibecode/runs/.
+  6. Run post-run checks: guard, required checks, handoff validation.
+  7. Write session metadata and summary under .vibecode/runs/<timestamp>/.
+  8. Print concise result.
 """
 
 from __future__ import annotations
@@ -16,18 +18,21 @@ import os
 import shutil
 import subprocess
 import sys
-import uuid
+from dataclasses import dataclass
 from datetime import datetime, timezone
-from io import StringIO
 from pathlib import Path
 from typing import Any
 
 from vibecode.adapters.opencode import check_opencode
+from vibecode.check import CheckRun, run_checks, write_check_results
 from vibecode.config import load_config
 from vibecode.context import cmd_context
-from vibecode.git_state import inspect_git_state
+from vibecode.diff_summary import DiffSummary, diff_summarise
+from vibecode.guard import GuardResult, evaluate_guard, write_guard_result
+from vibecode.git_state import GitState, inspect_git_state
+from vibecode.handoff import HandoffResult, validate_handoff_files
 from vibecode.indexer import cmd_index
-from vibecode.run_plan import build_run_plan, render_run_plan
+from vibecode.run_plan import build_run_plan
 
 
 def _get_opencode_command(config: Any | None, env: dict[str, str]) -> str | None:
@@ -43,6 +48,77 @@ def _get_opencode_command(config: Any | None, env: dict[str, str]) -> str | None
         return default_cmd
 
     return None
+
+
+@dataclass
+class RunSummary:
+    """Post-run summary combining agent results and quality checks."""
+
+    session_id: str
+    started_at: str
+    finished_at: str
+    platform: str
+    profile: str
+    repo_root: str
+    task: str
+    dirty: bool
+    index_fresh: bool
+    command: str | None
+    exit_code: int | None
+    stdout: str
+    stderr: str
+    agent_status: str  # "success", "failure", "error"
+    guard: GuardResult | None = None
+    checks: CheckRun | None = None
+    handoff: HandoffResult | None = None
+    diff: DiffSummary | None = None
+    error: str | None = None
+
+    @property
+    def overall_status(self) -> str:
+        """Overall run status: 'success', 'failure', 'incomplete', or 'error'."""
+        if self.agent_status == "error" or self.error:
+            return "error"
+        if self.guard and not self.guard.passed:
+            return "failure"
+        if self.checks and self.checks.has_required_failures:
+            return "failure"
+        if self.handoff and not self.handoff.passed:
+            return "incomplete"
+        if self.agent_status != "success":
+            return "failure"
+        return "success"
+
+    def as_dict(self) -> dict:
+        data: dict[str, Any] = {
+            "$schema": "vibecode/run-summary/v1",
+            "session_id": self.session_id,
+            "started_at": self.started_at,
+            "finished_at": self.finished_at,
+            "platform": self.platform,
+            "profile": self.profile,
+            "repo_root": self.repo_root,
+            "task": self.task,
+            "dirty": self.dirty,
+            "index_fresh": self.index_fresh,
+            "command": self.command,
+            "exit_code": self.exit_code,
+            "agent_status": self.agent_status,
+            "overall_status": self.overall_status,
+            "stdout": self.stdout,
+            "stderr": self.stderr,
+        }
+        if self.guard:
+            data["guard"] = self.guard.as_dict()
+        if self.checks:
+            data["checks"] = self.checks.as_dict()
+        if self.handoff:
+            data["handoff"] = self.handoff.as_dict()
+        if self.diff:
+            data["diff"] = self.diff.as_dict()
+        if self.error:
+            data["error"] = self.error
+        return data
 
 
 def _write_run_metadata(
@@ -89,6 +165,18 @@ def _write_run_metadata(
     return out_path
 
 
+def _write_run_summary(vibecode_dir: Path, summary: RunSummary) -> Path:
+    """Write the run summary JSON under .vibecode/runs/<session_id>/summary.json."""
+    summary_dir = vibecode_dir / "runs" / summary.session_id
+    summary_dir.mkdir(parents=True, exist_ok=True)
+    summary_path = summary_dir / "summary.json"
+    summary_path.write_text(
+        json.dumps(summary.as_dict(), indent=2, ensure_ascii=False) + "\n",
+        encoding="utf-8",
+    )
+    return summary_path
+
+
 def _run_git_check(root: Path, allow_dirty: bool) -> tuple[bool, list[str]]:
     """Check git status.  Returns (clean_ok, list_of_messages)."""
     messages: list[str] = []
@@ -123,6 +211,55 @@ def _run_git_check(root: Path, allow_dirty: bool) -> tuple[bool, list[str]]:
     return True, messages
 
 
+def _run_post_checks(
+    root: Path,
+    vibecode_dir: Path,
+    git_state: GitState | None,
+    session_id: str,
+) -> tuple[GuardResult | None, CheckRun | None, HandoffResult | None]:
+    """Run post-agent quality checks: guard, required checks, handoff validation.
+
+    Returns the results of each check (may be None if the check was skipped
+    due to an error). Individual failures do not raise here — the caller
+    interprets the results via RunSummary.overall_status.
+    """
+    guard_result: GuardResult | None = None
+    check_result: CheckRun | None = None
+    handoff_result: HandoffResult | None = None
+
+    # --- Post-check 1: Guard ---
+    try:
+        if git_state and git_state.is_git_repo:
+            guard_result = evaluate_guard(git_state, task="")
+            try:
+                write_guard_result(guard_result, vibecode_dir, root)
+            except Exception:
+                pass
+        else:
+            print("Warning: skipped guard (not a git repository).", file=sys.stderr)
+    except Exception as exc:
+        print(f"Warning: guard check failed with error: {exc}", file=sys.stderr)
+
+    # --- Post-check 2: Required checks ---
+    try:
+        check_result = run_checks(root)
+        write_check_results(check_result, vibecode_dir)
+    except Exception as exc:
+        print(f"Warning: required checks failed with error: {exc}", file=sys.stderr)
+
+    # --- Post-check 3: Handoff validation ---
+    try:
+        if git_state and git_state.is_git_repo:
+            diff_paths = git_state.diff_name_only + git_state.untracked_paths
+            handoff_result = validate_handoff_files(root, diff=diff_paths)
+        else:
+            print("Warning: skipped handoff-check (not a git repository).", file=sys.stderr)
+    except Exception as exc:
+        print(f"Warning: handoff-check failed with error: {exc}", file=sys.stderr)
+
+    return guard_result, check_result, handoff_result
+
+
 def cmd_run(args) -> int:
     """CLI entry point for ``vibecode run``."""
     repo_arg = getattr(args, "repo_root", None)
@@ -153,6 +290,14 @@ def cmd_run(args) -> int:
     if messages:
         for msg in messages:
             print(f"Warning: {msg}", file=sys.stderr)
+
+    # Capture git state now, before any tool-generated artifacts,
+    # so post-run checks evaluate the user's changes only.
+    pre_run_git_state = None
+    try:
+        pre_run_git_state = inspect_git_state(root)
+    except Exception as exc:
+        print(f"Warning: could not inspect git state for post-run checks: {exc}", file=sys.stderr)
 
     # ------------------------------------------------------------------
     # 2. Ensure index is fresh (generate / refresh if missing or stale)
@@ -259,12 +404,13 @@ def cmd_run(args) -> int:
 
     try:
         result = subprocess.run(
-            [command],
+            command,
             input=prompt_content,
             capture_output=True,
             text=True,
             timeout=300,
             cwd=str(root),
+            shell=True,
         )
         exit_code = result.returncode
         stdout = result.stdout
@@ -278,22 +424,112 @@ def cmd_run(args) -> int:
         stdout = ""
         stderr = f"Failed to execute {command}: {exc}"
 
+    agent_status = "success" if exit_code == 0 else "failure"
+
     # ------------------------------------------------------------------
-    # 6. Show results
+    # 6. Show agent results
     # ------------------------------------------------------------------
     if stdout:
         print(stdout, end="")
     if stderr:
         print(stderr, end="", file=sys.stderr)
 
-    # ------------------------------------------------------------------
-    # 7. Write session metadata
-    # ------------------------------------------------------------------
-    metadata_path = _write_run_metadata(
+    if exit_code != 0:
+        print(f"\nAgent exited with code {exit_code}.", file=sys.stderr)
+
+    # -------------------------------------------------------------------------
+    # 7. Post-run quality checks (guard, required checks, handoff)
+    # -------------------------------------------------------------------------
+    print("\nRunning post-run checks ...", file=sys.stderr)
+
+    guard_result, check_result, handoff_result = _run_post_checks(
+        root, vibecode_dir, pre_run_git_state, session_id,
+    )
+
+    # -------------------------------------------------------------------------
+    # 7b. Diff summary — compare pre-run and post-run git state
+    # -------------------------------------------------------------------------
+    post_run_git_state = None
+    try:
+        post_run_git_state = inspect_git_state(root)
+    except Exception as exc:
+        print(f"Warning: could not inspect post-run git state: {exc}", file=sys.stderr)
+
+    diff_summary = diff_summarise(pre_run_git_state, post_run_git_state, repo_root=root)
+
+    # -------------------------------------------------------------------------
+    # 8. Write session metadata and summary
+    # -------------------------------------------------------------------------
+    started_at = run_plan.metadata.get("started_at", datetime.now(tz=timezone.utc).isoformat())
+
+    summary = RunSummary(
+        session_id=session_id,
+        started_at=started_at,
+        finished_at=datetime.now(tz=timezone.utc).isoformat(),
+        platform=platform,
+        profile=profile or "safe",
+        repo_root=str(root),
+        task=task,
+        dirty=run_plan.dirty,
+        index_fresh=run_plan.index_fresh,
+        command=command,
+        exit_code=exit_code,
+        stdout=stdout,
+        stderr=stderr,
+        agent_status=agent_status,
+        guard=guard_result,
+        checks=check_result,
+        handoff=handoff_result,
+        diff=diff_summary,
+    )
+
+    # Write legacy metadata (backward-compatible) and new nested summary.
+    _write_run_metadata(
         vibecode_dir, session_id, run_plan,
         command=command, exit_code=exit_code,
         stdout=stdout, stderr=stderr,
     )
-    print(f"\nSession metadata written: {metadata_path.relative_to(root)}", file=sys.stderr)
+    summary_path = _write_run_summary(vibecode_dir, summary)
+    print(f"\nRun summary written: {summary_path.relative_to(root)}", file=sys.stderr)
 
-    return 1 if exit_code != 0 else 0
+    # -------------------------------------------------------------------------
+    # 9. Print concise result
+    # -------------------------------------------------------------------------
+    overall = summary.overall_status
+    print(f"\n{'=' * 50}", file=sys.stderr)
+    print(f"  RUN {overall.upper()}", file=sys.stderr)
+    print(f"{'=' * 50}", file=sys.stderr)
+
+    if guard_result and not guard_result.passed:
+        errors = tuple(f for f in guard_result.findings if f.severity == "error")
+        warnings = tuple(f for f in guard_result.findings if f.severity == "warning")
+        print(f"  Guard: {len(errors)} error(s), {len(warnings)} warning(s)", file=sys.stderr)
+    elif guard_result:
+        print("  Guard: passed", file=sys.stderr)
+
+    if check_result:
+        print(f"  Checks: {check_result.passed}/{check_result.total} passed"
+              f"  ({check_result.failed} failed, {check_result.warnings} warnings)", file=sys.stderr)
+
+    if handoff_result and not handoff_result.passed:
+        print(f"  Handoff: {len(handoff_result.issues)} issue(s)", file=sys.stderr)
+    elif handoff_result:
+        print("  Handoff: passed", file=sys.stderr)
+
+    # Print diff summary
+    if diff_summary.changed_files:
+        print("", file=sys.stderr)
+        print(diff_summary.as_text(), file=sys.stderr)
+
+    print(f"{'=' * 50}\n", file=sys.stderr)
+
+    # ------------------------------------------------------------------
+    # 10. Exit code
+    # ------------------------------------------------------------------
+    if overall == "failure":
+        return 1
+    if overall == "error":
+        return 1
+    if overall == "incomplete":
+        return 2
+    return 0
