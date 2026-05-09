@@ -68,5 +68,6 @@ PRD.json
 .vibecode/index/*.generated.*
 .vibecode/index/*.cache.*
 .vibecode/index/*.tmp.*
+.vibecode/current/guard_result.json
 !.vibecode/index/README.md
 !.vibecode/index/schema.json

@@ -2,8 +2,10 @@
 
 from __future__ import annotations
 
+import json
 import sys
 from dataclasses import dataclass
+from datetime import datetime, timezone
 from fnmatch import fnmatchcase
 from pathlib import Path, PurePosixPath
 
@@ -74,6 +76,21 @@ class GuardFinding:
     recommended_fix: str = ""
     required_tests: tuple[str, ...] = ()
 
+    def as_dict(self) -> dict:
+        data = {
+            "rule_id": self.rule_id,
+            "path": self.path,
+            "severity": self.severity,
+            "message": self.message,
+        }
+        if self.rule:
+            data["rule"] = self.rule
+        if self.recommended_fix:
+            data["recommended_fix"] = self.recommended_fix
+        if self.required_tests:
+            data["required_tests"] = list(self.required_tests)
+        return data
+
 
 @dataclass(frozen=True)
 class GuardResult:
@@ -84,6 +101,30 @@ class GuardResult:
     @property
     def passed(self) -> bool:
         return all(finding.severity != "error" for finding in self.findings)
+
+    def as_dict(self, root: Path | None = None) -> dict:
+        data: dict = {
+            "$schema": "vibecode/guard-result/v1",
+            "generated_at": datetime.now(tz=timezone.utc).isoformat(),
+            "passed": self.passed,
+            "errors": sum(1 for f in self.findings if f.severity == "error"),
+            "warnings": sum(1 for f in self.findings if f.severity == "warning"),
+            "findings": [f.as_dict() for f in self.findings],
+        }
+        if root is not None:
+            data["root"] = root.as_posix()
+        return data
+
+    def suggested_tests(self) -> tuple[str, ...]:
+        """Return unique suggested test paths from all findings."""
+        tests: list[str] = []
+        seen: set[str] = set()
+        for finding in self.findings:
+            for test in finding.required_tests:
+                if test not in seen:
+                    seen.add(test)
+                    tests.append(test)
+        return tuple(tests)
 
 
 def evaluate_guard(
@@ -125,6 +166,22 @@ def evaluate_guard(
             )
         )
     )
+
+
+def write_guard_result(
+    result: GuardResult,
+    vibecode_dir: Path,
+    root: Path,
+) -> Path:
+    """Write guard result to ``.vibecode/current/guard_result.json``."""
+    path = vibecode_dir / "current" / "guard_result.json"
+    path.parent.mkdir(parents=True, exist_ok=True)
+    data = result.as_dict(root=root)
+    path.write_text(
+        json.dumps(data, indent=2, ensure_ascii=False) + "\n",
+        encoding="utf-8",
+    )
+    return path
 
 
 def check_source_test_change_balance(
@@ -664,6 +721,12 @@ def cmd_guard(args) -> int:
                 (*result.findings, *project_result.findings)
             )
         )
+
+    # Write guard result as JSON (optional; failures here are non-blocking)
+    try:
+        write_guard_result(result, vibecode_dir, repo_root)
+    except Exception:
+        pass
 
     errors = tuple(f for f in result.findings if f.severity == "error")
     warnings = tuple(f for f in result.findings if f.severity == "warning")

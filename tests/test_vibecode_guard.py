@@ -2,6 +2,12 @@
 
 from __future__ import annotations
 
+import json
+import subprocess
+from datetime import datetime
+from pathlib import Path
+from types import SimpleNamespace
+
 from vibecode.config import ProtectedPathRule
 from vibecode.git_state import GitState
 from vibecode.guard import (
@@ -13,7 +19,11 @@ from vibecode.guard import (
     check_protected_path_changes,
     check_readme_changes,
     check_source_test_change_balance,
+    cmd_guard,
     evaluate_guard,
+    GuardFinding,
+    GuardResult,
+    write_guard_result,
 )
 
 
@@ -391,3 +401,235 @@ def test_handoff_change_requires_explanation_when_scoped():
     assert finding.severity == "warning"
     assert finding.path == ".vibecode/handoff/NOW.md"
     assert "Explain the protected truth-doc change" in finding.recommended_fix
+
+
+# ---------------------------------------------------------------------------
+# GuardFinding / GuardResult serialization
+# ---------------------------------------------------------------------------
+
+
+def test_guard_finding_as_dict_minimal():
+    f = GuardFinding(
+        rule_id="test-rule",
+        path="foo.py",
+        severity="error",
+        message="something broke",
+    )
+    d = f.as_dict()
+    assert d == {
+        "rule_id": "test-rule",
+        "path": "foo.py",
+        "severity": "error",
+        "message": "something broke",
+    }
+
+
+def test_guard_finding_as_dict_with_optional_fields():
+    f = GuardFinding(
+        rule_id="test-rule",
+        path="foo.py",
+        severity="warning",
+        message="something odd",
+        rule="Test rule description.",
+        recommended_fix="Fix it.",
+        required_tests=("tests/test_foo.py",),
+    )
+    d = f.as_dict()
+    assert d == {
+        "rule_id": "test-rule",
+        "path": "foo.py",
+        "severity": "warning",
+        "message": "something odd",
+        "rule": "Test rule description.",
+        "recommended_fix": "Fix it.",
+        "required_tests": ["tests/test_foo.py"],
+    }
+
+
+def test_guard_result_as_dict_shape():
+    result = GuardResult(
+        findings=(
+            GuardFinding(
+                rule_id="test-rule",
+                path="foo.py",
+                severity="error",
+                message="error msg",
+            ),
+            GuardFinding(
+                rule_id="warn-rule",
+                path="bar.py",
+                severity="warning",
+                message="warn msg",
+            ),
+        )
+    )
+    d = result.as_dict(root=Path("/tmp/test-repo"))
+
+    assert d["$schema"] == "vibecode/guard-result/v1"
+    assert "generated_at" in d
+    assert d["passed"] is False
+    assert d["errors"] == 1
+    assert d["warnings"] == 1
+    assert len(d["findings"]) == 2
+    assert d["root"] == "/tmp/test-repo"
+
+    # Validate generated_at is ISO 8601
+    datetime.fromisoformat(d["generated_at"])
+
+
+def test_guard_result_as_dict_no_root():
+    result = GuardResult()
+    d = result.as_dict()
+    assert "root" not in d
+    assert d["passed"] is True
+    assert d["errors"] == 0
+    assert d["warnings"] == 0
+    assert d["findings"] == []
+
+
+def test_guard_result_suggested_tests():
+    result = GuardResult(
+        findings=(
+            GuardFinding(
+                rule_id="test-rule",
+                path="foo.py",
+                severity="warning",
+                message="msg",
+                required_tests=("tests/test_foo.py", "tests/test_bar.py"),
+            ),
+            GuardFinding(
+                rule_id="test-rule-2",
+                path="baz.py",
+                severity="warning",
+                message="msg2",
+                required_tests=("tests/test_bar.py", "tests/test_baz.py"),
+            ),
+        )
+    )
+    tests = result.suggested_tests()
+    assert tests == ("tests/test_foo.py", "tests/test_bar.py", "tests/test_baz.py")
+
+
+# ---------------------------------------------------------------------------
+# write_guard_result
+# ---------------------------------------------------------------------------
+
+
+def test_write_guard_result_creates_valid_json(tmp_path):
+    result = GuardResult(
+        findings=(
+            GuardFinding(
+                rule_id="test-rule",
+                path="foo.py",
+                severity="error",
+                message="something broke",
+            ),
+        )
+    )
+    vibecode_dir = tmp_path / ".vibecode"
+    vibecode_dir.mkdir()
+    repo_root = tmp_path / "myproject"
+    repo_root.mkdir()
+
+    out_path = write_guard_result(result, vibecode_dir, repo_root)
+
+    assert out_path == vibecode_dir / "current" / "guard_result.json"
+    data = json.loads(out_path.read_text(encoding="utf-8"))
+
+    assert data["$schema"] == "vibecode/guard-result/v1"
+    assert "generated_at" in data
+    assert data["passed"] is False
+    assert data["errors"] == 1
+    assert data["warnings"] == 0
+    assert len(data["findings"]) == 1
+    assert data["findings"][0]["rule_id"] == "test-rule"
+    assert data["findings"][0]["path"] == "foo.py"
+    assert data["findings"][0]["severity"] == "error"
+    assert data["findings"][0]["message"] == "something broke"
+    assert Path(data["root"]) == Path(str(repo_root)).resolve()
+
+
+def test_write_guard_result_passes_clean_result(tmp_path):
+    result = GuardResult()
+    vibecode_dir = tmp_path / ".vibecode"
+    vibecode_dir.mkdir()
+
+    out_path = write_guard_result(result, vibecode_dir, tmp_path)
+    data = json.loads(out_path.read_text(encoding="utf-8"))
+
+    assert data["passed"] is True
+    assert data["errors"] == 0
+    assert data["warnings"] == 0
+    assert data["findings"] == []
+
+
+# ---------------------------------------------------------------------------
+# cmd_guard integration — guard_result.json is written
+# ---------------------------------------------------------------------------
+
+
+def test_cmd_guard_writes_guard_result_json(tmp_path):
+    """cmd_guard should write guard_result.json into .vibecode/current/."""
+    _init_git_repo(tmp_path)
+    vibecode_dir = tmp_path / ".vibecode"
+    vibecode_dir.mkdir()
+    (vibecode_dir / "project.yaml").write_text(
+        "project:\n  id: test\n  name: test\n  root: .\n", encoding="utf-8"
+    )
+
+    rc = cmd_guard(_make_args(str(tmp_path)))
+
+    guard_result_path = vibecode_dir / "current" / "guard_result.json"
+    assert guard_result_path.exists()
+
+    data = json.loads(guard_result_path.read_text(encoding="utf-8"))
+    assert data["$schema"] == "vibecode/guard-result/v1"
+    assert "generated_at" in data
+    assert "root" in data
+    assert isinstance(data["passed"], bool)
+    assert isinstance(data["errors"], int)
+    assert isinstance(data["warnings"], int)
+    assert isinstance(data["findings"], list)
+    # Clean repo should pass
+    assert rc == 0
+    assert data["passed"] is True
+
+
+# ---------------------------------------------------------------------------
+# Helpers
+# ---------------------------------------------------------------------------
+
+
+def _make_args(repo_root: str, strict: bool = False):
+    return SimpleNamespace(repo_root=repo_root, strict=strict)
+
+
+def _init_git_repo(repo: Path) -> None:
+    subprocess.run(
+        ["git", "init", "-b", "main"],
+        cwd=str(repo),
+        capture_output=True,
+    )
+    subprocess.run(
+        ["git", "config", "user.email", "test@test.com"],
+        cwd=str(repo),
+        capture_output=True,
+    )
+    subprocess.run(
+        ["git", "config", "user.name", "Test"],
+        cwd=str(repo),
+        capture_output=True,
+    )
+
+
+def _git_add_commit(repo: Path) -> None:
+    subprocess.run(
+        ["git", "add", "."],
+        cwd=str(repo),
+        capture_output=True,
+    )
+    subprocess.run(
+        ["git", "commit", "-m", "init"],
+        cwd=str(repo),
+        capture_output=True,
+    )

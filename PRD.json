@@ -85,7 +85,7 @@
     {
       "title": "Add guard report JSON output",
       "description": "Purpose: store guard results as ignored runtime output for future run workflows.\n\nScope:\n- Add optional or default write to `.vibecode/current/guard_result.json`.\n- Ensure file is ignored.\n- Do not make guard depend on previous guard result.\n\nJSON should include timestamp, repo root, changed files, hard failures, warnings, policy files loaded, and required tests suggested.\n\nAcceptance:\n- Guard writes valid JSON report.\n- Report is ignored/untracked.\n- Tests validate JSON shape.",
-      "completed": false
+      "completed": true
     },
     {
       "title": "Implement required checks schema validation",
