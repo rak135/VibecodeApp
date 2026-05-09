@@ -8,4 +8,5 @@
 - Agent-facing docs now distinguish stable root `AGENTS.md`, task-specific context packs, and ignored generated AGENTS export output.
 - Protected paths policy definition is implemented with loader/schema tests.
 - Context packs now render protected path edit constraints from `.vibecode/checks/protected_paths.yaml`.
+- Internal git changed-file inspection utility is implemented and tested for future guard/check/run workflows.
 - Guard enforcement is still not implemented.

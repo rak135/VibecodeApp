@@ -50,7 +50,7 @@
     {
       "title": "Implement git diff collection utility",
       "description": "Purpose: create a reusable internal utility for guard/check/run workflows to inspect changed files.\n\nScope:\n- Add a small module, for example `vibecode/git_state.py` or `vibecode/guard/git_diff.py`.\n- Do not implement full guard command yet.\n- Must work on Windows.\n\nUtility must provide changed paths from `git status --short`, staged vs unstaged if practical, diff name-only, diff stat if practical, safe behavior when repo is not a git repo, and clear error or empty result according to CLI conventions.\n\nAcceptance:\n- Tests use temporary git repos.\n- Handles clean repo, modified source file, modified test file, deleted file, and untracked file.\n- Does not run destructive git commands.",
-      "completed": false
+      "completed": true
     },
     {
       "title": "Implement guard rule for generated/runtime edits",
