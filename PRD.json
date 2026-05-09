@@ -200,7 +200,7 @@
     {
       "title": "Add end-to-end smoke for controlled agent preparation",
       "description": "Purpose: verify the full pre-agent workflow without launching a real agent.\n\nFlow in temp repo:\n1. `vibecode init`\n2. `vibecode index`\n3. `vibecode context --task \"...\"`\n4. `vibecode export-agents`\n5. `vibecode guard`\n6. `vibecode check` with safe dummy check\n7. `vibecode handoff-check`\n\nAcceptance:\n- Test uses temp repo and safe commands.\n- Generated/runtime files stay ignored/untracked.\n- Context pack includes relevant files.\n- AGENTS export is safe.\n- Guard/check/handoff commands produce expected statuses.",
-      "completed": false
+      "completed": true
     },
     {
       "title": "Add stale index detection",
