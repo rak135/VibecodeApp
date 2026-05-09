@@ -11,6 +11,9 @@ _TOKEN_RE = re.compile(r"[a-z0-9][a-z0-9_-]*")
 _PATH_RE = re.compile(r"[A-Za-z0-9_.-]+(?:/[A-Za-z0-9_.-]+)+")
 # Used to split a file path into component tokens for word-boundary keyword matching.
 _PATH_SPLIT_RE = re.compile(r"[/._\-]")
+# Splits CamelCase words at lower→upper and UPPER→Upper transitions so that
+# "ContextPanel" yields "Context" and "Panel" as separate tokens.
+_CAMEL_SPLIT_RE = re.compile(r"(?<=[a-z])(?=[A-Z])|(?<=[A-Z])(?=[A-Z][a-z])")
 _STOPWORDS: frozenset[str] = frozenset({
     "a",
     "an",
@@ -141,6 +144,12 @@ _DEP_BOOST_THRESHOLD = 12
 _DEP_BOOST = 3
 _DEP_BOOST_CAP = 3
 
+# Minimum pass-1 score a source file must reach (without pairing boost) for its
+# paired tests to receive the pairing boost in pass 1.5.  This prevents unrelated
+# tests from entering the long tail simply because they happen to be paired with a
+# low-scoring source.
+_TEST_BOOST_SOURCE_THRESHOLD = 8
+
 # Hub files: modules that broadly import/dispatch many project modules.  They
 # should only receive full scoring boosts (pairing, entrypoint, dep fan-out)
 # when the task explicitly targets CLI or command-dispatch topics.
@@ -190,13 +199,12 @@ def score_relevant_files(
     recent_paths = _recent_git_paths(root)
     source_to_tests = _source_test_pairs(root, path_set)
     # Suppress hub-file pairings when the task is not CLI/command-related.
-    # Hub files (e.g. cli.py) connect to many tests via test_map; without this
-    # suppression those tests flood paired_tests and trigger dep fan-out.
+    # Hub files (e.g. cli.py) connect to many tests; without this suppression
+    # those tests flood directly_relevant_tests and trigger dep fan-out.
     if not task_is_hub_relevant:
         source_to_tests = {
             k: v for k, v in source_to_tests.items() if not _is_hub_file(k)
         }
-    paired_tests = {test for tests in source_to_tests.values() for test in tests}
     handoff_tok = _handoff_tokens(root)
     history_tok = _history_tokens(root)
     dep_connections = _dependency_connections(root)
@@ -223,11 +231,14 @@ def score_relevant_files(
             reasons.append("generated/vendor/cache penalty")
 
         path_lower = rel.lower()
-        filename = PurePosixPath(rel).name.lower()
+        filename_orig = PurePosixPath(rel).name
+        filename = filename_orig.lower()
         # Pre-compute path and filename token sets for word-boundary keyword matching.
         # This prevents "pack" from matching "package.json" via substring.
-        path_tokens = _split_path_tokens(path_lower)
-        filename_tokens = _split_path_tokens(filename)
+        # CamelCase segments (e.g. "ContextPanel") are split into constituent words
+        # so that "context" and "panel" are each recognised as separate tokens.
+        path_tokens = _split_path_tokens(path_lower, path_orig=rel)
+        filename_tokens = _split_path_tokens(filename, path_orig=filename_orig)
 
         # Task keyword matching.
         # Low-value tokens (generic words) give only +1 for path presence with no reason string.
@@ -254,15 +265,6 @@ def score_relevant_files(
         if rel in arch_keyword_reasons:
             score += 3
             reasons.extend(arch_keyword_reasons[rel][:2])
-
-        # Source/test pairing.
-        if rel in source_to_tests:
-            score += 5
-            tests_str = ", ".join(f"`{t}`" for t in source_to_tests[rel][:2])
-            reasons.append(f"source file: paired test {tests_str}")
-        elif rel in paired_tests:
-            score += 5
-            reasons.append("paired test for a relevant source file")
 
         # Handoff signal: extra boost when handoff docs also mention this task keyword.
         for keyword in handoff_reinforced:
@@ -301,6 +303,28 @@ def score_relevant_files(
                 extra["requires_confirmation"] = True
 
         raw[rel] = (score, reasons, extra)
+
+    # Pass 1.5: pairing boost — only tests whose paired source scored at least
+    # _TEST_BOOST_SOURCE_THRESHOLD in pass 1 receive the boost.  This prevents
+    # unrelated tests from flooding the long tail via free +5 pairing points.
+    directly_relevant_sources = {
+        src for src in source_to_tests
+        if raw.get(src, (0,))[0] >= _TEST_BOOST_SOURCE_THRESHOLD
+    }
+    directly_relevant_tests: set[str] = {
+        test
+        for src in directly_relevant_sources
+        for test in source_to_tests[src]
+    }
+    for src in directly_relevant_sources:
+        if src in raw:
+            s, r, e = raw[src]
+            tests_str = ", ".join(f"`{t}`" for t in source_to_tests[src][:2])
+            raw[src] = (s + 5, r + [f"source file: paired test {tests_str}"], e)
+    for test in directly_relevant_tests:
+        if test in raw:
+            s, r, e = raw[test]
+            raw[test] = (s + 5, r + ["paired test for a relevant source file"], e)
 
     # Pass 2: dependency boost — files connected to high-scoring files get a small lift.
     dep_boosts: dict[str, list[str]] = {}
@@ -684,13 +708,24 @@ def _is_ignored(path: str) -> bool:
     return any(part.endswith(".egg-info") for part in parts)
 
 
-def _split_path_tokens(path: str) -> frozenset[str]:
+def _split_path_tokens(path_lower: str, path_orig: str | None = None) -> frozenset[str]:
     """Return path component tokens split on /._- boundaries.
 
     Used for word-boundary keyword matching so that e.g. ``"pack"`` does not
     accidentally match ``"package.json"``.
+
+    When *path_orig* (the original non-lowercased path or filename) is provided,
+    CamelCase segments are additionally split at case-transition boundaries so
+    that e.g. ``"ContextPanel.tsx"`` contributes both ``"context"`` and
+    ``"panel"`` as individual tokens alongside ``"contextpanel"``.
     """
-    return frozenset(t for t in _PATH_SPLIT_RE.split(path) if t)
+    tokens: set[str] = {t for t in _PATH_SPLIT_RE.split(path_lower) if t}
+    if path_orig is not None:
+        for part in _PATH_SPLIT_RE.split(path_orig):
+            subs = _CAMEL_SPLIT_RE.split(part)
+            if len(subs) > 1:
+                tokens.update(s.lower() for s in subs if s)
+    return frozenset(tokens)
 
 
 def _is_hub_file(rel: str) -> bool:

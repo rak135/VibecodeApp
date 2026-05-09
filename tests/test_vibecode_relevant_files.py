@@ -463,3 +463,54 @@ def test_hub_dep_fanout_does_not_flood_results(tmp_path):
         scoring_idx = paths.index("vibecode/context/scoring.py")
         assert scoring_idx < agents_idx
 
+
+# ---------------------------------------------------------------------------
+# Two-pass behavior tests — M and N
+# ---------------------------------------------------------------------------
+
+
+def test_unrelated_test_not_boosted_when_source_is_irrelevant(tmp_path):
+    """M: A test paired with a low-scoring source must NOT receive a pairing boost."""
+    # "widget.py" contains no task-relevant keywords → scores below threshold in pass 1.
+    # Its paired test must not receive the +5 pairing boost and must not appear with
+    # a "paired" reason.
+    inventory = _inventory(
+        "vibecode/context/scoring.py",       # directly relevant to task
+        "vibecode/context/widget.py",         # not relevant to task
+        "tests/test_vibecode_scoring.py",    # paired with relevant source
+        "tests/test_vibecode_widget.py",     # paired with irrelevant source
+    )
+
+    results = score_relevant_files(
+        tmp_path, "Improve relevant-file scoring", inventory=inventory, limit=10
+    )
+    scored = {r["path"]: r for r in results}
+
+    scoring_test_score = scored.get("tests/test_vibecode_scoring.py", {}).get("score", 0)
+    widget_test_score = scored.get("tests/test_vibecode_widget.py", {}).get("score", 0)
+
+    # Relevant test must outscore unrelated test by a significant margin.
+    assert scoring_test_score > widget_test_score, (
+        f"test_vibecode_scoring.py ({scoring_test_score}) should score > "
+        f"test_vibecode_widget.py ({widget_test_score})"
+    )
+    # Unrelated test must not carry a pairing reason.
+    widget_reasons = " ".join(scored.get("tests/test_vibecode_widget.py", {}).get("reasons", []))
+    assert "paired" not in widget_reasons
+
+
+def test_relevant_source_propagates_boost_to_paired_test(tmp_path):
+    """N: A test paired with a high-scoring source DOES receive a pairing boost."""
+    inventory = _inventory(
+        "vibecode/context/scoring.py",      # directly relevant to task
+        "tests/test_vibecode_scoring.py",   # paired with relevant source
+    )
+
+    results = score_relevant_files(
+        tmp_path, "Improve relevant-file scoring", inventory=inventory, limit=10
+    )
+    scored = {r["path"]: r for r in results}
+
+    assert "tests/test_vibecode_scoring.py" in scored, "paired test must appear in results"
+    reasons = " ".join(scored["tests/test_vibecode_scoring.py"]["reasons"])
+    assert "paired" in reasons, "paired test must carry a pairing reason"
