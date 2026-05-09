@@ -105,7 +105,7 @@
     {
       "title": "Implement handoff placeholder detection",
       "description": "Purpose: detect empty/useless handoff files.\n\nScope:\n- Add internal handoff validation utility.\n- Do not implement full CLI command yet unless small.\n- Tests required.\n\nRules:\n- `NOW.md` must contain concrete current state, not only heading.\n- `NEXT.md` must contain concrete next steps, not only heading.\n- `BLOCKERS.md` must say either no hard blocker or list blockers.\n- Placeholder phrases such as `TODO`, `TBD`, `placeholder`, empty bullets, or only headings should fail.\n\nAcceptance:\n- Real current handoff passes.\n- Placeholder handoff fails with clear message.\n- Tests cover empty, heading-only, placeholder text, and valid content.",
-      "completed": false
+      "completed": true
     },
     {
       "title": "Implement handoff architecture-change validation",

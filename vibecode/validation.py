@@ -15,6 +15,11 @@ from vibecode.project import TEMPLATE_UNFILLED_MARKER
 from vibecode.write_rules import GENERATED_PATH_PREFIXES as _GENERATED_PREFIXES
 from vibecode.write_rules import HUMAN_MAINTAINED_PATHS as _HUMAN_MAINTAINED_SET
 
+try:
+    from vibecode.handoff import validate_handoff_files
+except ImportError:
+    validate_handoff_files = None
+
 _SCHEMA = "vibecode/validation-report/v1"
 
 _GENERATED_JSON = (
@@ -77,6 +82,7 @@ def validate_project(repo_root: Path) -> dict:
     _validate_protected_paths(config, items)
     _validate_context_smoke(root, items)
     _validate_write_rules(root, items)
+    _validate_handoff(root, items)
 
     return _report(root, items)
 
@@ -238,6 +244,14 @@ def _validate_write_rules(root: Path, items: list[ValidationItem]) -> None:
         items.append(_warn("some human-maintained files are missing: " + ", ".join(missing_human[:5])))
     else:
         items.append(_ok("human-maintained files are outside generated artifact set"))
+
+
+def _validate_handoff(root: Path, items: list[ValidationItem]) -> None:
+    if validate_handoff_files is None:
+        return
+    result = validate_handoff_files(root)
+    for issue in result.issues:
+        items.append(_warn(issue.message, issue.file))
 
 
 def _report(root: Path, items: list[ValidationItem]) -> dict:
