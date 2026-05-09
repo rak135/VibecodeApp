@@ -31,4 +31,9 @@
   - Z3: "Improve context pack rendering" — renderer.py + test_context_pack.py present; platform_registry.py score < renderer.py score.
   - Z4: "Add OpenCode prompt export behavior" — platform_export, platform_registry, test_platform_export all present; platform_export outscores renderer.py.
   - Z5: "Add root AGENTS.md" — agents_export.py + test_agents_export.py present via "agents" phrase route; agents_export outscores renderer.py.
-  - Z6a/Z6b: "Implement guard command" — PROTECTED_AREAS.md appears via phrase route when no guard files exist; guard.py + test_vibecode_guard.py rank at top when guard files are present.
+- Z6a/Z6b: "Implement guard command" — PROTECTED_AREAS.md appears via phrase route when no guard files exist; guard.py + test_vibecode_guard.py rank at top when guard files are present.
+- `export-agents` command hardened (safe and predictable):
+  - Always writes to `.vibecode/generated/AGENTS.generated.md`.
+  - Returns exit code 1 with a clear message when root `AGENTS.md` exists and is not Vibecode-managed (no `--force`).
+  - Returns 0 for: no existing AGENTS.md, managed AGENTS.md update, `--force` overwrite.
+  - 3 new CLI tests added (managed update returns 0, manual-without-force returns non-zero, generated always written); 730 total tests pass.

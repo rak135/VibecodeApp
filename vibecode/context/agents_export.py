@@ -103,13 +103,15 @@ def cmd_export_agents(args) -> int:
 
     if agents_md_path:
         print(f"AGENTS.md written: {agents_md_path}", file=sys.stderr)
-    else:
-        agents_md = repo_root / AGENTS_ROOT_PATH
-        if agents_md.exists():
-            print(
-                "AGENTS.md exists and is not Vibecode-managed; skipped"
-                " (use --force to overwrite).",
-                file=sys.stderr,
-            )
+        return 0
+
+    agents_md = repo_root / AGENTS_ROOT_PATH
+    if agents_md.exists():
+        print(
+            "AGENTS.md exists and is not Vibecode-managed; skipped"
+            " (use --force to overwrite).",
+            file=sys.stderr,
+        )
+        return 1
 
     return 0

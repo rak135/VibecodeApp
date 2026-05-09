@@ -275,6 +275,29 @@ def test_cli_export_agents_force_overwrites_unmanaged(tmp_path):
     assert AGENTS_MARKER_START in content
 
 
+def test_cli_export_agents_managed_agents_md_returns_zero(tmp_path):
+    agents_md = tmp_path / AGENTS_ROOT_PATH
+    agents_md.write_text(
+        f"{AGENTS_MARKER_START}\nold content\n{AGENTS_MARKER_END}\n",
+        encoding="utf-8",
+    )
+    rc = main(["export-agents", str(tmp_path)])
+    assert rc == 0
+    assert "old content" not in agents_md.read_text(encoding="utf-8")
+
+
+def test_cli_export_agents_manual_without_force_returns_nonzero(tmp_path):
+    (tmp_path / AGENTS_ROOT_PATH).write_text("# Hand-written\n\nDo not touch.\n", encoding="utf-8")
+    rc = main(["export-agents", str(tmp_path)])
+    assert rc != 0
+
+
+def test_cli_export_agents_manual_without_force_still_writes_generated(tmp_path):
+    (tmp_path / AGENTS_ROOT_PATH).write_text("# Hand-written\n", encoding="utf-8")
+    main(["export-agents", str(tmp_path)])
+    assert (tmp_path / AGENTS_GENERATED_PATH).exists()
+
+
 def test_cli_export_agents_default_dir(tmp_path, monkeypatch):
     monkeypatch.chdir(tmp_path)
     rc = main(["export-agents"])
