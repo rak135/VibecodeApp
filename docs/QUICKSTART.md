@@ -12,6 +12,7 @@ for any local repository, and inspecting the generated output.
 - **`validate`** — check that all generated artifacts are internally consistent and that human-maintained files are in place
 - **`map`** — print a one-page project summary (file counts, languages, symbols, tests, high-risk files) from the last index run
 - **`context`** — generate a task-scoped `.vibecode/current/context_pack.md` ready to be pasted as agent context
+- **`check`** — run required checks from `.vibecode/checks/required_checks.yaml`
 - **`export-agents`** — write `AGENTS.md` (and `.vibecode/generated/AGENTS.generated.md`) with pre-edit and post-edit agent instructions
 
 ## What Vibecode cannot do yet
@@ -148,7 +149,17 @@ is written to `.vibecode\current\last_index.json`.
 **Expected warnings** on a fresh `init` — architecture template files still contain the
 `<!-- vibecode:unfilled -->` marker. Fill in the templates and re-run `index` to clear them.
 
-### Step 3 — validate
+### Step 3 — check
+
+Run the required checks defined in `.vibecode/checks/required_checks.yaml`:
+
+```powershell
+python -m vibecode.cli check C:\path\to\example-repo
+```
+
+Results are written to `.vibecode\current\check_results.json`. Each check prints `PASS`, `FAIL`, or `WARN`. A non-zero exit code indicates at least one required check failed.
+
+### Step 4 — validate
 
 Check that all artifacts are consistent and required files are present:
 
@@ -159,7 +170,7 @@ python -m vibecode.cli validate C:\path\to\example-repo
 Each check prints `OK`, `WARN`, or `ERROR`. A `WARN` on the invariants file means the
 architecture templates have not been filled in yet; this is expected on a fresh project.
 
-### Step 4 — map
+### Step 5 — map
 
 Print a one-page summary of the last index run:
 
@@ -182,7 +193,7 @@ Indexed:     2026-05-08 12:00:00 UTC
 Warnings:    none
 ```
 
-### Step 5 — context
+### Step 6 — context
 
 Generate a task-scoped context pack for a coding agent:
 
@@ -252,8 +263,6 @@ Get-Content C:\path\to\example-repo\.vibecode\current\opencode_prompt.md
 
 ### Step 7 — export-agents (optional)
 
-Write stable agent instructions to the repository root:
-
 ```powershell
 python -m vibecode.cli export-agents C:\path\to\example-repo
 ```
@@ -296,6 +305,12 @@ Get-Content C:\path\to\example-repo\.vibecode\index\repo_tree.generated.md
 
 ```powershell
 Get-Content C:\path\to\example-repo\.vibecode\current\last_index.json | python -m json.tool
+```
+
+### Check results
+
+```powershell
+Get-Content C:\path\to\example-repo\.vibecode\current\check_results.json | python -m json.tool
 ```
 
 ### Run log
@@ -343,7 +358,8 @@ Get-ChildItem C:\path\to\example-repo\.vibecode\logs\index_runs\ | Sort-Object L
 ├── current/                   ← GENERATED; session/runtime output
 │   ├── context_pack.md        ← current task context pack
 │   ├── opencode_prompt.md     ← OpenCode wrapper (only when --platform opencode used)
-│   └── last_index.json        ← summary of the last index run
+│   ├── last_index.json        ← summary of the last index run
+│   └── check_results.json     ← results from the last `vibecode check` run
 │
 ├── generated/                 ← GENERATED; derived from human-maintained files
 │   └── AGENTS.generated.md

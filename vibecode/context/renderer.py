@@ -286,6 +286,7 @@ def _required_checks(repo_root: Path) -> list[str]:
 
     if not lines:
         return ["- Missing `.vibecode/checks/required_checks.yaml`; ask before declaring work complete."]
+    lines.append(f"- Run all checks: `vibecode check {repo_root.as_posix()}`")
     return lines or [f"- See `{CHECKS_PATH.as_posix()}`."]
 
 

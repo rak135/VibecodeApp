@@ -389,6 +389,27 @@ def test_long_file_path_and_symbols_appear_not_full_content(tmp_path):
 # ---------------------------------------------------------------------------
 
 
+def test_required_checks_mentions_vibecode_check(tmp_path):
+    """Context pack must include a hint showing the exact vibecode check command."""
+    _minimal_repo(tmp_path)
+    _write(
+        tmp_path / ".vibecode" / "checks" / "required_checks.yaml",
+        "checks:\n"
+        "  - name: unit tests\n"
+        "    command: python -m pytest\n"
+        "    required: true\n",
+    )
+    _write(
+        tmp_path / ".vibecode" / "architecture" / "INVARIANTS.md",
+        "# Invariants\n\n- Generated indexes are not source of truth.\n",
+    )
+    _write(tmp_path / ".vibecode" / "index" / "file_inventory.json", '{"files": []}\n')
+
+    content = render_context_pack(tmp_path, "run checks")
+
+    assert "vibecode check" in content
+
+
 def test_required_checks_are_deduplicated(tmp_path):
     """D: Commands in required_checks.yaml must not appear again from test_map.json."""
     _write(

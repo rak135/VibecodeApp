@@ -80,6 +80,12 @@ $env:PYTHONDONTWRITEBYTECODE='1'
 python -m pytest -p no:cacheprovider
 ```
 
+Run the required checks:
+
+```powershell
+python -m vibecode.cli check .
+```
+
 <p align="right">(<a href="#readme-top">back to top</a>)</p>
 
 ## Usage

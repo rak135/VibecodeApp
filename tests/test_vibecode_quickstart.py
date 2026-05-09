@@ -396,7 +396,7 @@ class TestQuickstartDocumentationExists:
     def test_quickstart_covers_all_commands(self) -> None:
         quickstart = Path(__file__).parent.parent / "docs" / "QUICKSTART.md"
         content = quickstart.read_text(encoding="utf-8")
-        for cmd in ("init", "index", "validate", "map", "context", "export-agents"):
+        for cmd in ("init", "index", "check", "validate", "map", "context", "export-agents"):
             assert cmd in content, f"QUICKSTART.md must document the '{cmd}' command"
 
     def test_quickstart_covers_vibecode_structure(self) -> None:

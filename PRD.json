@@ -100,7 +100,7 @@
     {
       "title": "Add check command docs and context integration",
       "description": "Purpose: make required checks discoverable to agents and humans.\n\nScope:\n- Update README/QUICKSTART minimally.\n- Update context pack if needed to mention `vibecode check <repo>`.\n- Do not add broad roadmap.\n\nAcceptance:\n- Docs say checks are defined in `.vibecode/checks/required_checks.yaml`.\n- Docs say results are written to `.vibecode/current/check_results.json`.\n- Context pack still lists exact check commands.\n- Tests pass.",
-      "completed": false
+      "completed": true
     },
     {
       "title": "Implement handoff placeholder detection",
