@@ -3,7 +3,9 @@
 from __future__ import annotations
 
 from dataclasses import dataclass
+from fnmatch import fnmatchcase
 
+from vibecode.config import DEFAULT_PROTECTED_PATH_RULES, ProtectedPathRule
 from vibecode.git_state import GitState
 from vibecode.paths import strip_to_posix
 
@@ -31,6 +33,9 @@ class GuardFinding:
     path: str
     severity: str
     message: str
+    rule: str = ""
+    recommended_fix: str = ""
+    required_tests: tuple[str, ...] = ()
 
 
 @dataclass(frozen=True)
@@ -41,17 +46,63 @@ class GuardResult:
 
     @property
     def passed(self) -> bool:
-        return not self.findings
+        return all(finding.severity != "error" for finding in self.findings)
 
 
 def evaluate_guard(git_state: GitState, *, task: str = "") -> GuardResult:
     """Evaluate all internal guard rules against collected git state."""
 
-    return check_generated_runtime_changes(
+    policy_result = check_protected_path_changes(
+        git_state.changed_paths,
+        DEFAULT_PROTECTED_PATH_RULES,
+        task=task,
+        untracked_paths=git_state.untracked_paths,
+    )
+    generated_result = check_generated_runtime_changes(
         git_state.changed_paths,
         task=task,
         untracked_paths=git_state.untracked_paths,
     )
+    return GuardResult(
+        findings=_dedupe_findings((*policy_result.findings, *generated_result.findings))
+    )
+
+
+def check_protected_path_changes(
+    changed_paths: tuple[str, ...] | list[str],
+    protected_rules: tuple[ProtectedPathRule, ...] | list[ProtectedPathRule],
+    *,
+    task: str = "",
+    untracked_paths: tuple[str, ...] | list[str] = (),
+    ignored_paths: tuple[str, ...] | list[str] = (),
+) -> GuardResult:
+    """Report changed paths covered by protected path policy records."""
+
+    allowed_uncommitted_paths = _normalised_set((*untracked_paths, *ignored_paths))
+    task_allows_generator_files = _task_tests_generator_behavior(task)
+    findings: list[GuardFinding] = []
+
+    for raw_path in changed_paths:
+        path = _normalise_path(raw_path)
+        if not path:
+            continue
+        for rule in protected_rules:
+            policy_path = _normalise_path(rule.path)
+            if not _path_matches_rule(path, policy_path):
+                continue
+            if _is_generated_runtime_path(path):
+                if task_allows_generator_files and path in allowed_uncommitted_paths:
+                    continue
+                findings.append(_generated_policy_finding(path, rule))
+                continue
+
+            scoped = _task_mentions_scope(task, path, policy_path)
+            if _requires_explicit_scope(rule) and not scoped:
+                findings.append(_scope_required_finding(path, rule))
+                continue
+            if rule.required_tests or _requires_handoff_explanation(policy_path):
+                findings.append(_protected_path_note(path, rule, policy_path))
+    return GuardResult(findings=tuple(findings))
 
 
 def check_generated_runtime_changes(
@@ -79,9 +130,67 @@ def check_generated_runtime_changes(
                 path=path,
                 severity="error",
                 message=f"{GENERATED_RUNTIME_MESSAGE} Offending path: {path}",
+                rule=GENERATED_RUNTIME_MESSAGE,
+                recommended_fix=(
+                    "Regenerate this artifact with the owning command and do not "
+                    "commit manual generated/runtime edits."
+                ),
             )
         )
     return GuardResult(findings=tuple(findings))
+
+
+def _generated_policy_finding(path: str, rule: ProtectedPathRule) -> GuardFinding:
+    return GuardFinding(
+        rule_id="protected-path-generated",
+        path=path,
+        severity="error",
+        message=f"Generated/runtime protected path changed: {path}",
+        rule=rule.rule,
+        recommended_fix=(
+            "Regenerate this artifact with the owning Vibecode command; do not "
+            "manually edit or commit it."
+        ),
+        required_tests=rule.required_tests,
+    )
+
+
+def _scope_required_finding(path: str, rule: ProtectedPathRule) -> GuardFinding:
+    fix = f"Add explicit task scope for `{rule.path}` or revert `{path}`."
+    if rule.required_tests:
+        fix = f"{fix} Run required tests: {_format_required_tests(rule.required_tests)}."
+    return GuardFinding(
+        rule_id="protected-path-scope",
+        path=path,
+        severity="error",
+        message=f"Protected path changed without explicit task scope: {path}",
+        rule=rule.rule,
+        recommended_fix=fix,
+        required_tests=rule.required_tests,
+    )
+
+
+def _protected_path_note(
+    path: str,
+    rule: ProtectedPathRule,
+    policy_path: str,
+) -> GuardFinding:
+    fixes: list[str] = []
+    if rule.required_tests:
+        fixes.append(f"Run required tests: {_format_required_tests(rule.required_tests)}.")
+    if _requires_handoff_explanation(policy_path):
+        fixes.append(
+            "Explain the protected truth-doc change in handoff before marking done."
+        )
+    return GuardFinding(
+        rule_id="protected-path-requirements",
+        path=path,
+        severity="warning",
+        message=f"Protected path requirements apply: {path}",
+        rule=rule.rule,
+        recommended_fix=" ".join(fixes),
+        required_tests=rule.required_tests,
+    )
 
 
 def _is_generated_runtime_path(path: str) -> bool:
@@ -93,9 +202,62 @@ def _is_generated_runtime_path(path: str) -> bool:
     return "/" not in name and ".generated." in name
 
 
+def _path_matches_rule(path: str, rule_path: str) -> bool:
+    if not rule_path:
+        return False
+    if rule_path.endswith("/"):
+        return path.startswith(rule_path)
+    return path == rule_path or fnmatchcase(path, rule_path)
+
+
+def _requires_explicit_scope(rule: ProtectedPathRule) -> bool:
+    if rule.explicit_task_scope_required is not None:
+        return rule.explicit_task_scope_required
+    return True
+
+
+def _requires_handoff_explanation(policy_path: str) -> bool:
+    return policy_path.startswith((
+        ".vibecode/architecture/",
+        ".vibecode/checks/",
+        ".vibecode/handoff/",
+    ))
+
+
+def _task_mentions_scope(task: str, path: str, rule_path: str) -> bool:
+    task_words = _words(task)
+    if not task_words:
+        return False
+    if _normalise_path(path).lower() in task.lower().replace("\\", "/"):
+        return True
+    scope_words = _words(f"{path} {rule_path}") - {"vibecode", "py", "md", "yaml"}
+    return bool(task_words & scope_words)
+
+
 def _task_tests_generator_behavior(task: str) -> bool:
     words = task.lower().replace("-", " ")
     return "generator" in words and ("test" in words or "testing" in words)
+
+
+def _format_required_tests(required_tests: tuple[str, ...]) -> str:
+    return ", ".join(f"`{test}`" for test in required_tests)
+
+
+def _words(value: str) -> set[str]:
+    translated = "".join(char.lower() if char.isalnum() else " " for char in value)
+    return {word for word in translated.split() if word}
+
+
+def _dedupe_findings(findings: tuple[GuardFinding, ...]) -> tuple[GuardFinding, ...]:
+    deduped: list[GuardFinding] = []
+    seen: set[tuple[str, str]] = set()
+    for finding in findings:
+        key = (finding.severity, finding.path)
+        if key in seen:
+            continue
+        seen.add(key)
+        deduped.append(finding)
+    return tuple(deduped)
 
 
 def _normalised_set(paths: tuple[str, ...]) -> frozenset[str]:

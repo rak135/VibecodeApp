@@ -60,7 +60,7 @@
     {
       "title": "Implement guard rule for protected paths",
       "description": "Purpose: enforce `.vibecode/checks/protected_paths.yaml`.\n\nScope:\n- Build on protected path loader and git diff utility.\n- Add guard rule internals and tests.\n- Do not implement all guard rules yet if too broad.\n\nBehavior:\n- Changed protected paths require explicit task scope.\n- If policy has `required_tests`, guard reports those tests as required.\n- Generated paths are hard failures when manually edited.\n- Human-maintained truth docs require explanation/handoff.\n\nAcceptance:\n- Guard detects changes under `.vibecode/architecture/`.\n- Guard detects changes to core files such as `vibecode/context/scoring.py` and reports required tests.\n- Output contains path, rule, severity, and recommended fix.",
-      "completed": false
+      "completed": true
     },
     {
       "title": "Implement README generated-block guard",

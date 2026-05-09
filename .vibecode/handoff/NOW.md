@@ -10,3 +10,4 @@
 - Context packs now render protected path edit constraints from `.vibecode/checks/protected_paths.yaml`.
 - Internal git changed-file inspection utility is implemented and tested for future guard/check/run workflows.
 - Internal guard rule evaluation now fails generated/runtime file changes with tests.
+- Protected path guard evaluation now reports protected path scope failures, required tests, generated-artifact hard failures, and handoff/explanation requirements.

@@ -69,6 +69,7 @@ DEFAULT_PROTECTED_PATH_RULES = (
             "Scanner semantics define repository inventory; require task scope and "
             "tests for path/include/exclude behavior."
         ),
+        required_tests=("python -m pytest tests/test_vibecode_indexer.py",),
     ),
     ProtectedPathRule(
         path="vibecode/indexer/repo_tree.py",
@@ -76,6 +77,7 @@ DEFAULT_PROTECTED_PATH_RULES = (
             "Repository tree rendering controls generated map output; require task "
             "scope and tests for tree output."
         ),
+        required_tests=("python -m pytest tests/test_vibecode_repo_tree.py",),
     ),
     ProtectedPathRule(
         path="vibecode/context/scoring.py",
@@ -83,6 +85,7 @@ DEFAULT_PROTECTED_PATH_RULES = (
             "Context relevance scoring controls agent context; require task scope "
             "and tests for ranking behavior."
         ),
+        required_tests=("python -m pytest tests/test_vibecode_relevant_files.py",),
     ),
     ProtectedPathRule(
         path="vibecode/context/renderer.py",
@@ -90,6 +93,7 @@ DEFAULT_PROTECTED_PATH_RULES = (
             "Context-pack rendering controls agent-facing output; require task "
             "scope and tests for rendered sections/limits."
         ),
+        required_tests=("python -m pytest tests/test_vibecode_context_pack.py",),
     ),
 )
 
@@ -105,8 +109,14 @@ def render_protected_paths_yaml() -> str:
         lines.extend([
             f'  - path: "{record.path}"',
             f'    rule: "{record.rule}"',
-            "",
         ])
+        if record.required_tests:
+            lines.append("    required_tests:")
+            lines.extend(f'      - "{test}"' for test in record.required_tests)
+        if record.explicit_task_scope_required is not None:
+            value = str(record.explicit_task_scope_required).lower()
+            lines.append(f"    explicit_task_scope_required: {value}")
+        lines.append("")
     return "\n".join(lines)
 
 
