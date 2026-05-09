@@ -105,6 +105,17 @@ def create_parser() -> argparse.ArgumentParser:
         help="Treat warnings as hard failures (non-zero exit).",
     )
 
+    # check
+    check_parser = subparsers.add_parser(
+        "check", help="Run required checks from .vibecode/checks/required_checks.yaml."
+    )
+    check_parser.add_argument(
+        "repo_root",
+        nargs="?",
+        default=".",
+        help="Repository root directory (default: current directory).",
+    )
+
     # export-agents
     export_agents_parser = subparsers.add_parser(
         "export-agents", help="Export agent instructions to AGENTS.md."
@@ -198,6 +209,12 @@ def _dispatch(args, parser) -> int:
         _require_root_exists(args.repo_root)
         from vibecode.guard import cmd_guard
         return cmd_guard(args)
+
+    if args.command == "check":
+        args.repo_root = normalise_root(args.repo_root)
+        _require_root_exists(args.repo_root)
+        from vibecode.check import cmd_check
+        return cmd_check(args)
 
     if args.command == "export-agents":
         args.repo_root = normalise_root(args.repo_root)

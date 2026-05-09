@@ -95,7 +95,7 @@
     {
       "title": "Implement required checks runner",
       "description": "Purpose: add `vibecode check <repo>` to run concrete commands from `.vibecode/checks/required_checks.yaml`.\n\nScope:\n- Add check runner module and CLI command.\n- Do not integrate with OpenCode run yet.\n- Use subprocess safely.\n- Must work on Windows.\n\nBehavior:\n- Load required checks.\n- Run each command in repo root.\n- Capture exit code, stdout/stderr snippets, and duration.\n- Required failed check makes command exit non-zero.\n- Optional failed check reports warning.\n- Store result in `.vibecode/current/check_results.json`.\n\nAcceptance:\n- `python -m vibecode.cli check .` works.\n- JSON report is valid and ignored/untracked.\n- Tests use safe dummy commands.",
-      "completed": false
+      "completed": true
     },
     {
       "title": "Add check command docs and context integration",
