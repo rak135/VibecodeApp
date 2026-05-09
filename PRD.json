@@ -190,7 +190,7 @@
     {
       "title": "Allow commands to use active project when repo is omitted",
       "description": "Purpose: improve CLI UX after registry exists.\n\nCommands that should support active project fallback:\n- `index`\n- `map`\n- `context`\n- `validate`\n- `guard`\n- `check`\n- `handoff-check`\n- `run`\n\nBehavior:\n- If repo argument is provided, use it.\n- If omitted, use active project from registry.\n- If no active project, error clearly.\n- Do not guess from current directory unless command semantics already support `.`.\n\nAcceptance:\n- `vibecode project use STOCKS` then `vibecode context --task \"...\"` works.\n- Error tells user to pass repo or run `vibecode project use`.\n- Tests cover Windows-style paths.",
-      "completed": false
+      "completed": true
     },
     {
       "title": "Update docs for project registry workflow",

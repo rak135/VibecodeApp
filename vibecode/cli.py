@@ -43,8 +43,8 @@ def create_parser() -> argparse.ArgumentParser:
     index_parser.add_argument(
         "repo_root",
         nargs="?",
-        default=".",
-        help="Repository root directory (default: current directory).",
+        default=None,
+        help="Repository root directory (default: active project from registry).",
     )
 
     # context
@@ -59,7 +59,7 @@ def create_parser() -> argparse.ArgumentParser:
     context_parser.add_argument(
         "--repo",
         default=None,
-        help="Repository root directory (default: current directory).",
+        help="Repository root directory (default: active project from registry).",
     )
     context_parser.add_argument(
         "--platform",
@@ -73,8 +73,8 @@ def create_parser() -> argparse.ArgumentParser:
     map_parser.add_argument(
         "repo_root",
         nargs="?",
-        default=".",
-        help="Repository root directory (default: current directory).",
+        default=None,
+        help="Repository root directory (default: active project from registry).",
     )
 
     # validate
@@ -84,8 +84,8 @@ def create_parser() -> argparse.ArgumentParser:
     validate_parser.add_argument(
         "repo_root",
         nargs="?",
-        default=".",
-        help="Repository root directory (default: current directory).",
+        default=None,
+        help="Repository root directory (default: active project from registry).",
     )
 
     # guard
@@ -95,8 +95,8 @@ def create_parser() -> argparse.ArgumentParser:
     guard_parser.add_argument(
         "repo_root",
         nargs="?",
-        default=".",
-        help="Repository root directory (default: current directory).",
+        default=None,
+        help="Repository root directory (default: active project from registry).",
     )
     guard_parser.add_argument(
         "--strict",
@@ -112,8 +112,8 @@ def create_parser() -> argparse.ArgumentParser:
     check_parser.add_argument(
         "repo_root",
         nargs="?",
-        default=".",
-        help="Repository root directory (default: current directory).",
+        default=None,
+        help="Repository root directory (default: active project from registry).",
     )
 
     # handoff-check
@@ -124,8 +124,8 @@ def create_parser() -> argparse.ArgumentParser:
     handoff_parser.add_argument(
         "repo_root",
         nargs="?",
-        default=".",
-        help="Repository root directory (default: current directory).",
+        default=None,
+        help="Repository root directory (default: active project from registry).",
     )
     handoff_parser.add_argument(
         "--json",
@@ -141,8 +141,8 @@ def create_parser() -> argparse.ArgumentParser:
     run_parser.add_argument(
         "repo_root",
         nargs="?",
-        default=".",
-        help="Repository root directory (default: current directory).",
+        default=None,
+        help="Repository root directory (default: active project from registry).",
     )
     run_parser.add_argument(
         "--task", default="", help="Task description for the context pack."
@@ -171,7 +171,7 @@ def create_parser() -> argparse.ArgumentParser:
         help="Skip automatic index generation/refres.",
     )
 
-    # run-plan
+    # run-plan -- keeps "." default (no registry fallback)
     run_plan_parser = subparsers.add_parser(
         "run-plan",
         help="Assemble a run plan for an agent without launching it.",
@@ -306,6 +306,42 @@ def create_parser() -> argparse.ArgumentParser:
     return parser
 
 
+def _resolve_repo_root(args, allow_fallback: bool = True) -> Path:
+    """Resolve the repo root from args, falling back to the active project in the registry.
+
+    Priority:
+    1. Explicit ``repo_root`` argument from CLI (positional, not ``"."``).
+    2. Active project from the registry (if *allow_fallback* is True).
+
+    Raises ``FileNotFoundError`` with a clear message if no repo can be resolved.
+
+    Returns an absolute, resolved, forward-slash :class:`~pathlib.Path`.
+    """
+    from vibecode.paths import normalise_root
+    from vibecode.registry import ProjectRegistry
+
+    raw = getattr(args, "repo_root", None)
+    if raw is not None and raw != ".":
+        return normalise_root(raw)
+
+    # The user did not explicitly pass a repo root (or passed ".").
+    if not allow_fallback:
+        # Commands whose semantics already default to cwd (".").
+        return normalise_root(".")
+
+    # Try the registry's active project.
+    reg = ProjectRegistry()
+    try:
+        resolved = reg.pick(None)  # None -> active project
+    except FileNotFoundError:
+        raise FileNotFoundError(
+            "No repository root given and no active project. "
+            "Either pass a repo path or run 'vibecode project use <name>'."
+        ) from None
+
+    return normalise_root(str(resolved))
+
+
 def main(argv: list[str] | None = None) -> int:
     parser = create_parser()
     args = parser.parse_args(argv)
@@ -318,7 +354,7 @@ def main(argv: list[str] | None = None) -> int:
     try:
         return _dispatch(args, parser)
     except PermissionError as exc:
-        print(f"Error: Permission denied – {exc}", file=sys.stderr)
+        print(f"Error: Permission denied - {exc}", file=sys.stderr)
         if debug:
             import traceback
             traceback.print_exc()
@@ -354,7 +390,7 @@ def _dispatch(args, parser) -> int:
         return cmd_init(args)
 
     if args.command == "index":
-        args.repo_root = normalise_root(args.repo_root)
+        args.repo_root = _resolve_repo_root(args)
         _require_root_exists(args.repo_root)
         from vibecode.indexer import cmd_index
         return cmd_index(args)
@@ -364,42 +400,43 @@ def _dispatch(args, parser) -> int:
         return cmd_context(args)
 
     if args.command == "map":
-        args.repo_root = normalise_root(args.repo_root)
+        args.repo_root = _resolve_repo_root(args)
         _require_root_exists(args.repo_root)
         from vibecode.project import cmd_map
         return cmd_map(args)
 
     if args.command == "validate":
-        args.repo_root = normalise_root(args.repo_root)
+        args.repo_root = _resolve_repo_root(args)
         _require_root_exists(args.repo_root)
         from vibecode.validation import cmd_validate
         return cmd_validate(args)
 
     if args.command == "guard":
-        args.repo_root = normalise_root(args.repo_root)
+        args.repo_root = _resolve_repo_root(args)
         _require_root_exists(args.repo_root)
         from vibecode.guard import cmd_guard
         return cmd_guard(args)
 
     if args.command == "check":
-        args.repo_root = normalise_root(args.repo_root)
+        args.repo_root = _resolve_repo_root(args)
         _require_root_exists(args.repo_root)
         from vibecode.check import cmd_check
         return cmd_check(args)
 
     if args.command == "handoff-check":
-        args.repo_root = normalise_root(args.repo_root)
+        args.repo_root = _resolve_repo_root(args)
         _require_root_exists(args.repo_root)
         from vibecode.handoff import cmd_handoff_check
         return cmd_handoff_check(args)
 
     if args.command == "run":
-        args.repo_root = normalise_root(args.repo_root)
+        args.repo_root = _resolve_repo_root(args)
         _require_root_exists(args.repo_root)
         from vibecode.run import cmd_run
         return cmd_run(args)
 
     if args.command == "run-plan":
+        # run-plan keeps its original "." default (no registry fallback).
         args.repo_root = normalise_root(args.repo_root)
         _require_root_exists(args.repo_root)
         from vibecode.run_plan import cmd_run_plan

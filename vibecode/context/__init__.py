@@ -6,6 +6,7 @@ import sys
 
 from vibecode.context.renderer import write_context_pack
 from vibecode.paths import normalise_root
+from vibecode.registry import ProjectRegistry
 
 
 def cmd_context(args) -> int:
@@ -16,10 +17,10 @@ def cmd_context(args) -> int:
     platform = getattr(args, "platform", None)
 
     if task_option:
-        repo = normalise_root(str(repo_arg or context_arg or "."))
+        repo = _resolve_repo(repo_arg or context_arg)
         task = task_option
     else:
-        repo = normalise_root(str(repo_arg or "."))
+        repo = _resolve_repo(repo_arg)
         task = legacy_task or context_arg or "(no task specified)"
 
     if not repo.is_dir():
@@ -41,7 +42,6 @@ def cmd_context(args) -> int:
     risky_files_path = repo / ".vibecode" / "index" / "risky_files.md"
     if risky_files_path.exists():
         content = risky_files_path.read_text(encoding="utf-8")
-        # Surface high-risk / protected files so the agent is aware of them.
         if "## High Risk" in content:
             print("\n--- Protected / High-Risk Files ---", file=sys.stderr)
             in_high = False
@@ -71,3 +71,23 @@ def cmd_context(args) -> int:
             print(f"Warning: unknown platform '{platform}'; no export written.", file=sys.stderr)
 
     return 0
+
+
+def _resolve_repo(repo_arg):
+    """Resolve the repository root, with fallback to the active project registry.
+
+    Priority:
+    1. Explicit --repo / positional argument (non-".").
+    2. Active project from the registry.
+    3. Current working directory (".").
+    """
+    if repo_arg is not None and repo_arg != ".":
+        return normalise_root(repo_arg)
+    if repo_arg is not None:
+        return normalise_root(".")
+    try:
+        reg = ProjectRegistry()
+        resolved = reg.pick(None)
+        return normalise_root(str(resolved))
+    except FileNotFoundError:
+        return normalise_root(".")
