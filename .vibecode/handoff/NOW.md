@@ -9,4 +9,4 @@
 - Protected paths policy definition is implemented with loader/schema tests.
 - Context packs now render protected path edit constraints from `.vibecode/checks/protected_paths.yaml`.
 - Internal git changed-file inspection utility is implemented and tested for future guard/check/run workflows.
-- Guard enforcement is still not implemented.
+- Internal guard rule evaluation now fails generated/runtime file changes with tests.

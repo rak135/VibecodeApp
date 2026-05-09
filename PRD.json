@@ -55,7 +55,7 @@
     {
       "title": "Implement guard rule for generated/runtime edits",
       "description": "Purpose: prevent agents from editing generated/runtime files manually.\n\nPrerequisite:\nGit diff collection utility exists.\n\nScope:\n- Start guard rule engine internals.\n- Add tests for generated/runtime violations.\n- CLI may remain internal if full guard command is not ready.\n\nRule:\nIf changed files include `.vibecode/current/*`, `.vibecode/generated/*`, `.vibecode/logs/*`, `.vibecode/runs/*`, `.vibecode/tmp/*`, `.vibecode/cache/*`, or `.vibecode/index/*.generated.*`, guard reports a hard failure unless the task explicitly says generator behavior is being tested and the file is still ignored/untracked.\n\nAcceptance:\n- Rule returns failing result in tests for generated/runtime changes.\n- Error explains: regenerate generated files; do not manually edit them.\n- Human-maintained `.vibecode/architecture/*.md` is not treated as generated.",
-      "completed": false
+      "completed": true
     },
     {
       "title": "Implement guard rule for protected paths",
