@@ -89,6 +89,13 @@ def cmd_index(args) -> int:
     records = [classify(f.path, f.size) for f in files]
     risk_index = build_risk_index(records, protected_paths, risk_rules, run_log=run_log)
 
+    # Apply risk engine results to records so the repo tree reflects enriched risk levels.
+    from dataclasses import replace as _replace
+    records = [
+        _replace(r, risk_level=risk_index[r.path].risk_level) if r.path in risk_index else r
+        for r in records
+    ]
+
     inventory_path = vibecode_dir / "index" / "file_inventory.json"
     write_inventory(project_id, repo_root, files, inventory_path, risk_index=risk_index)
     print(f"  {len(files)} file(s) indexed", file=sys.stderr)
@@ -112,10 +119,13 @@ def cmd_index(args) -> int:
     required_checks: list[str] | None = cfg.required_checks or None
 
     test_map_path = vibecode_dir / "index" / "test_map.json"
-    write_test_map(repo_root, files, test_map_path, required_checks=required_checks)
+    test_map_data = build_test_map(repo_root, files, required_checks=required_checks)
+    test_map_path.parent.mkdir(parents=True, exist_ok=True)
+    test_map_path.write_text(json.dumps(test_map_data, indent=2, ensure_ascii=False) + "\n", encoding="utf-8")
     print(f"  test map written to {test_map_path.relative_to(repo_root).as_posix()}", file=sys.stderr)
 
     entrypoints_path = vibecode_dir / "index" / "entrypoints.md"
+    entrypoints_data = detect_entrypoints(repo_root)
     write_entrypoints(repo_root, entrypoints_path)
     print(f"  entrypoints written to {entrypoints_path.relative_to(repo_root).as_posix()}", file=sys.stderr)
 
@@ -126,6 +136,8 @@ def cmd_index(args) -> int:
         repo_tree_path,
         generated_at=started_at,
         git_commit=_git_commit(repo_root),
+        entrypoints_data=entrypoints_data,
+        test_map_data=test_map_data,
     )
     print(f"  repo tree written to {repo_tree_path.relative_to(repo_root).as_posix()}", file=sys.stderr)
 

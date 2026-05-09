@@ -112,9 +112,11 @@ class TestRenderRepoTree:
             _rec("docs/guide/intro.md"),    # low risk
         ]
         output = render_repo_tree(tmp_path, records)
-        # Low-risk files inside subdirs should not appear
-        assert "test_api.py" not in output
-        assert "intro.md" not in output
+        # Low-risk files inside subdirs must NOT appear in the compact Tree section.
+        # (They may appear in the Architecture Orientation section.)
+        tree_section = output.split("## Tree")[-1]
+        assert "test_api.py" not in tree_section
+        assert "intro.md" not in tree_section
 
     def test_high_risk_deep_files_present(self, tmp_path):
         records = [
@@ -146,18 +148,22 @@ class TestRenderRepoTree:
         ]
         output = render_repo_tree(tmp_path, records)
 
-        forbidden = [
-            "__pycache__",
-            "node_modules",
-            ".venv",
-            "dist",
-            "build",
-            ".git",
-            ".vibecode/current",
-            ".vibecode/cache",
-        ]
-        for text in forbidden:
+        # These should never appear anywhere – they are noise, not architecture.
+        for text in ("__pycache__", "node_modules", ".venv", "dist", "build", ".git"):
             assert text not in output
+
+        # .vibecode/current and .vibecode/cache should NOT appear in the compact Tree.
+        tree_section = output.split("## Tree")[-1]
+        assert ".vibecode/current" not in tree_section
+        assert ".vibecode/cache" not in tree_section
+
+        # But they may appear in the Architecture Orientation section to warn agents,
+        # clearly labelled as [runtime / ignored].
+        arch_section = output.split("## Architecture Orientation")[1].split("## Tree")[0] \
+            if "## Architecture Orientation" in output else ""
+        if ".vibecode/current" in arch_section:
+            assert "[runtime / ignored]" in arch_section
+
         assert "src/" in output
 
     def test_tree_connectors_present(self, tmp_path):
@@ -244,11 +250,364 @@ class TestRenderRepoTree:
 
 
 # ---------------------------------------------------------------------------
-# write_repo_tree
+# Architecture orientation section
 # ---------------------------------------------------------------------------
 
 
-class TestWriteRepoTree:
+def _make_vibecode_records() -> list[FileRecord]:
+    """Return a representative set of records that mirrors the VibecodeApp layout."""
+    return [
+        # Source package
+        _rec("vibecode/__init__.py"),
+        _rec("vibecode/cli.py"),
+        _rec("vibecode/config.py"),
+        _rec("vibecode/project.py"),
+        _rec("vibecode/paths.py"),
+        _rec("vibecode/validation.py"),
+        # Indexer sub-package
+        _rec("vibecode/indexer/__init__.py"),
+        _rec("vibecode/indexer/scanner.py"),
+        _rec("vibecode/indexer/classifier.py"),
+        _rec("vibecode/indexer/repo_tree.py"),
+        _rec("vibecode/indexer/test_map.py"),   # should NOT be classified as tests
+        _rec("vibecode/indexer/entrypoints.py"),
+        # Context sub-package
+        _rec("vibecode/context/__init__.py"),
+        _rec("vibecode/context/renderer.py"),
+        _rec("vibecode/context/scoring.py"),
+        _rec("vibecode/context/agents_export.py"),
+        # Test suite
+        _rec("tests/__init__.py"),
+        _rec("tests/test_vibecode_cli.py"),
+        _rec("tests/test_vibecode_repo_tree.py"),
+        _rec("tests/test_vibecode_context_pack.py"),
+        # Docs
+        _rec("docs/README.md"),
+        # .vibecode project truth
+        _rec(".vibecode/architecture/INVARIANTS.md"),
+        _rec(".vibecode/handoff/NOW.md"),
+        # .vibecode generated
+        _rec(".vibecode/index/repo_tree.generated.md"),
+        # Config
+        _rec("pyproject.toml"),
+        _rec("README.md"),
+    ]
+
+
+def _make_test_map_data() -> dict:
+    """Return minimal test_map_data that links source to test files."""
+    return {
+        "tests": [
+            {"path": "tests/test_vibecode_cli.py", "kind": "pytest"},
+            {"path": "tests/test_vibecode_repo_tree.py", "kind": "pytest"},
+            {"path": "tests/test_vibecode_context_pack.py", "kind": "pytest"},
+        ],
+        "rules": [
+            {
+                "path_pattern": "vibecode/cli.py",
+                "required_checks": ["tests/test_vibecode_cli.py"],
+                "reason": "import match",
+            },
+            {
+                "path_pattern": "vibecode/indexer/repo_tree.py",
+                "required_checks": ["tests/test_vibecode_repo_tree.py"],
+                "reason": "import match",
+            },
+            {
+                "path_pattern": "vibecode/context/renderer.py",
+                "required_checks": ["tests/test_vibecode_context_pack.py"],
+                "reason": "import match",
+            },
+        ],
+    }
+
+
+def _make_entrypoints_data() -> dict:
+    return {
+        "backend": [],
+        "frontend": [],
+        "cli_scripts": [
+            {"name": "vibecode", "target": "vibecode.cli:main", "source": "pyproject.toml"},
+        ],
+        "runtime_config": [],
+    }
+
+
+class TestArchitectureOrientation:
+    """Tests for the ## Architecture Orientation section of render_repo_tree."""
+
+    def test_summary_section_present(self, tmp_path):
+        records = _make_vibecode_records()
+        output = render_repo_tree(tmp_path, records)
+        assert "## Summary" in output
+
+    def test_summary_source_count(self, tmp_path):
+        records = _make_vibecode_records()
+        output = render_repo_tree(tmp_path, records)
+        assert "Source files:" in output
+
+    def test_summary_test_count(self, tmp_path):
+        records = _make_vibecode_records()
+        output = render_repo_tree(tmp_path, records)
+        assert "Test files:" in output
+
+    def test_architecture_orientation_section_present(self, tmp_path):
+        records = _make_vibecode_records()
+        output = render_repo_tree(tmp_path, records)
+        assert "## Architecture Orientation" in output
+
+    def test_source_package_labeled_as_package_root(self, tmp_path):
+        """vibecode/ must appear with [package root / source] label."""
+        records = _make_vibecode_records()
+        output = render_repo_tree(tmp_path, records)
+        assert "[package root / source]" in output
+        assert "vibecode/" in output
+
+    def test_vibecode_not_classified_as_tests(self, tmp_path):
+        """vibecode/ must NOT appear with a 'tests' label in the orientation section."""
+        records = _make_vibecode_records()
+        output = render_repo_tree(tmp_path, records)
+        arch_section = output.split("## Architecture Orientation")[1].split("## Tree")[0]
+        # The vibecode/ line should say [package root / source], not [test suite]
+        for line in arch_section.splitlines():
+            if "vibecode/" in line and "[" in line and not "indexer" in line and not "context" in line:
+                assert "[test suite]" not in line, f"vibecode/ falsely labelled as test suite: {line!r}"
+
+    def test_indexer_subfolder_labeled_as_indexing_core(self, tmp_path):
+        """vibecode/indexer/ must appear as repository indexing core."""
+        records = _make_vibecode_records()
+        output = render_repo_tree(tmp_path, records)
+        assert "[repository indexing core]" in output
+
+    def test_context_subfolder_labeled_as_context_generation(self, tmp_path):
+        """vibecode/context/ must appear as agent context generation."""
+        records = _make_vibecode_records()
+        output = render_repo_tree(tmp_path, records)
+        assert "[agent context generation]" in output
+
+    def test_cli_py_labeled_as_entrypoint(self, tmp_path):
+        """cli.py must appear with [CLI entrypoint] label."""
+        records = _make_vibecode_records()
+        output = render_repo_tree(tmp_path, records)
+        assert "[CLI entrypoint]" in output
+        assert "cli.py" in output
+
+    def test_test_suite_section_present(self, tmp_path):
+        records = _make_vibecode_records()
+        output = render_repo_tree(tmp_path, records)
+        assert "### Test suite" in output
+        assert "[test suite]" in output
+
+    def test_test_files_grouped_in_test_section(self, tmp_path):
+        """Top-level test files appear in the Test suite section."""
+        records = _make_vibecode_records()
+        output = render_repo_tree(tmp_path, records)
+        assert "test_vibecode_cli.py" in output
+        assert "test_vibecode_repo_tree.py" in output
+
+    def test_test_source_links_shown(self, tmp_path):
+        """Test files include → source links when test_map_data is provided."""
+        records = _make_vibecode_records()
+        test_map = _make_test_map_data()
+        output = render_repo_tree(tmp_path, records, test_map_data=test_map)
+        # Source → test link in the core package section
+        assert "test_vibecode_cli.py" in output
+        # Direct source file should mention its test
+        assert "← tests:" in output or "→" in output
+
+    def test_source_test_links_shown_in_orientation(self, tmp_path):
+        """Source files in the core package show their test coverage."""
+        records = _make_vibecode_records()
+        test_map = _make_test_map_data()
+        output = render_repo_tree(tmp_path, records, test_map_data=test_map)
+        arch_section = output.split("## Architecture Orientation")[1].split("## Tree")[0]
+        assert "test_vibecode_cli.py" in arch_section
+
+    def test_entrypoints_section_shown(self, tmp_path):
+        """Entrypoints section appears when entrypoints_data is provided."""
+        records = _make_vibecode_records()
+        entrypoints = _make_entrypoints_data()
+        output = render_repo_tree(tmp_path, records, entrypoints_data=entrypoints)
+        assert "### Entrypoints" in output
+        assert "vibecode.cli:main" in output
+
+    def test_entrypoints_count_in_summary(self, tmp_path):
+        """Summary Entrypoints count reflects entrypoints_data."""
+        records = _make_vibecode_records()
+        entrypoints = _make_entrypoints_data()
+        output = render_repo_tree(tmp_path, records, entrypoints_data=entrypoints)
+        assert "Entrypoints: 1" in output
+
+    def test_entrypoints_zero_without_data(self, tmp_path):
+        records = _make_vibecode_records()
+        output = render_repo_tree(tmp_path, records)
+        assert "Entrypoints: 0" in output
+
+    def test_docs_section_present(self, tmp_path):
+        records = _make_vibecode_records()
+        output = render_repo_tree(tmp_path, records)
+        assert "[documentation]" in output
+
+    def test_vibecode_architecture_labeled_as_truth(self, tmp_path):
+        """`.vibecode/architecture/` appears with human-maintained label."""
+        records = _make_vibecode_records()
+        output = render_repo_tree(tmp_path, records)
+        assert "[human-maintained architecture truth]" in output
+
+    def test_vibecode_index_labeled_as_generated(self, tmp_path):
+        """`.vibecode/index/` appears with generated / ignored label."""
+        records = _make_vibecode_records()
+        output = render_repo_tree(tmp_path, records)
+        assert "[generated / ignored]" in output
+
+    def test_generated_runtime_section_present(self, tmp_path):
+        """Generated and runtime state section present when .vibecode/ files exist."""
+        records = _make_vibecode_records()
+        output = render_repo_tree(tmp_path, records)
+        assert "### Generated and runtime state" in output
+        assert "[runtime / ignored]" in output
+
+    def test_test_map_py_not_in_test_suite_section(self, tmp_path):
+        """vibecode/indexer/test_map.py must NOT appear in the Test suite section."""
+        records = _make_vibecode_records()
+        output = render_repo_tree(tmp_path, records)
+        # Find the test suite section
+        if "### Test suite" in output and "### Documentation" in output:
+            test_section = output.split("### Test suite")[1].split("###")[0]
+            # test_map.py lives in the source package, not in tests/
+            assert "test_map.py" not in test_section
+
+    def test_output_is_deterministic(self, tmp_path):
+        """Same inputs always produce identical output."""
+        records = _make_vibecode_records()
+        test_map = _make_test_map_data()
+        entrypoints = _make_entrypoints_data()
+        out1 = render_repo_tree(
+            tmp_path, records,
+            generated_at=_FIXED_TIME,
+            git_commit="abc123",
+            entrypoints_data=entrypoints,
+            test_map_data=test_map,
+        )
+        out2 = render_repo_tree(
+            tmp_path, records,
+            generated_at=_FIXED_TIME,
+            git_commit="abc123",
+            entrypoints_data=entrypoints,
+            test_map_data=test_map,
+        )
+        assert out1 == out2
+
+    def test_canonical_output_filename(self, tmp_path):
+        """write_repo_tree uses repo_tree.generated.md as the canonical filename."""
+        out = tmp_path / ".vibecode" / "index" / "repo_tree.generated.md"
+        write_repo_tree(tmp_path, _make_vibecode_records(), out)
+        assert out.exists()
+        assert out.name == "repo_tree.generated.md"
+
+    def test_second_level_indexer_files_listed(self, tmp_path):
+        """Files inside vibecode/indexer/ appear in the orientation section."""
+        records = _make_vibecode_records()
+        output = render_repo_tree(tmp_path, records)
+        arch_section = output.split("## Architecture Orientation")[1].split("## Tree")[0]
+        assert "scanner.py" in arch_section
+        assert "classifier.py" in arch_section
+        assert "repo_tree.py" in arch_section
+
+    def test_second_level_context_files_listed(self, tmp_path):
+        """Files inside vibecode/context/ appear in the orientation section."""
+        records = _make_vibecode_records()
+        output = render_repo_tree(tmp_path, records)
+        arch_section = output.split("## Architecture Orientation")[1].split("## Tree")[0]
+        assert "renderer.py" in arch_section
+        assert "scoring.py" in arch_section
+
+
+# ---------------------------------------------------------------------------
+# Tree section: source package expansion
+# ---------------------------------------------------------------------------
+
+
+def _tree_section(output: str) -> str:
+    """Return just the ## Tree section content from render_repo_tree output."""
+    return output.split("## Tree")[-1]
+
+
+class TestTreeSourcePackageExpansion:
+    """Tests that the ## Tree section expands Python source packages."""
+
+    def test_vibecode_not_bare_in_tree(self, tmp_path):
+        """vibecode/ must NOT appear as a collapsed bare directory in ## Tree."""
+        records = _make_vibecode_records()
+        tree = _tree_section(render_repo_tree(tmp_path, records))
+        # The tree must show content inside vibecode/ — at minimum cli.py.
+        assert "cli.py" in tree, "vibecode/ appears collapsed; cli.py missing from ## Tree"
+
+    def test_vibecode_context_in_tree(self, tmp_path):
+        """vibecode/context/ must appear inside the ## Tree section."""
+        records = _make_vibecode_records()
+        tree = _tree_section(render_repo_tree(tmp_path, records))
+        assert "context/" in tree
+
+    def test_vibecode_indexer_in_tree(self, tmp_path):
+        """vibecode/indexer/ must appear inside the ## Tree section."""
+        records = _make_vibecode_records()
+        tree = _tree_section(render_repo_tree(tmp_path, records))
+        assert "indexer/" in tree
+
+    def test_vibecode_cli_py_in_tree(self, tmp_path):
+        """vibecode/cli.py must appear inside the ## Tree section."""
+        records = _make_vibecode_records()
+        tree = _tree_section(render_repo_tree(tmp_path, records))
+        assert "cli.py" in tree
+
+    def test_context_files_in_tree(self, tmp_path):
+        """Key files in vibecode/context/ appear in ## Tree."""
+        records = _make_vibecode_records()
+        tree = _tree_section(render_repo_tree(tmp_path, records))
+        assert "renderer.py" in tree
+        assert "scoring.py" in tree
+        assert "agents_export.py" in tree
+
+    def test_indexer_files_in_tree(self, tmp_path):
+        """Key files in vibecode/indexer/ appear in ## Tree."""
+        records = _make_vibecode_records()
+        tree = _tree_section(render_repo_tree(tmp_path, records))
+        assert "scanner.py" in tree
+        assert "classifier.py" in tree
+        assert "repo_tree.py" in tree
+
+    def test_init_py_omitted_from_tree_expansion(self, tmp_path):
+        """__init__.py files should not clutter the tree output."""
+        records = _make_vibecode_records()
+        tree = _tree_section(render_repo_tree(tmp_path, records))
+        assert "__init__.py" not in tree
+
+    def test_tests_not_expanded_more_than_source(self, tmp_path):
+        """tests/ must not be expanded to show individual test files in ## Tree."""
+        records = _make_vibecode_records()
+        tree = _tree_section(render_repo_tree(tmp_path, records))
+        # The test suite section should NOT list individual test files inline in the tree
+        # (those live in the Architecture Orientation section, not in the Tree).
+        # At minimum, test files from tests/ should not appear as file entries in the Tree.
+        assert "test_vibecode_cli.py" not in tree
+
+    def test_dir_without_init_not_expanded_as_source(self, tmp_path):
+        """A directory without __init__.py must not be expanded as a source package."""
+        records = [_rec(f"src/module_{i}/helper.py") for i in range(5)]
+        tree = _tree_section(render_repo_tree(tmp_path, records))
+        # src/ has no __init__.py, so helper.py files must not appear in the tree
+        assert "helper.py" not in tree
+
+    def test_source_package_expansion_deterministic(self, tmp_path):
+        """Source package expansion must be deterministic (same input → same output)."""
+        records = _make_vibecode_records()
+        out1 = _tree_section(render_repo_tree(tmp_path, records, generated_at=_FIXED_TIME))
+        out2 = _tree_section(render_repo_tree(tmp_path, records, generated_at=_FIXED_TIME))
+        assert out1 == out2
+
+
+
     def test_creates_file(self, tmp_path):
         out = tmp_path / ".vibecode" / "index" / "repo_tree.generated.md"
         write_repo_tree(tmp_path, _make_fixture_records(), out)
