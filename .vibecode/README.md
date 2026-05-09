@@ -5,7 +5,7 @@
 - `.vibecode/architecture/*.md`
 - `.vibecode/checks/*.yaml`
 - `.vibecode/handoff/*.md`
-- `.vibecode/history/README.md`
+- `.vibecode/history/` (policy + summaries when durable; see `history/README.md`)
 - `.vibecode/index/README.md`
 - `.vibecode/index/schema.json`
 

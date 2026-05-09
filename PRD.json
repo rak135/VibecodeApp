@@ -120,7 +120,7 @@
     {
       "title": "Define history summary policy",
       "description": "Purpose: make `.vibecode/history/` useful as compressed project memory, not noisy logs.\n\nScope:\n- Update `.vibecode/history/README.md`.\n- Add docs if needed.\n- No automation yet.\n\nPolicy:\n- `.vibecode/history/README.md` is committed.\n- `.vibecode/history/*.md` may be committed only when it contains durable project truth.\n- `.vibecode/runs/*` is always runtime output and ignored.\n- History summaries are not raw logs.\n- A history summary contains Task, Changed files, Behavior changed, Tests run, Decisions, and Follow-up.\n\nAcceptance:\n- Policy is explicit and short.\n- AGENTS/context/handoff docs do not conflict with it.",
-      "completed": false
+      "completed": true
     },
     {
       "title": "Implement history summary template writer",

@@ -215,7 +215,9 @@ def _file_templates(project_id: str, project_name: str) -> dict[str, str]:  # no
         ),
         ".vibecode/history/README.md": (
             f"# {project_name} \u2013 Change History\n\n"
-            "<!-- Index of significant changes and decisions. -->\n"
+            "<!-- This file records significant changes with full context.\n"
+            "     Every committed summary must include: Task, Changed files,\n"
+            "     Behavior changed, Tests run, Decisions, Follow-up. -->\n"
         ),
     }
 

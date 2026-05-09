@@ -26,7 +26,7 @@ def render_agents_block() -> str:
         "## Source of truth\n\n"
         "Treat source code, tests, and human-maintained docs"
         " (`.vibecode/architecture/`, `.vibecode/handoff/`,"
-        " `.vibecode/checks/`) as truth.\n\n"
+        " `.vibecode/history/`, `.vibecode/checks/`) as truth.\n\n"
         "## Do not manually edit\n\n"
         "- `.vibecode/current/*` \u2014 session state\n"
         "- `.vibecode/index/*.generated.*` \u2014 generated index\n"

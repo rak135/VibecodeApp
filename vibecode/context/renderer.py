@@ -361,6 +361,7 @@ def _handoff_expectations(repo_root: Path) -> list[str]:
         "- Keep edits scoped to files relevant to the task.",
         "- Report changed files and checks run.",
         "- If architecture truth changes, update committed architecture docs in the same handoff.",
+        "- For significant changes, add a summary to `.vibecode/history/` (see `history/README.md`).",
         "- Update `NOW.md` before starting a new task session; describe current work in progress.",
         "- Update `NEXT.md` when queuing follow-up work; remove items that are started or done.",
         "- Update `BLOCKERS.md` when blockers appear or are resolved; do not leave stale entries.",
