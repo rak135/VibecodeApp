@@ -35,7 +35,7 @@
     {
       "title": "Unify data loading and connect TUI + MCP + CLI",
       "description": "Create `src/vibecodeapp/data_loader.py` with a single function `load_project_data()` that reads both `file_inventory.json` and `risk_report.json` and returns a `ProjectData` dataclass. Replace the duplicate loading logic in the MCP server and TUI app with calls to this function. Update the `vibecode serve` and `vibecode dashboard` commands to gracefully handle missing data (prompt to run `vibecode inventory`). Add a simple integration test script (`tests/test_integration.py`) that generates inventory, starts the dashboard in headless mode (if possible) and probes the MCP server via a subprocess. This task consolidates the architecture and ensures a single source of truth.",
-      "completed": false
+      "completed": true
     },
     {
       "title": "Check & fix: run full integration, final polish and documentation",

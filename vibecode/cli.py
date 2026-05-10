@@ -500,6 +500,13 @@ def _dispatch(args, parser) -> int:
     if args.command == "dashboard":
         args.repo_root = _resolve_repo_root(args)
         _require_root_exists(args.repo_root)
+        from vibecode.data_loader import load_project_data
+        project = load_project_data(args.repo_root)
+        if project.inventory_missing or project.risk_report_missing:
+            print(
+                "Hint: index files are missing. Run 'vibecode inventory' to generate them.",
+                file=sys.stderr,
+            )
         from vibecode.tui_app import VibecodeTUI
         VibecodeTUI(repo_root=args.repo_root).run()
         return 0

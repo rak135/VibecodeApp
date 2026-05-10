@@ -41,14 +41,12 @@ class VibecodeServer:
 
     @staticmethod
     def _load_json(path: Path, label: str) -> dict:
-        if not path.exists():
+        from vibecode.data_loader import _load_json as _shared_load
+
+        data, missing = _shared_load(path)
+        if missing:
             print(f"Warning: {label} not found at {path}", file=sys.stderr)
-            return {}
-        try:
-            return json.loads(path.read_text(encoding="utf-8"))
-        except (json.JSONDecodeError, OSError) as exc:
-            print(f"Warning: failed to load {label}: {exc}", file=sys.stderr)
-            return {}
+        return data
 
     # ------------------------------------------------------------------
     # Tool implementations
@@ -206,12 +204,21 @@ def cmd_serve(args) -> int:
     Prints a ready-to-paste OpenCode MCP configuration snippet to *stderr*
     before entering the blocking server loop.
     """
+    from vibecode.data_loader import load_project_data
     from vibecode.paths import normalise_root
 
-    repo_root = normalise_root(getattr(args, "repo_root", "."))
+    raw = getattr(args, "repo_root", ".")
+    repo_root = raw if isinstance(raw, Path) else normalise_root(raw)
     index_dir = repo_root / ".vibecode" / "index"
     inventory_path = index_dir / "file_inventory.json"
     risk_report_path = index_dir / "risk_report.json"
+
+    project = load_project_data(repo_root)
+    if project.inventory_missing or project.risk_report_missing:
+        print(
+            "Hint: index files are missing. Run 'vibecode inventory' to generate them.",
+            file=sys.stderr,
+        )
 
     config_snippet = {
         "mcpServers": {

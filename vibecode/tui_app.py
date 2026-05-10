@@ -2,7 +2,6 @@
 
 from __future__ import annotations
 
-import json
 from pathlib import Path
 from typing import NamedTuple
 
@@ -25,37 +24,14 @@ def load_dashboard_data(repo_root: Path) -> DashboardData:
     Returns a :class:`DashboardData` with cards, total file count, and
     high-risk item count derived from ``risk_report.json``.
     """
-    index_dir = repo_root / ".vibecode" / "index"
+    from vibecode.data_loader import load_project_data
 
-    inventory_path = index_dir / "file_inventory.json"
-    cards: list[dict] = []
-    total_files = 0
-    if inventory_path.is_file():
-        try:
-            data = json.loads(inventory_path.read_text(encoding="utf-8"))
-        except (json.JSONDecodeError, OSError):
-            data = {}
-        total_files = len(data.get("files", []))
-        cards = data.get("context_cards", [])
-        for card in cards:
-            for _field in ("symbols", "facts", "heuristics"):
-                if card.get(_field) is None:
-                    card[_field] = []
-
-    risk_path = index_dir / "risk_report.json"
-    high_risk_count = 0
-    if risk_path.is_file():
-        try:
-            risk_data = json.loads(risk_path.read_text(encoding="utf-8"))
-        except (json.JSONDecodeError, OSError):
-            risk_data = {}
-        for entry in risk_data.get("files", []):
-            if entry.get("risk_level") == "high":
-                high_risk_count += 1
-            elif any(h.get("severity") == "high" for h in entry.get("heuristics", [])):
-                high_risk_count += 1
-
-    return DashboardData(cards=cards, total_files=total_files, high_risk_count=high_risk_count)
+    project = load_project_data(repo_root)
+    return DashboardData(
+        cards=project.cards,
+        total_files=project.total_files,
+        high_risk_count=project.high_risk_count,
+    )
 
 
 def _symbols_summary(symbols: list[dict]) -> str:
