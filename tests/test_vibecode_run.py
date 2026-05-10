@@ -64,6 +64,16 @@ def _commit_all(repo: Path) -> None:
 def _minimal_vibecode(repo: Path) -> None:
     """Write the minimal .vibecode/project.yaml and index for a valid repo."""
     _write(
+        repo / ".gitignore",
+        ".vibecode/current/\n"
+        ".vibecode/generated/\n"
+        ".vibecode/runs/\n"
+        ".vibecode/tmp/\n"
+        ".vibecode/cache/\n"
+        ".vibecode/logs/\n"
+        ".vibecode/index/*.generated.*\n",
+    )
+    _write(
         repo / ".vibecode" / "project.yaml",
         "project:\n"
         "  id: testproject\n"
@@ -468,6 +478,71 @@ class TestCmdRunPreflight:
         assert rc == 1
         assert not marker.exists()
         assert "Permission profile 'safe' is missing" in capsys.readouterr().err
+
+    def test_missing_gitignore_blocks_agent_launch(self, tmp_path: Path, capsys, monkeypatch):
+        _init_repo(tmp_path)
+        _minimal_vibecode(tmp_path)
+        (tmp_path / ".gitignore").unlink()
+        _write(tmp_path / "app.py", "x = 1\n")
+        _commit_all(tmp_path)
+
+        marker = tmp_path / "launched.txt"
+        fake_dir = (tmp_path / ".." / "fake_bin_ign").resolve()
+        fake_dir.mkdir(parents=True, exist_ok=True)
+        script = fake_dir / "opencode.py"
+        script.write_text(
+            "import sys\n"
+            f"argv = sys.argv[1:] if len(sys.argv) > 1 else []\n"
+            'if "--version" in argv:\n'
+            '    sys.stdout.write("fake-opencode 1.0.0\\n")\n'
+            "    sys.exit(0)\n"
+            f"from pathlib import Path\nPath({str(marker)!r}).write_text('yes')\n",
+            encoding="utf-8",
+        )
+        wrapper = fake_dir / "opencode.cmd"
+        wrapper.write_text(
+            "@echo off\n" + f'"{sys.executable}" "%~dp0opencode.py" %*\n',
+            encoding="utf-8",
+        )
+        monkeypatch.setenv("OPENCODE_COMMAND", str(wrapper))
+
+        rc = main(["run", str(tmp_path), "--task", "test", "--no-index"])
+
+        assert rc == 1
+        assert not marker.exists()
+        assert "git-ignored" in capsys.readouterr().err
+
+    def test_safe_gitignore_allows_agent_launch(self, tmp_path: Path, capsys, monkeypatch):
+        _init_repo(tmp_path)
+        _minimal_vibecode(tmp_path)
+        _write(tmp_path / "app.py", "x = 1\n")
+        _commit_all(tmp_path)
+
+        marker = tmp_path / "launched.txt"
+        fake_dir = (tmp_path / ".." / "fake_bin_safe").resolve()
+        fake_dir.mkdir(parents=True, exist_ok=True)
+        script = fake_dir / "opencode.py"
+        script.write_text(
+            "import sys\n"
+            f"argv = sys.argv[1:] if len(sys.argv) > 1 else []\n"
+            'if "--version" in argv:\n'
+            '    sys.stdout.write("fake-opencode 1.0.0\\n")\n'
+            "    sys.exit(0)\n"
+            f"from pathlib import Path\nPath({str(marker)!r}).write_text('yes')\n"
+            "sys.stdout.write('OK\\n')\n",
+            encoding="utf-8",
+        )
+        wrapper = fake_dir / "opencode.cmd"
+        wrapper.write_text(
+            "@echo off\n" + f'"{sys.executable}" "%~dp0opencode.py" %*\n',
+            encoding="utf-8",
+        )
+        monkeypatch.setenv("OPENCODE_COMMAND", str(wrapper))
+
+        rc = main(["run", str(tmp_path), "--task", "test", "--no-index"])
+
+        assert rc == 0
+        assert marker.exists()
 
 
 # ---------------------------------------------------------------------------

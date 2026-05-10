@@ -74,6 +74,16 @@ def _commit_all(repo: Path) -> None:
 def _minimal_vibecode(repo: Path) -> None:
     """Write the minimal .vibecode/project.yaml and index for a valid repo."""
     _write(
+        repo / ".gitignore",
+        ".vibecode/current/\n"
+        ".vibecode/generated/\n"
+        ".vibecode/runs/\n"
+        ".vibecode/tmp/\n"
+        ".vibecode/cache/\n"
+        ".vibecode/logs/\n"
+        ".vibecode/index/*.generated.*\n",
+    )
+    _write(
         repo / ".vibecode" / "project.yaml",
         "project:\n"
         "  id: testproject\n"
@@ -989,7 +999,8 @@ class TestCmdRunWithPostChecks:
         # agent modify it after the pre-agent git baseline is captured.
         current_dir = self.repo / ".vibecode" / "current"
         _write(current_dir / "test_generated.md", "# generated\n")
-        _commit_all(self.repo)
+        _git(self.repo, "add", "-f", ".vibecode/current/test_generated.md")
+        _git(self.repo, "commit", "-m", "track generated file")
         body = (
             "from pathlib import Path\n"
             "Path('.vibecode/current/test_generated.md').write_text('# modified\\n', encoding='utf-8')"

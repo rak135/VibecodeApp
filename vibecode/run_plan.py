@@ -8,6 +8,7 @@ preflight checks, and decide whether to proceed.
 from __future__ import annotations
 
 import json
+import subprocess
 from dataclasses import dataclass, field
 from datetime import datetime, timezone
 from pathlib import Path
@@ -24,6 +25,86 @@ class RunPlanWarning:
 
     level: str  # "warn" or "error"
     message: str
+
+
+# Critical generated/runtime paths that must be git-ignored for safe operation.
+# Each entry is a (display_name, test_path) pair for git check-ignore verification.
+_CRITICAL_IGNORE_CHECKS: tuple[tuple[str, str], ...] = (
+    (".vibecode/current/", ".vibecode/current/ignore_check_file"),
+    (".vibecode/generated/", ".vibecode/generated/ignore_check_file"),
+    (".vibecode/runs/", ".vibecode/runs/ignore_check_file"),
+    (".vibecode/logs/", ".vibecode/logs/ignore_check_file"),
+    (".vibecode/tmp/", ".vibecode/tmp/ignore_check_file"),
+    (".vibecode/cache/", ".vibecode/cache/ignore_check_file"),
+    (".vibecode/index/*.generated.*", ".vibecode/index/check.generated.md"),
+)
+
+
+def _git_check_ignored(root: Path, test_path: str) -> bool:
+    """Return True if *test_path* would be ignored by git's exclude rules."""
+    try:
+        result = subprocess.run(
+            ["git", "check-ignore", "--no-index", test_path],
+            cwd=root,
+            capture_output=True,
+            text=True,
+            timeout=5,
+            check=False,
+        )
+        return result.returncode == 0
+    except (OSError, subprocess.SubprocessError):
+        return False
+
+
+def _git_is_tracked(root: Path, test_path: str) -> bool:
+    """Return True if *test_path* is tracked in the git index."""
+    try:
+        result = subprocess.run(
+            ["git", "ls-files", "--error-unmatch", test_path],
+            cwd=root,
+            capture_output=True,
+            text=True,
+            timeout=5,
+            check=False,
+        )
+        return result.returncode == 0
+    except (OSError, subprocess.SubprocessError):
+        return False
+
+
+def _verify_gitignore_policy(
+    root: Path, git_state: GitState | None
+) -> list[RunPlanWarning]:
+    """Verify critical generated/runtime paths are git-ignored and not tracked.
+
+    Returns a list of ``RunPlanWarning`` errors for any unsafe paths.
+    """
+    errors: list[RunPlanWarning] = []
+
+    if git_state is None or not git_state.is_git_repo:
+        return errors
+
+    for display_name, test_path in _CRITICAL_IGNORE_CHECKS:
+        if _git_is_tracked(root, test_path):
+            errors.append(
+                RunPlanWarning(
+                    "error",
+                    f"Critical generated/runtime path '{display_name}' is tracked by git. "
+                    "Remove it with 'git rm --cached' and ensure .gitignore covers it.",
+                )
+            )
+            continue
+
+        if not _git_check_ignored(root, test_path):
+            errors.append(
+                RunPlanWarning(
+                    "error",
+                    f"Critical generated/runtime path '{display_name}' is not git-ignored. "
+                    "Add it to .gitignore.",
+                )
+            )
+
+    return errors
 
 
 @dataclass(frozen=True)
@@ -246,7 +327,12 @@ def build_run_plan(
                 f"OpenCode not available: {opencode_status.message}",
             ))
 
-    # --- 7. Assemble commands that would be run ----------------------------
+    # --- 7. Gitignore policy check ------------------------------------------
+    if git_state and git_state.is_git_repo:
+        ignore_errors = _verify_gitignore_policy(root, git_state)
+        errors.extend(ignore_errors)
+
+    # --- 8. Assemble commands that would be run ----------------------------
     commands: list[str] = []
     if dirty and not allow_dirty:
         commands.append("# Repo is dirty — commit or stash changes first for a clean run.")
@@ -318,7 +404,7 @@ def render_run_plan(plan: RunPlan) -> str:
     lines.append(f"  OpenCode prompt:    {plan.opencode_prompt_path or '(not available)'}")
 
     if plan.opencode_available is False:
-        lines.append(f"  OpenCode status:    NOT AVAILABLE")
+        lines.append("  OpenCode status:    NOT AVAILABLE")
         if plan.opencode_message:
             lines.append(f"                    {plan.opencode_message}")
 

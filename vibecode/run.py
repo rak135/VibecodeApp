@@ -478,6 +478,16 @@ def cmd_run(args) -> int:
 
     run_plan = build_run_plan(root, task=task, platform=platform, profile_name=profile_name, allow_dirty=allow_dirty)
 
+    if run_plan.preflight_errors:
+        for e in run_plan.preflight_errors:
+            print(f"Error: [{e.level}] {e.message}", file=sys.stderr)
+        _write_run_metadata(
+            vibecode_dir, session_id, run_plan,
+            command=command, exit_code=-1, stdout="", stderr="Preflight errors detected.",
+            error="Preflight errors: " + "; ".join(e.message for e in run_plan.preflight_errors),
+        )
+        return 1
+
     try:
         pre_agent_git_state = inspect_git_state(root)
     except Exception as exc:

@@ -59,6 +59,16 @@ def _commit_all(repo: Path) -> None:
 def _minimal_vibecode(repo: Path) -> None:
     """Write the minimal .vibecode/project.yaml and index for a valid repo."""
     _write(
+        repo / ".gitignore",
+        ".vibecode/current/\n"
+        ".vibecode/generated/\n"
+        ".vibecode/runs/\n"
+        ".vibecode/tmp/\n"
+        ".vibecode/cache/\n"
+        ".vibecode/logs/\n"
+        ".vibecode/index/*.generated.*\n",
+    )
+    _write(
         repo / ".vibecode" / "project.yaml",
         "project:\n"
         "  id: testproject\n"
@@ -555,6 +565,33 @@ class TestRunPlanCLI:
 
         assert "safe" in out.lower()
 
+    @patch("vibecode.adapters.opencode.shutil.which", return_value=None)
+    def test_run_plan_reports_gitignore_issues(self, _which, tmp_path, capsys):
+        _init_repo(tmp_path)
+        _write(tmp_path / "app.py", "x = 1\n")
+        _write(
+            tmp_path / ".vibecode" / "project.yaml",
+            "project:\n  id: test\n  name: Test\n  root: .\n"
+            "indexing:\n  include: []\n  exclude: []\n  protected_paths: []\n"
+            "  risk_rules: []\n",
+        )
+        _write(
+            tmp_path / ".vibecode" / "current" / "last_index.json",
+            json.dumps({
+                "project_id": "test",
+                "root": str(tmp_path),
+                "started_at": "2026-01-15T10:00:00+00:00",
+                "counts": {},
+            }),
+        )
+        _commit_all(tmp_path)
+
+        rc = main(["run-plan", str(tmp_path), "--task", "test"])
+        out = capsys.readouterr().out
+
+        assert rc == 1
+        assert "git-ignored" in out
+
 
 # ---------------------------------------------------------------------------
 # build_run_plan — permission profile integration
@@ -863,3 +900,129 @@ class TestRunPlanOpenCodeFields:
         )
         assert plan.opencode_available is True
         assert plan.opencode_message == "OpenCode 1.0.0"
+
+
+# ---------------------------------------------------------------------------
+# build_run_plan — gitignore policy verification
+# ---------------------------------------------------------------------------
+
+
+class TestBuildRunPlanGitignorePolicy:
+    """Tests for gitignore policy verification in build_run_plan."""
+
+    def test_missing_gitignore_entries_produce_errors(self, tmp_path: Path):
+        _init_repo(tmp_path)
+        _write(tmp_path / "app.py", "x = 1\n")
+        _commit_all(tmp_path)
+        _write(
+            tmp_path / ".vibecode" / "project.yaml",
+            "project:\n  id: test\n  name: Test\n  root: .\n"
+            "indexing:\n  include: []\n  exclude: []\n  protected_paths: []\n"
+            "  risk_rules: []\n",
+        )
+        _write(
+            tmp_path / ".vibecode" / "current" / "last_index.json",
+            json.dumps({
+                "project_id": "test",
+                "root": str(tmp_path),
+                "started_at": "2026-01-15T10:00:00+00:00",
+                "counts": {},
+            }),
+        )
+        _commit_all(tmp_path)
+
+        plan = build_run_plan(tmp_path, task="test", platform="opencode")
+
+        gitignore_errors = [
+            e for e in plan.preflight_errors
+            if "git-ignored" in e.message or "tracked by git" in e.message
+        ]
+        assert len(gitignore_errors) >= 1
+
+    def test_partial_gitignore_coverage_produces_errors(self, tmp_path: Path):
+        _init_repo(tmp_path)
+        _write(tmp_path / "app.py", "x = 1\n")
+        _commit_all(tmp_path)
+        _write(
+            tmp_path / ".gitignore",
+            ".vibecode/current/\n"
+            ".vibecode/runs/\n",
+        )
+        _write(
+            tmp_path / ".vibecode" / "project.yaml",
+            "project:\n  id: test\n  name: Test\n  root: .\n"
+            "indexing:\n  include: []\n  exclude: []\n  protected_paths: []\n"
+            "  risk_rules: []\n",
+        )
+        _write(
+            tmp_path / ".vibecode" / "current" / "last_index.json",
+            json.dumps({
+                "project_id": "test",
+                "root": str(tmp_path),
+                "started_at": "2026-01-15T10:00:00+00:00",
+                "counts": {},
+            }),
+        )
+        _commit_all(tmp_path)
+
+        plan = build_run_plan(tmp_path, task="test", platform="opencode")
+
+        gitignore_errors = [
+            e for e in plan.preflight_errors
+            if "git-ignored" in e.message
+        ]
+        assert len(gitignore_errors) >= 1
+
+    def test_full_gitignore_coverage_no_errors(self, tmp_path: Path):
+        _init_repo(tmp_path)
+        _minimal_vibecode(tmp_path)
+        _write(tmp_path / "app.py", "x = 1\n")
+        _commit_all(tmp_path)
+
+        plan = build_run_plan(tmp_path, task="test", platform="opencode")
+
+        gitignore_errors = [
+            e for e in plan.preflight_errors
+            if "git-ignored" in e.message or "tracked by git" in e.message
+        ]
+        assert len(gitignore_errors) == 0
+
+    def test_tracked_runtime_path_produces_error(self, tmp_path: Path):
+        _init_repo(tmp_path)
+        _write(
+            tmp_path / ".vibecode" / "project.yaml",
+            "project:\n  id: test\n  name: Test\n  root: .\n"
+            "indexing:\n  include: []\n  exclude: []\n  protected_paths: []\n"
+            "  risk_rules: []\n",
+        )
+        # Track the sentinel path used by the gitignore check
+        _write(tmp_path / ".vibecode" / "runs" / "ignore_check_file", "x")
+        _git(tmp_path, "add", ".vibecode/runs/ignore_check_file")
+        _git(tmp_path, "commit", "-m", "tracked runtime sentinel")
+        # Now add .gitignore that covers the directory
+        _write(
+            tmp_path / ".gitignore",
+            ".vibecode/runs/\n",
+        )
+
+        plan = build_run_plan(tmp_path, task="test", platform="opencode")
+
+        tracked_errors = [
+            e for e in plan.preflight_errors
+            if "tracked by git" in e.message and "runs" in e.message
+        ]
+        assert len(tracked_errors) >= 1
+
+    def test_non_git_dir_skips_gitignore_check(self, tmp_path: Path):
+        _write(
+            tmp_path / ".vibecode" / "project.yaml",
+            "project:\n  id: test\n  name: Test\n  root: .\n",
+        )
+
+        plan = build_run_plan(tmp_path, task="test", platform="opencode")
+
+        gitignore_errors = [
+            e for e in plan.preflight_errors
+            if "git-ignored" in e.message or "tracked by git" in e.message
+        ]
+        assert len(gitignore_errors) == 0

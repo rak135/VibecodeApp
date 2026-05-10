@@ -245,7 +245,7 @@
     {
       "title": "Add generated/runtime ignore verification to run preflight",
       "description": "Purpose: make `vibecode run` safer before launching an external agent. One audit found that run preflight does not explicitly verify generated/runtime ignore rules. If generated/runtime outputs are not ignored, a run can pollute git state or confuse guard baselines.\n\nScope: Work in `vibecode/run.py`, `vibecode/run_plan.py`, and tests such as `tests/test_vibecode_run.py` or `tests/test_vibecode_run_plan.py`. Do not change OpenCode invocation semantics except preflight failure/warning behavior.\n\nRequired behavior: before launching external OpenCode, preflight should verify that critical generated/runtime paths are ignored or at least not tracked: `.vibecode/current/`, `.vibecode/generated/`, `.vibecode/runs/`, `.vibecode/logs/`, `.vibecode/tmp/`, `.vibecode/cache/`, and `.vibecode/index/*.generated.*`. If ignore policy is missing or unsafe, run should fail or produce a hard preflight error before launching the external command. `run-plan` should surface the same issue without launching.\n\nTesting: use temp repos with intentionally missing `.gitignore` entries to prove preflight catches the problem. Tests must not require real OpenCode.\n\nAcceptance criteria: unsafe ignore setup is caught before external process launch; safe setup passes; run-plan reports the same preflight status; generated/runtime outputs remain untracked.\n\nVerification commands: `python -m pytest tests/test_vibecode_run.py tests/test_vibecode_run_plan.py -p no:cacheprovider`; `python -m pytest -p no:cacheprovider`.",
-      "completed": false
+      "completed": true
     },
     {
       "title": "Clarify and optionally harden shell command execution model",
