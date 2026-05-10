@@ -71,6 +71,17 @@ def _commit_all(repo: Path) -> None:
     _git(repo, "commit", "-m", "init")
 
 
+def _write_file_inventory(repo: Path) -> None:
+    """Write a minimal file_inventory.json so inventory health checks pass."""
+    _write(
+        repo / ".vibecode" / "index" / "file_inventory.json",
+        json.dumps({
+            "$schema": "vibecode/file-inventory/v1",
+            "files": [{"path": "test.py", "size": 100}],
+        }),
+    )
+
+
 def _minimal_vibecode(repo: Path) -> None:
     """Write the minimal .vibecode/project.yaml and index for a valid repo."""
     _write(
@@ -111,6 +122,7 @@ def _minimal_vibecode(repo: Path) -> None:
             }
         ),
     )
+    _write_file_inventory(repo)
     for name, data in PROFILES.items():
         _write(
             repo / ".vibecode" / "agents" / f"{name}.json",

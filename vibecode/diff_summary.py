@@ -11,12 +11,12 @@ from pathlib import Path, PurePosixPath
 from typing import Iterable
 
 from vibecode.git_state import GitState, StatusPath
-from vibecode.guard import (
-    _is_documentation_path,
-    _is_generated_runtime_path,
-    _is_source_path,
-    _is_test_path,
-    _normalise_path,
+from vibecode.paths import (
+    is_documentation_path,
+    is_generated_runtime_path,
+    is_source_path,
+    is_test_path,
+    normalise_path,
 )
 
 
@@ -149,9 +149,9 @@ class DiffSummary:
         return "\n".join(lines)
 
 
-def _categorise_path(path: str) -> str:
+def categorise_path(path: str) -> str:
     """Categorise a single path into source/test/docs/generated/config/other."""
-    if _is_generated_runtime_path(path):
+    if is_generated_runtime_path(path):
         return "generated"
 
     suffix = PurePosixPath(path).suffix.lower()
@@ -163,15 +163,15 @@ def _categorise_path(path: str) -> str:
         return "config"
 
     # Source
-    if _is_source_path(path):
+    if is_source_path(path):
         return "source"
 
     # Test
-    if _is_test_path(path):
+    if is_test_path(path):
         return "test"
 
     # Documentation
-    if _is_documentation_path(path):
+    if is_documentation_path(path):
         return "docs"
 
     return "other"
@@ -233,15 +233,15 @@ def diff_summarise(
     pre_changed: set[str] = set()
     if pre_state is not None:
         pre_changed = set(
-            _normalise_path(p) for p in pre_state.changed_paths
-        ) | set(_normalise_path(p) for p in pre_state.untracked_paths)
+            normalise_path(p) for p in pre_state.changed_paths
+        ) | set(normalise_path(p) for p in pre_state.untracked_paths)
 
     # Collect the post-change state
     post_changed_paths: list[str] = []
     post_status_paths: dict[str, StatusPath] = {}
     if post_state is not None:
         for sp in post_state.status_paths:
-            norm = _normalise_path(sp.path)
+            norm = normalise_path(sp.path)
             post_changed_paths.append(norm)
             post_status_paths[norm] = sp
 
@@ -282,7 +282,7 @@ def diff_summarise(
                 status = "modified"
                 modified.append(path)
 
-            category = _categorise_path(path)
+            category = categorise_path(path)
             changed.append(FileChange(path=path, status=status, category=category))
 
     # Categorise by domain

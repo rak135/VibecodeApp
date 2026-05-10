@@ -299,6 +299,17 @@ def test_dedupe_findings_keeps_distinct():
     assert len(result) == 2
 
 
+def test_dedupe_findings_keeps_distinct_rules_same_path():
+    f1 = GuardFinding(
+        rule_id="rule-a", path="foo.py", severity="error", message="msg1"
+    )
+    f2 = GuardFinding(
+        rule_id="rule-b", path="foo.py", severity="error", message="msg2"
+    )
+    result = _dedupe_findings((f1, f2))
+    assert len(result) == 2
+
+
 # ---------------------------------------------------------------------------
 # Helpers
 # ---------------------------------------------------------------------------

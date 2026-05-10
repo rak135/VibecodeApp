@@ -23,6 +23,7 @@ def write_run_record(
     timestamp: str,
     validation: dict | None = None,
     git_commit: str | None = None,
+    file_set_fingerprint: str | None = None,
 ) -> tuple[Path, Path]:
     """Persist the run record to ``current/last_index.json`` and ``logs/index_runs/<timestamp>.json``.
 
@@ -43,6 +44,8 @@ def write_run_record(
         record["validation"] = validation
     if git_commit is not None:
         record["git_commit"] = git_commit
+    if file_set_fingerprint is not None:
+        record["file_set_fingerprint"] = file_set_fingerprint
     serialized = json.dumps(record, indent=2, ensure_ascii=False) + "\n"
 
     current_path = vibecode_dir / "current" / "last_index.json"

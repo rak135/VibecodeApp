@@ -17,6 +17,7 @@ from typing import Any
 from vibecode.adapters.opencode import check_opencode
 from vibecode.config import load_config
 from vibecode.git_state import GitState, current_git_commit, inspect_git_state
+from vibecode.indexer import check_inventory_health, compute_current_file_set_fingerprint
 
 
 @dataclass(frozen=True)
@@ -263,6 +264,20 @@ def build_run_plan(
                         ))
                         index_fresh = False
 
+            # Compare file-set fingerprint (detects added/removed files
+            # even without a new commit).
+            if index_fresh:
+                recorded_fingerprint = record.get("file_set_fingerprint")
+                if recorded_fingerprint:
+                    current_fingerprint = compute_current_file_set_fingerprint(root)
+                    if current_fingerprint is not None and current_fingerprint != recorded_fingerprint:
+                        warnings.append(RunPlanWarning(
+                            "warn",
+                            "Indexed file set has changed since the last index "
+                            "— run 'vibecode index' to refresh.",
+                        ))
+                        index_fresh = False
+
             # If dirty, index may be stale
             if dirty and index_age_seconds is not None and index_age_seconds > 0:
                 warnings.append(RunPlanWarning(
@@ -280,7 +295,12 @@ def build_run_plan(
             "No index found — run 'vibecode index' before running an agent.",
         ))
 
-    # --- 4. Context pack path -----------------------------------------------
+    # --- 4. Inventory health check ------------------------------------------
+    inventory_err = check_inventory_health(root)
+    if inventory_err:
+        errors.append(RunPlanWarning("error", inventory_err))
+
+    # --- 5. Context pack path -----------------------------------------------
     context_pack_path: str | None = None
     opencode_prompt_path: str | None = None
 
@@ -291,7 +311,7 @@ def build_run_plan(
                 vibecode_dir / "current" / "opencode_prompt.md"
             )
 
-    # --- 5. Permission profile ----------------------------------------------
+    # --- 6. Permission profile ----------------------------------------------
     profile_name = profile_name or "safe"
     profile_file = vibecode_dir / "agents" / f"{profile_name}.json"
     permission_profile: str | None = None

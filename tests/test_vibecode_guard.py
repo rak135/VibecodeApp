@@ -108,9 +108,12 @@ def test_evaluate_guard_consumes_git_state_changed_paths():
     result = evaluate_guard(state, task="update app")
 
     assert result.passed is False
-    assert tuple(finding.path for finding in result.findings) == (
-        ".vibecode/index/repo_tree.generated.md",
-    )
+    finding_paths = tuple(finding.path for finding in result.findings)
+    # The file triggers both generated-runtime and protected-path rules.
+    assert ".vibecode/index/repo_tree.generated.md" in finding_paths
+    # Two distinct rule_ids on the same path should both be reported.
+    rule_ids = tuple(finding.rule_id for finding in result.findings if finding.path == ".vibecode/index/repo_tree.generated.md")
+    assert len(rule_ids) >= 2
 
 
 def test_source_only_change_warns_with_suggested_tests():

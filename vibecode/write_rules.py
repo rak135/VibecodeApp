@@ -18,6 +18,7 @@ from pathlib import Path
 HUMAN_MAINTAINED_PATHS: frozenset[str] = frozenset({
     ".vibecode/project.yaml",
     ".vibecode/checks/required_checks.yaml",
+    ".vibecode/checks/protected_paths.yaml",
     ".vibecode/architecture/OVERVIEW.md",
     ".vibecode/architecture/INVARIANTS.md",
     ".vibecode/architecture/STRUCTURE.md",
@@ -28,6 +29,8 @@ HUMAN_MAINTAINED_PATHS: frozenset[str] = frozenset({
     ".vibecode/handoff/NEXT.md",
     ".vibecode/handoff/BLOCKERS.md",
     ".vibecode/history/README.md",
+    ".vibecode/index/README.md",
+    ".vibecode/index/schema.json",
     ".vibecode/agents/safe.json",
     ".vibecode/agents/fast.json",
     ".vibecode/agents/audit.json",

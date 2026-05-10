@@ -28,10 +28,10 @@ from vibecode.check import CheckRun, run_checks, write_check_results
 from vibecode.config import load_config
 from vibecode.context import cmd_context
 from vibecode.diff_summary import DiffSummary, diff_summarise
-from vibecode.guard import GuardResult, evaluate_project_guard, write_guard_result
+from vibecode.guard import GuardResult, _load_test_map, evaluate_project_guard, write_guard_result
 from vibecode.git_state import GitState, current_git_commit, inspect_git_state
 from vibecode.handoff import HandoffResult, validate_handoff_files
-from vibecode.indexer import cmd_index
+from vibecode.indexer import check_inventory_health, cmd_index
 from vibecode.permissions import PROFILES, profile_path
 from vibecode.run_plan import build_run_plan
 
@@ -290,7 +290,8 @@ def _run_post_checks(
     # --- Post-check 1: Guard ---
     try:
         if git_state and git_state.is_git_repo:
-            guard_result = evaluate_project_guard(git_state, vibecode_dir, task=task)
+            test_map = _load_test_map(vibecode_dir)
+            guard_result = evaluate_project_guard(git_state, vibecode_dir, task=task, test_map=test_map)
             try:
                 write_guard_result(guard_result, vibecode_dir, root)
             except Exception:
@@ -411,6 +412,12 @@ def cmd_run(args) -> int:
 
     if not index_path.exists():
         print("Error: no index found.  Run 'vibecode index' first.", file=sys.stderr)
+        return 1
+
+    # Verify inventory health — fail early if inventory is broken.
+    inventory_err = check_inventory_health(root)
+    if inventory_err:
+        print(f"Error: {inventory_err}", file=sys.stderr)
         return 1
 
     # ------------------------------------------------------------------

@@ -46,6 +46,15 @@ def test_human_maintained_paths_contains_handoff_files():
     assert ".vibecode/handoff/BLOCKERS.md" in HUMAN_MAINTAINED_PATHS
 
 
+def test_human_maintained_paths_contains_protected_paths_policy():
+    assert ".vibecode/checks/protected_paths.yaml" in HUMAN_MAINTAINED_PATHS
+
+
+def test_human_maintained_paths_contains_index_policy():
+    assert ".vibecode/index/README.md" in HUMAN_MAINTAINED_PATHS
+    assert ".vibecode/index/schema.json" in HUMAN_MAINTAINED_PATHS
+
+
 def test_generated_path_prefixes_is_tuple():
     assert isinstance(GENERATED_PATH_PREFIXES, tuple)
 
@@ -75,8 +84,18 @@ def test_generated_path_prefixes_covers_cache():
 
 
 def test_human_maintained_paths_not_in_generated_prefixes():
-    """No human-maintained path may start with a generated prefix."""
+    """No human-maintained path may start with a generated prefix.
+
+    Exception: committed policy files under .vibecode/index/ that are
+    intentionally human-maintained (README.md, schema.json).
+    """
+    _COMMITTED_INDEX_EXCEPTIONS: frozenset[str] = frozenset({
+        ".vibecode/index/README.md",
+        ".vibecode/index/schema.json",
+    })
     for rel in HUMAN_MAINTAINED_PATHS:
+        if rel in _COMMITTED_INDEX_EXCEPTIONS:
+            continue
         assert not rel.startswith(GENERATED_PATH_PREFIXES), (
             f"Human-maintained path '{rel}' lives under a generated prefix."
         )
@@ -250,3 +269,48 @@ def test_index_does_not_overwrite_any_human_maintained_file(tmp_path):
     for rel, original in snapshots.items():
         current = (tmp_path / Path(rel)).read_text(encoding="utf-8")
         assert current == original, f"index modified human-maintained file: {rel}"
+
+
+# ---------------------------------------------------------------------------
+# Drift detection: init-created files must be in HUMAN_MAINTAINED_PATHS
+# ---------------------------------------------------------------------------
+
+
+def test_init_created_files_covered_by_write_rules(tmp_path):
+    """Every file created by ``vibecode init`` that should be human-maintained
+    must be listed in HUMAN_MAINTAINED_PATHS.  This test catches drift when
+    new template files are added without updating the allowlist."""
+    assert main(["init", str(tmp_path), "--id", "proj", "--name", "Proj"]) == 0
+
+    # Files that vibecode init creates.
+    files_created_by_init = {
+        ".vibecode/project.yaml",
+        ".vibecode/checks/required_checks.yaml",
+        ".vibecode/checks/protected_paths.yaml",
+        ".vibecode/architecture/OVERVIEW.md",
+        ".vibecode/architecture/INVARIANTS.md",
+        ".vibecode/architecture/STRUCTURE.md",
+        ".vibecode/architecture/MODULE_BOUNDARIES.md",
+        ".vibecode/architecture/PROTECTED_AREAS.md",
+        ".vibecode/architecture/DATA_FLOW.md",
+        ".vibecode/handoff/NOW.md",
+        ".vibecode/handoff/NEXT.md",
+        ".vibecode/handoff/BLOCKERS.md",
+        ".vibecode/history/README.md",
+        ".vibecode/agents/safe.json",
+        ".vibecode/agents/fast.json",
+        ".vibecode/agents/audit.json",
+    }
+
+    missing = files_created_by_init - HUMAN_MAINTAINED_PATHS
+    assert not missing, (
+        f"Files created by init but missing from HUMAN_MAINTAINED_PATHS: {missing}"
+    )
+
+    # Also verify they exist on disk and are recognised.
+    for rel in files_created_by_init:
+        path = tmp_path / Path(rel)
+        assert path.exists(), f"init did not create {rel}"
+        assert is_human_maintained(path, tmp_path) is True, (
+            f"is_human_maintained returned False for {rel}"
+        )

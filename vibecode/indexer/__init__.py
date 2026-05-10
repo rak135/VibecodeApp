@@ -2,9 +2,10 @@
 
 from __future__ import annotations
 
-import sys
+import hashlib
 import json
 import subprocess
+import sys
 from datetime import datetime, timezone
 from pathlib import Path
 
@@ -105,6 +106,16 @@ def check_index_freshness(
                 "Index was built for commit {recorded_commit}, "
                 "but HEAD is now {current_commit} -- re-index."
             ).format(recorded_commit=recorded_commit, current_commit=current_commit)
+
+    # Check file-set fingerprint against current inventory.
+    recorded_fingerprint = record.get("file_set_fingerprint")
+    if recorded_fingerprint:
+        current_fingerprint = compute_current_file_set_fingerprint(repo_root)
+        if current_fingerprint is not None and current_fingerprint != recorded_fingerprint:
+            return False, (
+                "Indexed file set has changed since the last index "
+                "-- run 'vibecode index' to refresh."
+            )
 
     return True, "fresh"
 def cmd_index(args) -> int:
@@ -232,6 +243,8 @@ def cmd_index(args) -> int:
         warnings=warnings,
         errors=errors,
     )
+    # Compute file-set fingerprint for stale-index detection.
+    file_set_fingerprint = _compute_file_set_fingerprint(files)
     finished_at = datetime.now(tz=timezone.utc)
 
     current_path, run_path = write_run_record(
@@ -246,6 +259,7 @@ def cmd_index(args) -> int:
         timestamp=timestamp,
         validation=validation_report,
         git_commit=_git_commit(repo_root),
+        file_set_fingerprint=file_set_fingerprint,
     )
     print(f"  last index written to {current_path.relative_to(repo_root).as_posix()}", file=sys.stderr)
     print(f"  run record written to {run_path.relative_to(repo_root).as_posix()}", file=sys.stderr)
@@ -332,6 +346,113 @@ def _print_validation_summary(report: dict) -> None:
         f" {summary.get('errors', 0)} ERROR",
         file=sys.stderr,
     )
+
+
+_FINGERPRINT_EXCLUDED_PREFIXES: tuple[str, ...] = (
+    ".vibecode/current/",
+    ".vibecode/generated/",
+    ".vibecode/logs/",
+    ".vibecode/runs/",
+    ".vibecode/tmp/",
+    ".vibecode/cache/",
+    ".ralphy/",
+    ".ralph/",
+)
+_FINGERPRINT_EXCLUDED_PARTS: frozenset[str] = frozenset({
+    ".git", "node_modules", "__pycache__", ".venv", "venv",
+    "dist", "build", ".pytest_cache", ".mypy_cache", ".ruff_cache",
+})
+
+
+def _compute_file_set_fingerprint(files: list[IndexedFile]) -> str:
+    """Deterministic hash of indexed file paths for stale-index detection.
+
+    Excludes generated/runtime and vendor paths so they don't change
+    the fingerprint.
+    """
+    paths: list[str] = []
+    for f in files:
+        p = f.path.replace("\\", "/")
+        if any(p.startswith(prefix) for prefix in _FINGERPRINT_EXCLUDED_PREFIXES):
+            continue
+        parts = set(p.split("/"))
+        if parts & _FINGERPRINT_EXCLUDED_PARTS:
+            continue
+        paths.append(p)
+    paths.sort()
+    h = hashlib.sha256()
+    for p in paths:
+        h.update(p.encode("utf-8"))
+        h.update(b"\n")
+    return h.hexdigest()
+
+
+def compute_current_file_set_fingerprint(repo_root: Path) -> str | None:
+    """Compute a lightweight fingerprint of the current relevant file set.
+
+    Used by freshness checks after indexing to detect added/removed
+    source files even before the next commit.  Returns None when the
+    fingerprint cannot be determined (e.g. missing inventory).
+    """
+    inventory_path = repo_root / ".vibecode" / "index" / "file_inventory.json"
+    if not inventory_path.is_file():
+        return None
+    try:
+        data = json.loads(inventory_path.read_text(encoding="utf-8"))
+    except (OSError, json.JSONDecodeError):
+        return None
+    files = data.get("files") or []
+    if not isinstance(files, list):
+        return None
+    # Re-use the same fingerprint logic by constructing lightweight IndexedFile
+    # lookalikes from the inventory paths.
+    inventory_paths: list[str] = []
+    for entry in files:
+        raw = entry.get("path") if isinstance(entry, dict) else str(entry)
+        p = raw.replace("\\", "/")
+        if any(p.startswith(prefix) for prefix in _FINGERPRINT_EXCLUDED_PREFIXES):
+            continue
+        parts = set(p.split("/"))
+        if parts & _FINGERPRINT_EXCLUDED_PARTS:
+            continue
+        inventory_paths.append(p)
+    inventory_paths.sort()
+    h = hashlib.sha256()
+    for p in inventory_paths:
+        h.update(p.encode("utf-8"))
+        h.update(b"\n")
+    return h.hexdigest()
+
+
+_INVENTORY_REL_PATH = ".vibecode/index/file_inventory.json"
+
+
+def check_inventory_health(repo_root: Path) -> str | None:
+    """Return an error message if the file inventory is missing/invalid/empty.
+
+    Returns ``None`` when the inventory is healthy (exists, valid JSON,
+    contains at least one file entry).
+    """
+    inventory_path = repo_root / _INVENTORY_REL_PATH
+    if not inventory_path.is_file():
+        return (
+            f"File inventory not found at {_INVENTORY_REL_PATH}. "
+            "Run 'vibecode index <repo>' to generate it."
+        )
+    try:
+        data = json.loads(inventory_path.read_text(encoding="utf-8"))
+    except (json.JSONDecodeError, OSError) as exc:
+        return f"File inventory is not valid JSON: {exc}"
+    files = data.get("files") if isinstance(data, dict) else None
+    if not isinstance(files, list):
+        return "File inventory has no 'files' list."
+    if not files:
+        return (
+            "File inventory is empty. "
+            "Check include/exclude patterns in .vibecode/project.yaml "
+            "and run 'vibecode index' again."
+        )
+    return None
 
 
 def _git_commit(repo_root: Path) -> str:

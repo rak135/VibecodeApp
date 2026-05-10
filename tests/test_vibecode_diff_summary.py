@@ -18,7 +18,6 @@ from vibecode.diff_summary import (
     diff_summarise,
 )
 from vibecode.git_state import GitState, StatusPath
-from vibecode.guard import _is_generated_runtime_path, _is_source_path, _is_test_path
 
 
 # ---------------------------------------------------------------------------

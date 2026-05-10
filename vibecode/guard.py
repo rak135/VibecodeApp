@@ -11,7 +11,15 @@ from pathlib import Path, PurePosixPath
 
 from vibecode.config import DEFAULT_PROTECTED_PATH_RULES, ProtectedPathRule, load_config
 from vibecode.git_state import GitState, inspect_git_state
-from vibecode.paths import strip_to_posix
+from vibecode.paths import (
+    is_architecture_truth_path,
+    is_documentation_path,
+    is_generated_runtime_path,
+    is_source_path,
+    is_test_path,
+    normalise_path,
+    strip_to_posix,
+)
 
 
 GENERATED_RUNTIME_RULE_ID = "generated-runtime-files"
@@ -35,33 +43,8 @@ README_ALLOWED_GENERATED_BLOCK_MARKERS: tuple[tuple[str, str], ...] = (
     ),
 )
 
-_GENERATED_RUNTIME_PREFIXES: tuple[str, ...] = (
-    ".vibecode/current/",
-    ".vibecode/generated/",
-    ".vibecode/logs/",
-    ".vibecode/runs/",
-    ".vibecode/tmp/",
-    ".vibecode/cache/",
-)
-_SOURCE_EXTENSIONS: frozenset[str] = frozenset({
-    ".py",
-    ".pyi",
-    ".js",
-    ".jsx",
-    ".ts",
-    ".tsx",
-})
-_DOC_EXTENSIONS: frozenset[str] = frozenset({".md", ".mdx", ".rst", ".txt", ".adoc"})
-_TS_TEST_SUFFIXES: tuple[str, ...] = (
-    ".test.ts",
-    ".test.tsx",
-    ".spec.ts",
-    ".spec.tsx",
-    ".test.js",
-    ".test.jsx",
-    ".spec.js",
-    ".spec.jsx",
-)
+# Classification constants are now in vibecode.paths - use public helpers
+# is_generated_runtime_path, is_source_path, is_test_path, is_documentation_path.
 
 
 @dataclass(frozen=True)
@@ -220,14 +203,14 @@ def check_source_test_change_balance(
 
     paths = tuple(
         path
-        for path in (_normalise_path(raw_path) for raw_path in changed_paths)
-        if path and not _is_generated_runtime_path(path)
+        for path in (normalise_path(raw_path) for raw_path in changed_paths)
+        if path and not is_generated_runtime_path(path)
     )
     if not paths:
         return GuardResult()
 
-    source_paths = tuple(path for path in paths if _is_source_path(path))
-    test_paths = tuple(path for path in paths if _is_test_path(path))
+    source_paths = tuple(path for path in paths if is_source_path(path))
+    test_paths = tuple(path for path in paths if is_test_path(path))
     if not source_paths and not test_paths:
         return GuardResult()
     if test_paths and not source_paths:
@@ -307,14 +290,14 @@ def check_protected_path_changes(
     findings: list[GuardFinding] = []
 
     for raw_path in changed_paths:
-        path = _normalise_path(raw_path)
+        path = normalise_path(raw_path)
         if not path:
             continue
         for rule in protected_rules:
-            policy_path = _normalise_path(rule.path)
+            policy_path = normalise_path(rule.path)
             if not _path_matches_rule(path, policy_path):
                 continue
-            if _is_generated_runtime_path(path):
+            if is_generated_runtime_path(path):
                 if task_allows_generator_files and path in allowed_uncommitted_paths:
                     continue
                 findings.append(_generated_policy_finding(path, rule))
@@ -343,8 +326,8 @@ def check_generated_runtime_changes(
 
     findings = []
     for raw_path in changed_paths:
-        path = _normalise_path(raw_path)
-        if not path or not _is_generated_runtime_path(path):
+        path = normalise_path(raw_path)
+        if not path or not is_generated_runtime_path(path):
             continue
         if task_allows_generator_files and path in allowed_uncommitted_paths:
             continue
@@ -380,7 +363,7 @@ def check_readme_changes(
 
     findings = []
     for raw_path in changed_paths:
-        path = _normalise_path(raw_path)
+        path = normalise_path(raw_path)
         if path != "README.md":
             continue
         findings.append(
@@ -418,10 +401,10 @@ def check_architecture_truth_recorded(
 
     paths = tuple(
         path
-        for path in (_normalise_path(raw_path) for raw_path in changed_paths)
+        for path in (normalise_path(raw_path) for raw_path in changed_paths)
         if path
     )
-    architecture_paths = tuple(path for path in paths if _is_architecture_doc_path(path))
+    architecture_paths = tuple(path for path in paths if is_architecture_truth_path(path))
     if not architecture_paths or _has_architecture_truth_record(paths):
         return GuardResult()
 
@@ -502,15 +485,6 @@ def _protected_path_note(
     )
 
 
-def _is_generated_runtime_path(path: str) -> bool:
-    if path.startswith(_GENERATED_RUNTIME_PREFIXES):
-        return True
-    if not path.startswith(".vibecode/index/"):
-        return False
-    name = path.removeprefix(".vibecode/index/")
-    return "/" not in name and ".generated." in name
-
-
 def _path_matches_rule(path: str, rule_path: str) -> bool:
     if not rule_path:
         return False
@@ -533,41 +507,6 @@ def _requires_handoff_explanation(policy_path: str) -> bool:
     ))
 
 
-def _is_architecture_doc_path(path: str) -> bool:
-    if not path.startswith(".vibecode/architecture/") or not path.endswith(".md"):
-        return False
-    return "/" not in path.removeprefix(".vibecode/architecture/")
-
-
-def _is_source_path(path: str) -> bool:
-    if _is_test_path(path) or _is_documentation_path(path):
-        return False
-    return PurePosixPath(path).suffix in _SOURCE_EXTENSIONS
-
-
-def _is_test_path(path: str) -> bool:
-    suffix = PurePosixPath(path).suffix
-    name = PurePosixPath(path).name
-    parts = path.split("/")
-    if suffix == ".py":
-        return (
-            name.startswith("test_")
-            or name.endswith("_test.py")
-            or "tests" in parts[:-1]
-        )
-    if suffix in {".js", ".jsx", ".ts", ".tsx"}:
-        return any(name.endswith(test_suffix) for test_suffix in _TS_TEST_SUFFIXES) or (
-            "__tests__" in parts[:-1]
-        )
-    return False
-
-
-def _is_documentation_path(path: str) -> bool:
-    if path == "README.md" or path.startswith("docs/"):
-        return True
-    return PurePosixPath(path).suffix in _DOC_EXTENSIONS
-
-
 def _has_architecture_truth_record(paths: tuple[str, ...]) -> bool:
     return any(
         path == ".vibecode/handoff/NOW.md"
@@ -584,7 +523,7 @@ def _task_mentions_scope(task: str, path: str, rule_path: str) -> bool:
     task_words = _words(task)
     if not task_words:
         return False
-    if _normalise_path(path).lower() in task.lower().replace("\\", "/"):
+    if normalise_path(path).lower() in task.lower().replace("\\", "/"):
         return True
     scope_words = _words(f"{path} {rule_path}") - {"vibecode", "py", "md", "yaml"}
     return bool(task_words & scope_words)
@@ -611,15 +550,15 @@ def _paired_tests_for_source(source_path: str, test_map: dict | None) -> tuple[s
     for rule in test_map.get("rules", []):
         if not isinstance(rule, dict):
             continue
-        pattern = _normalise_path(str(rule.get("path_pattern", "")))
+        pattern = normalise_path(str(rule.get("path_pattern", "")))
         if not pattern or pattern == "**" or not _path_matches_rule(source_path, pattern):
             continue
         checks = rule.get("required_checks", [])
         if not isinstance(checks, list):
             continue
         for check in checks:
-            path = _normalise_path(str(check))
-            if path and _is_test_path(path):
+            path = normalise_path(str(check))
+            if path and is_test_path(path):
                 matched.append(path)
     return tuple(_unique_paths(matched))
 
@@ -639,7 +578,7 @@ def _unique_paths(paths: tuple[str, ...] | list[str]) -> tuple[str, ...]:
     seen: set[str] = set()
     unique: list[str] = []
     for raw_path in paths:
-        path = _normalise_path(raw_path)
+        path = normalise_path(raw_path)
         if not path or path in seen:
             continue
         seen.add(path)
@@ -666,16 +605,25 @@ def _words(value: str) -> set[str]:
     return {word for word in translated.split() if word}
 
 
+def _load_test_map(vibecode_dir: Path) -> dict | None:
+    """Load the test_map.json index file if it exists and is valid."""
+    test_map_path = vibecode_dir / "index" / "test_map.json"
+    if not test_map_path.is_file():
+        return None
+    try:
+        data = json.loads(test_map_path.read_text(encoding="utf-8"))
+        if isinstance(data, dict):
+            return data
+    except (json.JSONDecodeError, OSError):
+        pass
+    return None
+
+
 def _dedupe_findings(findings: tuple[GuardFinding, ...]) -> tuple[GuardFinding, ...]:
     deduped: list[GuardFinding] = []
     seen: set[tuple[str, ...]] = set()
     for finding in findings:
-        key = (finding.severity, finding.path)
-        if finding.rule_id in {
-            ARCHITECTURE_TRUTH_RECORD_RULE_ID,
-            SOURCE_TEST_BALANCE_RULE_ID,
-        }:
-            key = (*key, finding.rule_id)
+        key = (finding.severity, finding.path, finding.rule_id)
         if key in seen:
             continue
         seen.add(key)
@@ -684,11 +632,7 @@ def _dedupe_findings(findings: tuple[GuardFinding, ...]) -> tuple[GuardFinding, 
 
 
 def _normalised_set(paths: tuple[str, ...]) -> frozenset[str]:
-    return frozenset(path for path in (_normalise_path(p) for p in paths) if path)
-
-
-def _normalise_path(path: str) -> str:
-    return strip_to_posix(str(path).strip())
+    return frozenset(path for path in (normalise_path(p) for p in paths) if path)
 
 
 def cmd_guard(args) -> int:
@@ -720,9 +664,12 @@ def cmd_guard(args) -> int:
     if git_state.error:
         print(f"Git error: {git_state.error}", file=sys.stderr)
 
+    # Load test_map for precise source/test pairing suggestions.
+    test_map = _load_test_map(vibecode_dir)
+
     # Evaluate guard rules
     try:
-        result = evaluate_project_guard(git_state, vibecode_dir, task="", test_map=None)
+        result = evaluate_project_guard(git_state, vibecode_dir, task="", test_map=test_map)
     except Exception as exc:
         print(f"Error loading project config: {exc}", file=sys.stderr)
         return 1

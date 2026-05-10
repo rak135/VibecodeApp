@@ -102,6 +102,14 @@ def _minimal_vibecode(repo: Path) -> None:
             }
         ),
     )
+    # Write mock file_inventory.json so inventory health checks pass.
+    _write(
+        repo / ".vibecode" / "index" / "file_inventory.json",
+        json.dumps({
+            "$schema": "vibecode/file-inventory/v1",
+            "files": [{"path": "test.py", "size": 100}],
+        }),
+    )
     # Create handoff files so handoff-check passes.
     handoff_dir = repo / ".vibecode" / "handoff"
     handoff_dir.mkdir(parents=True, exist_ok=True)
@@ -268,10 +276,6 @@ class TestCmdRunEndToEnd:
         _write(tmp_path / "app.py", "print('hello')\n")
         _commit_all(tmp_path)
         _minimal_vibecode(tmp_path)
-        _write(
-            tmp_path / ".vibecode" / "index" / "file_inventory.json",
-            json.dumps({"files": []}),
-        )
         _commit_all(tmp_path)
 
         self.repo = tmp_path
