@@ -36,6 +36,8 @@ def test_init_creates_all_required_paths(tmp_path):
     assert (tmp_path / ".vibecode" / "handoff" / "NEXT.md").is_file()
     assert (tmp_path / ".vibecode" / "handoff" / "BLOCKERS.md").is_file()
     assert (tmp_path / ".vibecode" / "history" / "README.md").is_file()
+    assert (tmp_path / ".vibecode" / "index" / "README.md").is_file()
+    assert (tmp_path / ".vibecode" / "index" / "schema.json").is_file()
 
 
 def test_init_project_yaml_contains_required_fields(tmp_path):
@@ -64,6 +66,31 @@ def test_init_protected_paths_yaml_contains_default_policy(tmp_path):
     records = load_protected_path_records(tmp_path / ".vibecode")
 
     assert records == list(DEFAULT_PROTECTED_PATH_RULES)
+
+
+def test_init_external_repo_protected_paths_are_generic(tmp_path):
+    (tmp_path / "app.py").write_text("print('hello')\n", encoding="utf-8")
+    main(["init", str(tmp_path), "--id", "external", "--name", "External"])
+
+    content = (tmp_path / ".vibecode" / "checks" / "protected_paths.yaml").read_text(
+        encoding="utf-8"
+    )
+    protected_paths = [record.path for record in load_protected_path_records(tmp_path / ".vibecode")]
+
+    assert "vibecode/indexer/scanner.py" not in content
+    assert "vibecode/indexer/repo_tree.py" not in content
+    assert "vibecode/context/scoring.py" not in content
+    assert "vibecode/context/renderer.py" not in content
+    assert not any(path.startswith("vibecode/") for path in protected_paths)
+    assert ".vibecode/architecture/" in content
+    assert ".vibecode/checks/" in content
+    assert ".vibecode/handoff/" in content
+    assert ".vibecode/history/README.md" in content
+    assert ".vibecode/agents/" in content
+    assert ".vibecode/current/*" in content
+    assert ".vibecode/generated/*" in content
+    assert ".vibecode/runs/*" in content
+    assert "README.md" in content
 
 
 def test_init_project_yaml_default_indexing_covers_python_js_ts_and_config(tmp_path):
@@ -157,6 +184,8 @@ def test_init_idempotent_preserves_all_human_files(tmp_path):
         ".vibecode/handoff/NEXT.md",
         ".vibecode/handoff/BLOCKERS.md",
         ".vibecode/history/README.md",
+        ".vibecode/index/README.md",
+        ".vibecode/index/schema.json",
     ]
     original = {p: (tmp_path / Path(p)).read_text(encoding="utf-8") for p in human_files}
 

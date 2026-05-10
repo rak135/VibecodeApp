@@ -295,6 +295,38 @@ def _file_templates(project_id: str, project_name: str, repo_root: Path | None =
             "     Every committed summary must include: Task, Changed files,\n"
             "     Behavior changed, Tests run, Decisions, Follow-up. -->\n"
         ),
+        ".vibecode/index/README.md": (
+            f"# {project_name} \u2013 Vibecode Index Policy\n\n"
+            "This directory contains Vibecode index metadata.\n\n"
+            "Human-maintained files:\n"
+            "- README.md\n"
+            "- schema.json\n\n"
+            "Generated files are derived runtime artifacts and should be "
+            "regenerated with `vibecode index` instead of edited by hand.\n"
+        ),
+        ".vibecode/index/schema.json": (
+            json.dumps(
+                {
+                    "$schema": "vibecode/index-source-truth/v1",
+                    "description": (
+                        "Human-maintained marker for Vibecode index source-truth "
+                        "files. Generated index outputs are not source truth."
+                    ),
+                    "human_maintained": ["README.md", "schema.json"],
+                    "generated_outputs": [
+                        "file_inventory.json",
+                        "symbol_map.json",
+                        "dependency_map.json",
+                        "test_map.json",
+                        "entrypoints.md",
+                        "risky_files.md",
+                        "repo_tree.generated.md",
+                    ],
+                },
+                indent=2,
+            )
+            + "\n"
+        ),
     }
 
 

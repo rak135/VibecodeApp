@@ -59,7 +59,7 @@ from vibecode.git_state import GitState, current_git_commit, inspect_git_state
 from vibecode.handoff import HandoffResult, validate_handoff_files
 from vibecode.indexer import check_inventory_health, cmd_index, compute_current_file_set_fingerprint
 from vibecode.permissions import PROFILES, profile_path
-from vibecode.run_plan import build_run_plan
+from vibecode.run_plan import build_run_plan, _classify_dirty_paths
 
 
 def _get_opencode_command(config: Any | None, env: dict[str, str]) -> str | None:
@@ -209,13 +209,28 @@ def _run_git_check(root: Path, allow_dirty: bool) -> tuple[bool, list[str]]:
 
     if git_state.changed_paths:
         dirty_count = len(git_state.changed_paths)
+        _setup_paths, source_paths = _classify_dirty_paths(git_state.changed_paths)
         if allow_dirty:
-            # Warn but still allow the run.
-            messages.append(
-                f"Git working tree is dirty — {dirty_count} changed file(s). "
-                "Consider committing or stashing."
-            )
+            if not source_paths:
+                messages.append(
+                    f"Vibecode onboarding baseline is pending — {dirty_count} setup file(s). "
+                    "Review and commit/stash the Vibecode baseline before running an external agent."
+                )
+            else:
+                messages.append(
+                    f"Git working tree is dirty — {dirty_count} changed file(s). "
+                    "Consider committing or stashing."
+                )
             return True, messages
+        if not source_paths:
+            messages.append(
+                f"Vibecode onboarding baseline is pending — {dirty_count} setup file(s): "
+                + ", ".join(git_state.changed_paths[:8])
+                + (" ..." if dirty_count > 8 else "")
+                + "\nReview and commit/stash the Vibecode baseline before running an external agent, "
+                "or pass --allow-dirty only when deliberately running on an uncommitted baseline."
+            )
+            return False, messages
         else:
             messages.append(
                 f"Git working tree is dirty — {dirty_count} changed file(s): "

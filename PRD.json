@@ -1,291 +1,117 @@
+
 {
-  "name": "VibecodeApp control-layer PRD",
-  "description": "Detailed implementation PRD for the next VibecodeApp control-layer work. The repository already has a CLI-first architecture-map and context-pack core. The next work must harden relevance scoring, add strict agent-facing AGENTS.md/export workflow, implement guard/check/handoff enforcement, add durable history summaries, add a safe OpenCode adapter, and improve CLI UX with a project registry. Do not implement GUI, MCP, swarm, or broad memory systems in this PRD. Generated/runtime artifacts must remain ignored and must not become source of truth.",
+  "name": "VibecodeApp Synrepo Features",
+  "description": "Do VibecodeApp přidáme čtyři hlavní schopnosti inspirované synrepo: 1) kontextové karty souborů, 2) oddělení kanonických faktů od heuristik, 3) MCP server pro živé dotazy agentů a 4) interaktivní TUI dashboard. Vše implementujeme iterativně v Pythonu po malých 15minutových krocích.",
   "tasks": [
     {
-      "title": "Harden relevant-file scoring with two-pass source/test pairing",
-      "description": "Purpose: reduce long-tail noise from unrelated tests by making test boosts depend on direct source relevance.\n\nCurrent issue:\nMany unrelated test files can receive pairing/extension scores and appear in the long tail. Top results are now mostly correct, but the context pack still gets noisy.\n\nScope:\n- Work mainly in `vibecode/context/scoring.py`.\n- Update or add tests in `tests/test_vibecode_relevant_files.py`.\n- Do not change repo tree rendering.\n- Do not implement AGENTS.md, guard, check runner, or OpenCode integration in this task.\n\nRequired behavior:\n1. First pass: identify directly relevant source files using task/domain signals, exact token/path matches, compound phrase routing, architecture/handoff/history signals, and dependency hints.\n2. Second pass: boost test files only when they are paired with directly relevant source files.\n3. Do not boost every test just because it has any source pairing.\n4. Keep good pairings such as `scoring.py` to `test_vibecode_relevant_files.py`, `repo_tree.py` to `test_vibecode_repo_tree.py`, and `renderer.py` to `test_vibecode_context_pack.py`.\n\nAcceptance:\n- For task `Improve relevant-file scoring`, top results include `vibecode/context/scoring.py` and `tests/test_vibecode_relevant_files.py`.\n- Unrelated tests do not flood top 10.\n- Repo tree and context pack task scenarios still rank their implementation/test files correctly.\n- Tests cover the two-pass behavior.",
-      "completed": true
+      "title": "Vytvořit datový model kontextové karty",
+      "description": "Do souboru src/vibecodeapp/schema.py přidej dataclass ContextCard s poli: id (uuid), file_path, purpose (první docstring), symbols (list dictů s name, kind, line), facts (list str), heuristics (list str), content_snippet (prvních 200 znaků kódu). Dále vytvoř enum CardSeverity (UNKNOWN, LOW, MEDIUM, HIGH) pro pozdější heuristiku.",
+      "completed": false
     },
     {
-      "title": "Add compound phrase routing for task domains",
-      "description": "Purpose: make scoring understand domain phrases instead of over-weighting broad single tokens like `context`.\n\nCurrent issue:\nFor `Improve context pack rendering`, files under `vibecode/context/` may rank because of the broad token `context`, even if they are not the renderer.\n\nScope:\n- Work in `vibecode/context/scoring.py`.\n- Tests in `tests/test_vibecode_relevant_files.py`.\n- No LLM/API calls.\n\nRequired phrase/domain routes:\n- `context pack`, `context rendering`, `context pack rendering` → `vibecode/context/renderer.py`, `tests/test_vibecode_context_pack.py`, `vibecode/context/scoring.py`\n- `repo tree`, `architecture tree`, `architecture map rendering` → `vibecode/indexer/repo_tree.py`, `tests/test_vibecode_repo_tree.py`\n- `opencode prompt`, `platform export`, `prompt export` → `vibecode/context/platform_export.py`, `vibecode/context/platform_registry.py`, `tests/test_vibecode_platform_export.py`\n- `agents export`, `AGENTS.md` → `vibecode/context/agents_export.py`, `tests/test_vibecode_agents_export.py`\n- `required checks`, `check runner` → `.vibecode/checks/required_checks.yaml`, future check runner files once implemented\n- `guard`, `protected paths` → future guard/protected paths files once implemented\n\nAcceptance:\n- Phrase matches are deterministic and documented in code comments or constants.\n- Broad token `context` alone is weak; compound phrase `context pack rendering` is strong.\n- `platform_registry.py` does not outrank `renderer.py` for context-pack rendering tasks.\n- OpenCode/platform tasks still rank platform files high.",
-      "completed": true
+      "title": "Extrahovat docstring a symboly z Python souboru pomocí AST",
+      "description": "V souboru src/vibecodeapp/ast_parser.py implementuj funkci parse_file(file_path: str) -> dict. Pomocí modulu ast projdi strom, získej module docstring a pro každou třídu/funkci ulož název, druh (function/class) a řádek. Vrať dict s klíči 'docstring' a 'symbols'. Ošetři syntaktické chyby vrácením prázdných hodnot.",
+      "completed": false
     },
     {
-      "title": "Refine dependency boost to avoid hub fan-out",
-      "description": "Purpose: prevent generic hub files such as `cli.py` from spreading relevance to unrelated files.\n\nScope:\n- Work in `vibecode/context/scoring.py` and tests.\n- Do not change dependency map generation unless a small schema read fix is required.\n\nRules:\n1. Define deterministic hub/gateway files such as `vibecode/cli.py`, `vibecode/__init__.py`, `vibecode/context/__init__.py`, `vibecode/indexer/__init__.py`, and optionally `vibecode/config.py` / `vibecode/project.py`.\n2. Do not apply dependency boost through hub files unless the task explicitly mentions CLI/command/init/config/project behavior.\n3. A dependency-connected target must also have direct task/domain relevance or be paired with a directly relevant source/test file.\n4. Cap fan-out from any single source file.\n\nAcceptance:\n- For `Improve relevant-file scoring`, `vibecode/cli.py` is not top 3 and ideally not in scored results.\n- For `Improve context command help`, `vibecode/cli.py` ranks high.\n- Dependency reasons remain visible only where meaningful.\n- Tests cover both scoring task and CLI task.",
-      "completed": true
+      "title": "Naimplementovat generování karet do JSON struktury",
+      "description": "V existujícím modulu pro generování inventáře (např. src/vibecodeapp/inventory.py) rozšiř funkci build_file_inventory o nový režim. Když je parametr generate_cards=True, pro každý Python soubor zavolej ast_parser.parse_file, vytvoř ContextCard a ulož ho jako položku do slovníku cards. Výsledek přidej do vráceného dictu pod klíčem 'context_cards' vedle stávajícího 'files'.",
+      "completed": false
     },
     {
-      "title": "Add relevant-file scoring quality smoke tests",
-      "description": "Purpose: lock in expected scoring quality across representative tasks so future changes do not silently degrade context packs.\n\nScope:\n- Add tests in `tests/test_vibecode_relevant_files.py`.\n- Source changes are allowed only if tests reveal real bugs.\n\nTest scenarios:\n1. `Improve relevant-file scoring` → scoring implementation and its tests, no generated/runtime top results.\n2. `Improve repo tree rendering` → repo tree generator and tests.\n3. `Improve context pack rendering` → renderer and context-pack tests; platform registry does not outrank renderer.\n4. `Add OpenCode prompt export behavior` → platform export, platform registry, and platform export tests.\n5. `Add root AGENTS.md` → agents export and AGENTS tests.\n6. `Implement guard command` → guard/protected path files once created; until then docs/check policy files can rank as supporting files.\n\nAcceptance:\n- Tests use top-N contains/excludes, not brittle full-order assertions unless intentional.\n- Tests document behavior expected by future agents.",
-      "completed": true
+      "title": "Oddělit fakta od heuristik v generátoru rizik",
+      "description": "V modulu pro analýzu rizik (např. src/vibecodeapp/risk.py) změň strukturu výstupu: místo prostého seznamu rizik vracej dict s dvěma poli: 'facts' (detekce TODO/FIXME, oprávnění 0777) a 'heuristics' (např. vysoký počet argumentů funkce, název souboru s 'danger'). Uprav příslušný report tak, aby obě kategorie odděleně zobrazoval.",
+      "completed": false
     },
     {
-      "title": "Add root AGENTS.md with strict agent instructions",
-      "description": "Purpose: provide future coding agents a short root-level instruction file that points them to Vibecode project truth and context workflow.\n\nScope:\n- Create root `AGENTS.md`.\n- Keep it short and concrete.\n- Do not duplicate README.\n- Do not include roadmap, broad philosophy, or long architecture explanations.\n\nContent requirements:\nAGENTS.md must instruct agents to read `.vibecode/architecture/INVARIANTS.md`, `.vibecode/architecture/STRUCTURE.md`, and `.vibecode/handoff/NOW.md` when present. It must tell agents to generate or inspect a task-specific context pack with `python -m vibecode.cli context . --task \"<task>\"`, start from `Relevant files with reasons`, treat source/tests/human-maintained architecture docs as truth, and treat `.vibecode/current/*`, `.vibecode/index/*.generated.*`, `.vibecode/generated/*`, `.vibecode/logs/*` as generated/runtime.\n\nAcceptance:\n- Root `AGENTS.md` exists.\n- It is short enough to be read quickly by agents.\n- It does not tell agents to trust stale generated artifacts.\n- Existing tests pass.",
-      "completed": true
+      "title": "Přepsat export .vibecode/file_inventory.json aby zahrnoval context_cards",
+      "description": "V CLI handleru pro příkaz vibecode inventory (nebo podobném) zajisti, že se volá build_file_inventory(generate_cards=True) a výsledný JSON se ukládá do .vibecode/file_inventory.json. Otestuj, že v JSON souboru přibyla sekce context_cards.",
+      "completed": false
     },
     {
-      "title": "Harden AGENTS export workflow safety",
-      "description": "Purpose: make `vibecode export-agents .` safe and predictable.\n\nExisting behavior:\nAGENTS export support exists, but the workflow must be explicit and tested.\n\nScope:\n- Work in `vibecode/context/agents_export.py`, CLI dispatch, and tests.\n- Update docs only if behavior changes.\n- Do not implement OpenCode run integration.\n\nRequired behavior:\n1. Generated content is written to `.vibecode/generated/AGENTS.generated.md`.\n2. Root `AGENTS.md` is either Vibecode-managed and safe to update, or manual and not overwritten unless `--force` is explicitly passed.\n3. If root `AGENTS.md` exists and is manual, command exits with clear message and non-zero or warning status according to existing CLI conventions.\n4. `--force` must be explicit and tested.\n5. Generated files remain ignored/untracked.\n\nAcceptance:\n- `export-agents` never silently overwrites a manual root `AGENTS.md`.\n- Tests cover no existing AGENTS, managed AGENTS, manual AGENTS without force, and manual AGENTS with force.\n- `python -m pytest tests/test_vibecode_agents_export.py -p no:cacheprovider` passes.",
-      "completed": true
+      "title": "Přidat konfigurační soubor .vibecode/config.yml pro úroveň detailů",
+      "description": "Vytvoř dataclass VibecodeConfig s atributem card_detail (volba 'basic'/'full') a include_heuristics (bool). Implementuj načítání z .vibecode/config.yml ve funkci load_config(). Při generování karet pak respektuj tyto hodnoty (basic – jen purpose, full – i symbols a snippet). Tím se připraví podpora pro přizpůsobení.",
+      "completed": false
     },
     {
-      "title": "Include AGENTS export workflow in context and docs",
-      "description": "Purpose: make agent-facing docs explain how AGENTS.md relates to generated context packs.\n\nScope:\n- Update `README.md`, `docs/QUICKSTART.md`, or relevant docs only.\n- Do not add large roadmap text.\n- Do not modify implementation unless docs reveal a real mismatch.\n\nDocumentation must state:\n- Root `AGENTS.md` is stable agent instruction.\n- `.vibecode/current/context_pack.md` is task-specific runtime output.\n- `.vibecode/generated/AGENTS.generated.md` is generated and ignored.\n- `export-agents` must not overwrite manual root AGENTS without `--force`.\n- Future agents should generate context for each task rather than relying on old context packs.\n\nAcceptance:\n- Docs are concise and consistent with code.\n- No version labels are introduced.\n- Tests still pass.",
-      "completed": true
+      "title": "Založit MCP serverový modul",
+      "description": "Nainstaluj balíček mcp (pip install mcp). Vytvoř nový soubor src/vibecodeapp/mcp_server.py se základní strukturou: třída VibecodeServer dědící z Server. Ve __init__ načti data z .vibecode/file_inventory.json a ulož je do self.data. Přidej metodu run(), která spustí server na stdio transportu.",
+      "completed": false
     },
     {
-      "title": "Create protected paths policy file and schema",
-      "description": "Purpose: define what files/folders are protected before implementing guard enforcement.\n\nScope:\n- Add `.vibecode/checks/protected_paths.yaml`.\n- Add loader/schema code if needed.\n- Add tests for parsing and default content.\n- Do not implement full `guard` command in this task unless minimal loading CLI help is required.\n\nDefault policy should include `.vibecode/architecture/`, `.vibecode/checks/`, `.vibecode/handoff/`, `.vibecode/index/*.generated.*`, `.vibecode/current/*`, `vibecode/indexer/scanner.py`, `vibecode/indexer/repo_tree.py`, `vibecode/context/scoring.py`, and `vibecode/context/renderer.py`, each with a concrete rule and required tests where relevant.\n\nAcceptance:\n- Policy file is committed.\n- Loader validates required fields.\n- Invalid entries produce clear errors.\n- Context pack can later include protected path summary.",
-      "completed": true
+      "title": "Implementovat MCP nástroj get_file_card",
+      "description": "Do VibecodeServer přidej nástroj (dekorátorem @server.tool()) s názvem get_file_card. Parametry: file_path (str). Nástroj vrátí textově formátovanou kartu z self.data['context_cards'], obsahující purpose, symbols a content_snippet. Pokud soubor nenalezen, vrátí chybovou zprávu.",
+      "completed": false
     },
     {
-      "title": "Expose protected paths in context pack",
-      "description": "Purpose: make agents see protected paths before editing.\n\nPrerequisite:\nProtected paths policy file exists and can be loaded.\n\nScope:\n- Update context rendering to include protected paths from `.vibecode/checks/protected_paths.yaml`.\n- Do not implement guard enforcement yet.\n- Keep output compact.\n\nRequired output:\nContext pack includes a section like `## Protected paths / edit constraints` with path, reason/rule, required tests if defined, and whether explicit task scope is required.\n\nAcceptance:\n- Protected paths appear in context pack.\n- Generated/runtime paths are clearly labeled as not manually editable.\n- Tests cover rendering.",
-      "completed": true
+      "title": "Implementovat MCP nástroj find_symbol",
+      "description": "Přidej nástroj find_symbol(symbol_name: str). Prohledá wszystkie karty a vrátí seznam cest, kde se symbol nachází. Výstup nechť je strukturovaný seznam (JSON string) s cestami a druhy symbolu.",
+      "completed": false
     },
     {
-      "title": "Implement git diff collection utility",
-      "description": "Purpose: create a reusable internal utility for guard/check/run workflows to inspect changed files.\n\nScope:\n- Add a small module, for example `vibecode/git_state.py` or `vibecode/guard/git_diff.py`.\n- Do not implement full guard command yet.\n- Must work on Windows.\n\nUtility must provide changed paths from `git status --short`, staged vs unstaged if practical, diff name-only, diff stat if practical, safe behavior when repo is not a git repo, and clear error or empty result according to CLI conventions.\n\nAcceptance:\n- Tests use temporary git repos.\n- Handles clean repo, modified source file, modified test file, deleted file, and untracked file.\n- Does not run destructive git commands.",
-      "completed": true
+      "title": "Implementovat MCP nástroj list_high_risk",
+      "description": "Přidej nástroj list_high_risk(). Načti .vibecode/risk_report.json (pokud existuje), vyfiltruj položky z 'heuristics' se závažností HIGH a vrať jejich seznam. Pokud report neexistuje, informuj uživatele.",
+      "completed": false
     },
     {
-      "title": "Implement guard rule for generated/runtime edits",
-      "description": "Purpose: prevent agents from editing generated/runtime files manually.\n\nPrerequisite:\nGit diff collection utility exists.\n\nScope:\n- Start guard rule engine internals.\n- Add tests for generated/runtime violations.\n- CLI may remain internal if full guard command is not ready.\n\nRule:\nIf changed files include `.vibecode/current/*`, `.vibecode/generated/*`, `.vibecode/logs/*`, `.vibecode/runs/*`, `.vibecode/tmp/*`, `.vibecode/cache/*`, or `.vibecode/index/*.generated.*`, guard reports a hard failure unless the task explicitly says generator behavior is being tested and the file is still ignored/untracked.\n\nAcceptance:\n- Rule returns failing result in tests for generated/runtime changes.\n- Error explains: regenerate generated files; do not manually edit them.\n- Human-maintained `.vibecode/architecture/*.md` is not treated as generated.",
-      "completed": true
+      "title": "Přidat CLI příkaz 'vibecode serve'",
+      "description": "V hlavním CLI souboru (src/vibecodeapp/cli.py) přidej nový subpříkaz serve. Ten naimportuje VibecodeServer, vytvoří instanci a zavolá server.run(). Zajisti, aby před spuštěním zkontroloval existenci .vibecode/file_inventory.json, jinak vypíše výzvu k provedení inventury.",
+      "completed": false
     },
     {
-      "title": "Implement guard rule for protected paths",
-      "description": "Purpose: enforce `.vibecode/checks/protected_paths.yaml`.\n\nScope:\n- Build on protected path loader and git diff utility.\n- Add guard rule internals and tests.\n- Do not implement all guard rules yet if too broad.\n\nBehavior:\n- Changed protected paths require explicit task scope.\n- If policy has `required_tests`, guard reports those tests as required.\n- Generated paths are hard failures when manually edited.\n- Human-maintained truth docs require explanation/handoff.\n\nAcceptance:\n- Guard detects changes under `.vibecode/architecture/`.\n- Guard detects changes to core files such as `vibecode/context/scoring.py` and reports required tests.\n- Output contains path, rule, severity, and recommended fix.",
-      "completed": true
+      "title": "Otestovat MCP server pomocí MCP Inspector",
+      "description": "Spusť MCP Inspector (npx @modelcontextprotocol/inspector) a nasměruj ho na příkaz vibecode serve. Ručně vyzkoušej všechny tři nástroje: get_file_card pro existující a neexistující soubor, find_symbol pro známou funkci, list_high_risk. Oprav případné chyby. Tento úkol považuj za ruční test – nezapomeň ověřit výstupy.",
+      "completed": false
     },
     {
-      "title": "Implement README generated-block guard",
-      "description": "Purpose: protect README from uncontrolled agent rewrites.\n\nScope:\n- Add guard logic for README changes.\n- Define allowed generated block markers if they exist, or document that README is manual-only until generated blocks are introduced.\n- Do not add README generated block automation in this task.\n\nBehavior:\n- If README changes outside allowed markers, guard should warn or fail depending on policy.\n- If no markers exist, README changes are allowed only when task explicitly mentions README/docs.\n- Do not block docs tasks.\n\nAcceptance:\n- Tests cover README changed during docs task and non-docs task.\n- Error message is clear.\n- No false failure for `docs/QUICKSTART.md` changes.",
-      "completed": true
+      "title": "Vygenerovat konfigurační snippet pro Cursor",
+      "description": "Do výstupu příkazu serve přidej po spuštění informaci pro uživatele: textový výstup s JSON konfigurací pro Cursor (mcpServers). Ulož jednu šablonu do konstanty a po startu ji vytiskni na stderr, aby neovlivnila stdio komunikaci MCP.",
+      "completed": false
     },
     {
-      "title": "Implement architecture-change handoff guard",
-      "description": "Purpose: require handoff/history acknowledgement when architecture truth changes.\n\nScope:\n- Guard rule internals and tests.\n\nBehavior:\nIf changed files include `.vibecode/architecture/*.md`, guard requires at least one of `.vibecode/handoff/NOW.md` changed with a relevant note, `.vibecode/history/*.md` changed with a relevant summary, or an explicit override flag in future CLI.\n\nAcceptance:\n- Architecture doc changes without handoff/history fail guard.\n- Architecture doc changes with handoff/history pass.\n- Message explains that architecture truth changed and must be recorded.",
-      "completed": true
+      "title": "Nainstalovat Textual a připravit TUI shell",
+      "description": "Přidej do projektu závislost textual. Vytvoř soubor src/vibecodeapp/tui_app.py s prázdnou Textual App třídou VibecodeTUI, která jen otevře obrazovku s titulkem 'Vibecode Dashboard' a tlačítkem Quit. Ověř, že jde spustit ručně python -m vibecodeapp.tui_app.",
+      "completed": false
     },
     {
-      "title": "Implement source/test mismatch guard warnings",
-      "description": "Purpose: warn when source changes occur without corresponding test changes, or tests change without source changes.\n\nScope:\n- Guard rule internals.\n- This rule should usually warn, not hard fail.\n\nBehavior:\n- Source changed without tests: warning with suggested tests.\n- Tests changed without source: warning unless task is explicitly test-only.\n- Use existing test_map/source pairing where possible.\n- Do not require tests for docs-only changes.\n\nAcceptance:\n- Tests cover source-only, test-only, source+test, and docs-only.\n- Warnings are clear and not overbearing.",
-      "completed": true
+      "title": "Vytvořit widget pro výpis karet v TUI",
+      "description": "V souboru tui_app.py uprav hlavní obrazovku, aby místo prázdné obrazovky obsahovala DataTable s třemi sloupci: 'File', 'Purpose', 'Symbols'. Naplň ji daty z načteného .vibecode/file_inventory.json (context_cards). Implementuj metodu na čtení JSON dat při startu aplikace.",
+      "completed": false
     },
     {
-      "title": "Add guard CLI command",
-      "description": "Purpose: expose guard rules through `python -m vibecode.cli guard <repo>` and `vibecode guard <repo>`.\n\nPrerequisite:\nInitial guard rules exist.\n\nScope:\n- Update CLI parser and dispatch.\n- Add tests in CLI test module or guard-specific tests.\n- Do not implement check runner or OpenCode run in this task.\n\nRequired behavior:\n- `guard <repo>` inspects current git diff.\n- Returns non-zero exit code for hard failures.\n- Prints clear reasons.\n- Prints warnings separately.\n- Supports clean repo with zero findings.\n- Uses protected paths policy if present.\n- Handles missing `.vibecode/project.yaml` with clear error.\n\nAcceptance:\n- Hard violation returns non-zero.\n- Warning-only returns zero unless a strict flag is introduced.\n- CLI help includes guard.\n- Tests pass.",
-      "completed": true
+      "title": "Přidat do TUI panel statistik",
+      "description": "Přidej pod tabulku statický Footer nebo samostatný widget, který zobrazuje celkový počet souborů, počet karet a počet vysoce rizikových položek (čte z risk_report.json). Aktualizuj při spuštění.",
+      "completed": false
     },
     {
-      "title": "Add guard report JSON output",
-      "description": "Purpose: store guard results as ignored runtime output for future run workflows.\n\nScope:\n- Add optional or default write to `.vibecode/current/guard_result.json`.\n- Ensure file is ignored.\n- Do not make guard depend on previous guard result.\n\nJSON should include timestamp, repo root, changed files, hard failures, warnings, policy files loaded, and required tests suggested.\n\nAcceptance:\n- Guard writes valid JSON report.\n- Report is ignored/untracked.\n- Tests validate JSON shape.",
-      "completed": true
+      "title": "Přidat do TUI možnost zobrazit detail karty",
+      "description": "Po stisku klávesy 'Enter' na položce v tabulce nechť aplikace přepne na novou obrazovku s úplnými detaily ContextCard: celý purpose, symbols (s řádky), facts, heuristics a snippet kódu ve formátovaném bloku. Zajisti tlačítko 'Back' pro návrat.",
+      "completed": false
     },
     {
-      "title": "Implement required checks schema validation",
-      "description": "Purpose: make `.vibecode/checks/required_checks.yaml` enforce concrete commands before adding a runner.\n\nScope:\n- Work in config/check loading code.\n- Add tests.\n\nRules:\n- Each check must have a name and command.\n- `required` defaults to true unless explicitly false.\n- Generic commands such as `tests`, `lint`, or `run checks` without a real command should be rejected or warned.\n- Duplicate commands should be deduplicated or reported clearly.\n- Purpose/description is optional but recommended.\n\nAcceptance:\n- Existing required checks load successfully.\n- Invalid check files fail with clear error.\n- Context pack required checks remain deduplicated.",
-      "completed": true
+      "title": "Zapojit TUI jako CLI příkaz 'vibecode dashboard'",
+      "description": "Do CLI přidej subpříkaz dashboard. V jeho handleru importuj a spusť VibecodeTUI aplikaci. Před spuštěním zkontroluj, zda existuje .vibecode/file_inventory.json, jinak uživatele vyzvi k vygenerování inventáře.",
+      "completed": false
     },
     {
-      "title": "Implement required checks runner",
-      "description": "Purpose: add `vibecode check <repo>` to run concrete commands from `.vibecode/checks/required_checks.yaml`.\n\nScope:\n- Add check runner module and CLI command.\n- Do not integrate with OpenCode run yet.\n- Use subprocess safely.\n- Must work on Windows.\n\nBehavior:\n- Load required checks.\n- Run each command in repo root.\n- Capture exit code, stdout/stderr snippets, and duration.\n- Required failed check makes command exit non-zero.\n- Optional failed check reports warning.\n- Store result in `.vibecode/current/check_results.json`.\n\nAcceptance:\n- `python -m vibecode.cli check .` works.\n- JSON report is valid and ignored/untracked.\n- Tests use safe dummy commands.",
-      "completed": true
+      "title": "Refaktorovat a sjednotit styly TUI",
+      "description": "Vytvoř soubor tui_theme.tcss s definicí barev a stylů. Aplikuj jej pomocí CSS_PATH. Nastav vzhled tak, aby odpovídal CLI-first filozofii (tmavé pozadí, minimální barvy). Otestuj, že vše vypadá konzistentně.",
+      "completed": false
     },
     {
-      "title": "Add check command docs and context integration",
-      "description": "Purpose: make required checks discoverable to agents and humans.\n\nScope:\n- Update README/QUICKSTART minimally.\n- Update context pack if needed to mention `vibecode check <repo>`.\n- Do not add broad roadmap.\n\nAcceptance:\n- Docs say checks are defined in `.vibecode/checks/required_checks.yaml`.\n- Docs say results are written to `.vibecode/current/check_results.json`.\n- Context pack still lists exact check commands.\n- Tests pass.",
-      "completed": true
+      "title": "Zajistit synchronizaci MCP a TUI zdrojů dat",
+      "description": "Vytvoř modul src/vibecodeapp/data_loader.py s funkcí load_project_data(), která vrací dict s 'cards' a 'risks'. Tuto funkci použij jak v MCP serveru, tak v TUI aplikaci. Tím zamezíš duplicitnímu kódu. Nahraď stávající načítání v obou modulech.",
+      "completed": false
     },
     {
-      "title": "Implement handoff placeholder detection",
-      "description": "Purpose: detect empty/useless handoff files.\n\nScope:\n- Add internal handoff validation utility.\n- Do not implement full CLI command yet unless small.\n- Tests required.\n\nRules:\n- `NOW.md` must contain concrete current state, not only heading.\n- `NEXT.md` must contain concrete next steps, not only heading.\n- `BLOCKERS.md` must say either no hard blocker or list blockers.\n- Placeholder phrases such as `TODO`, `TBD`, `placeholder`, empty bullets, or only headings should fail.\n\nAcceptance:\n- Real current handoff passes.\n- Placeholder handoff fails with clear message.\n- Tests cover empty, heading-only, placeholder text, and valid content.",
-      "completed": true
+      "title": "Otestovat celý workflow – inventura → TUI → MCP",
+      "description": "Proveď integrační test ručně: spusť vibecode inventory, zkontroluj obsah .vibecode/file_inventory.json. Pak spusť vibecode dashboard a projdi všechny obrazovky. Nakonec spusť vibecode serve a přes MCP Inspector ověř funkčnost nástrojů. Zaznamenej jakékoli chyby a oprav je.",
+      "completed": false
     },
     {
-      "title": "Implement handoff architecture-change validation",
-      "description": "Purpose: ensure architecture truth changes are reflected in handoff or history.\n\nScope:\n- Extend handoff validation utility with git diff input.\n- Tests.\n\nBehavior:\n- If `.vibecode/architecture/*.md` changed, validation requires handoff file changed with relevant mention, or history summary added, or explicit override in future CLI.\n- If only source/test changed, architecture handoff requirement does not apply.\n\nAcceptance:\n- Architecture change without handoff fails.\n- Architecture change with handoff passes.\n- Message is clear and actionable.",
-      "completed": true
-    },
-    {
-      "title": "Add handoff-check CLI command",
-      "description": "Purpose: expose handoff validation as `vibecode handoff-check <repo>`.\n\nScope:\n- Update CLI parser/dispatch.\n- Add tests.\n\nBehavior:\n- Checks NOW/NEXT/BLOCKERS.\n- Checks architecture-change handoff requirement using current git diff.\n- Returns non-zero when handoff is invalid.\n- Writes optional report to `.vibecode/current/handoff_check.json` if useful.\n\nAcceptance:\n- CLI help includes handoff-check.\n- Placeholder handoff fails.\n- Valid handoff passes.\n- Architecture doc change without handoff fails.",
-      "completed": true
-    },
-    {
-      "title": "Define history summary policy",
-      "description": "Purpose: make `.vibecode/history/` useful as compressed project memory, not noisy logs.\n\nScope:\n- Update `.vibecode/history/README.md`.\n- Add docs if needed.\n- No automation yet.\n\nPolicy:\n- `.vibecode/history/README.md` is committed.\n- `.vibecode/history/*.md` may be committed only when it contains durable project truth.\n- `.vibecode/runs/*` is always runtime output and ignored.\n- History summaries are not raw logs.\n- A history summary contains Task, Changed files, Behavior changed, Tests run, Decisions, and Follow-up.\n\nAcceptance:\n- Policy is explicit and short.\n- AGENTS/context/handoff docs do not conflict with it.",
-      "completed": true
-    },
-    {
-      "title": "Implement history summary template writer",
-      "description": "Purpose: provide a safe way to create durable history summaries without dumping raw logs.\n\nScope:\n- Add internal utility and optional CLI command such as `vibecode history new <repo> --task \"<task>\"`.\n- If CLI scope is too large, implement utility plus tests only.\n- Do not integrate with OpenCode run yet.\n\nBehavior:\n- Creates `.vibecode/history/YYYYMMDD-HHMM-task-summary.md`.\n- Filename is sanitized.\n- File contains headings: Task, Changed files, Behavior changed, Tests run, Decisions, Follow-up.\n- Does not automatically create a summary for every trivial command.\n\nAcceptance:\n- Tests validate filename format and template content.\n- Does not overwrite existing summaries.\n- History summaries are human-maintained and may be committed when meaningful.",
-      "completed": true
-    },
-    {
-      "title": "Integrate handoff/history requirements into context pack",
-      "description": "Purpose: ensure agents know when and how to update handoff/history.\n\nScope:\n- Update context renderer and tests.\n\nContext pack should say:\n- Handoff files are required for meaningful changes.\n- Architecture truth changes require handoff or history.\n- History summaries are durable memory, not run logs.\n- `.vibecode/runs/*` remains ignored runtime state.\n\nAcceptance:\n- Context pack includes concise handoff/history rules.\n- It does not dump all history content.\n- Tests cover rendering.",
-      "completed": true
-    },
-    {
-      "title": "Add OpenCode availability detection",
-      "description": "Purpose: prepare for run adapter by detecting whether OpenCode is installed without launching a coding session.\n\nScope:\n- Add small adapter module, for example `vibecode/adapters/opencode.py`.\n- Add tests with fake PATH or monkeypatch.\n\nBehavior:\n- Detect configured OpenCode command or default `opencode`.\n- Provide clear status: available, missing, command failed.\n- Do not start an agent session.\n\nAcceptance:\n- Missing OpenCode produces actionable error.\n- Tests do not require real OpenCode installed.",
-      "completed": true
-    },
-    {
-      "title": "Add OpenCode permission profile templates",
-      "description": "Purpose: create safe/fast/audit permission profiles for future OpenCode runs.\n\nScope:\n- Add `.vibecode/agents/` policy docs/templates or generated-on-init files.\n- Decide whether templates are human-maintained and committed.\n- Add tests for init preserving custom profiles.\n\nProfiles:\n- safe: read allow, grep/glob allow, edit ask, bash ask, generated files deny\n- fast: edit allow, bash ask, guard after run\n- audit: read only, no edit, no write\n\nAcceptance:\n- Profiles exist in clear files like `.vibecode/agents/opencode.safe.json`.\n- `init` creates missing templates but does not overwrite human-edited profiles.\n- Docs warn that sensitive projects should use audit/safe.",
-      "completed": true
-    },
-    {
-      "title": "Build OpenCode prompt/run plan assembly",
-      "description": "Purpose: assemble everything needed for an OpenCode run without executing OpenCode yet.\n\nScope:\n- Add run planning utility.\n- Do not launch OpenCode in this task.\n- Tests required.\n\nRun plan should include repo root, task, dirty git status, index freshness status, context pack path, opencode prompt path, permission profile, preflight warnings, and commands that would be run.\n\nAcceptance:\n- Either `vibecode run-plan <repo> --platform opencode --task \"...\"` exists, or an internal utility with tests exists if CLI is too soon.\n- Dirty repo warning exists.\n- Missing/stale index warning exists.\n- No agent process is started.",
-      "completed": true
-    },
-    {
-      "title": "Implement OpenCode run preflight",
-      "description": "Purpose: prevent running agents into a dirty/stale state without warning.\n\nScope:\n- OpenCode run adapter preflight only.\n- Do not launch OpenCode unless explicitly part of this task after preflight is tested.\n\nPreflight checks:\n- repo is git repo\n- `.vibecode/project.yaml` exists\n- generated index exists and is fresh or can be regenerated\n- current git status is clean or user explicitly allows dirty state\n- required permission profile exists\n- OpenCode command is available\n- generated/runtime files are ignored\n\nAcceptance:\n- Dirty repo blocks or warns according to flag.\n- Stale/missing index is detected.\n- Preflight has tests using fake repos.\n- No real OpenCode required in tests.",
-      "completed": true
-    },
-    {
-      "title": "Implement OpenCode run adapter with fake runner tests",
-      "description": "Purpose: add `vibecode run <repo> --platform opencode --task \"...\"` using a fake OpenCode binary in tests.\n\nPrerequisites:\nOpenCode detection and preflight exist.\n\nFlow:\n1. check git status\n2. generate or refresh index if missing/stale\n3. generate context pack\n4. generate opencode prompt\n5. invoke configured OpenCode command with safe prompt input\n6. capture stdout/stderr/exit code\n7. write session metadata under `.vibecode/runs/`\n8. do not commit generated/runtime files\n\nAcceptance:\n- Tests use fake OpenCode script/command and do not require real OpenCode.\n- Run metadata is stored under ignored `.vibecode/runs/`.\n- Failed OpenCode command reports clear error.\n- Dirty repo behavior is safe.",
-      "completed": true
-    },
-    {
-      "title": "Run post-OpenCode guard and check pipeline",
-      "description": "Purpose: make `vibecode run` useful as a controlled agent workflow, not just a launcher.\n\nPrerequisites:\n- guard command exists\n- check command exists\n- handoff-check exists\n- OpenCode run adapter exists\n\nPost-run flow:\n1. collect git diff summary\n2. run `vibecode guard`\n3. run `vibecode check`\n4. run `vibecode handoff-check`\n5. write run summary to `.vibecode/runs/<timestamp>/summary.json`\n6. print concise result\n\nAcceptance:\n- Hard guard failure causes run to be marked failed.\n- Required check failure causes run to be marked failed.\n- Missing handoff causes run to be marked incomplete.\n- Tests use fake OpenCode and fake checks.",
-      "completed": true
-    },
-    {
-      "title": "Add OpenCode run diff summary",
-      "description": "Purpose: show user what changed after an agent run.\n\nScope:\n- Add diff summary utility or reuse git diff collection.\n- Integrate into run output.\n\nSummary should include changed files, added/deleted files, source/test/docs/generated categories, protected path touches, whether generated/runtime files changed, and suggested next action.\n\nAcceptance:\n- Summary is human-readable.\n- JSON summary is stored in run metadata.\n- Tests cover representative diffs.",
-      "completed": true
-    },
-    {
-      "title": "Document OpenCode run workflow",
-      "description": "Purpose: document the safe OpenCode workflow once implementation exists.\n\nScope:\n- Update README and QUICKSTART minimally.\n- No broad marketing copy.\n\nDocs should show context-only generation, run plan/preflight, audit/safe/fast permission profiles, running fake or real OpenCode, post-run guard/check/handoff behavior, where run metadata is stored, and that generated/runtime files remain ignored.\n\nAcceptance:\n- Docs match actual commands.\n- No claim that VibecodeApp edits code itself.\n- No GUI/MCP claims.",
-      "completed": true
-    },
-    {
-      "title": "Keep canonical CLI command set small and consistent",
-      "description": "Purpose: prevent CLI bloat and command-name drift.\n\nScope:\n- Audit CLI parser/help/docs/tests.\n- Keep canonical commands: `init`, `index`, `map`, `context`, `validate`, `export-agents`, `guard`, `check`, `handoff-check`, `run`, and `project` once registry exists.\n- Do not add aliases unless documented.\n\nAcceptance:\n- README, QUICKSTART, CLI help, and tests use consistent command names.\n- No stale command names like `generate-context` unless supported as documented alias.",
-      "completed": true
-    },
-    {
-      "title": "Implement project registry storage",
-      "description": "Purpose: allow selecting repos by project name instead of passing paths every time.\n\nScope:\n- Add registry module.\n- No GUI.\n- Use local user-level file, likely `~/.vibecode/projects.yaml`.\n- Tests must not write to real home; use temp HOME/app data override.\n\nRegistry fields:\n- project name\n- repo path\n- project id if known\n- last used timestamp if useful\n- active project name\n\nAcceptance:\n- Can read/write registry.\n- Handles Windows paths.\n- Handles missing/deleted repo paths gracefully.\n- Registry file is outside project repo and not committed.",
-      "completed": true
-    },
-    {
-      "title": "Add project registry CLI commands",
-      "description": "Purpose: expose project registry via CLI.\n\nCommands:\n- `vibecode project add <name> <path>`\n- `vibecode project use <name>`\n- `vibecode project list`\n- `vibecode project remove <name>`\n- `vibecode project current`\n\nScope:\n- Update CLI parser and tests.\n- Do not integrate all existing commands with active project yet.\n\nAcceptance:\n- Commands work with temp registry in tests.\n- Duplicate names require explicit overwrite or fail clearly.\n- Removing active project clears or updates active selection safely.",
-      "completed": true
-    },
-    {
-      "title": "Allow commands to use active project when repo is omitted",
-      "description": "Purpose: improve CLI UX after registry exists.\n\nCommands that should support active project fallback:\n- `index`\n- `map`\n- `context`\n- `validate`\n- `guard`\n- `check`\n- `handoff-check`\n- `run`\n\nBehavior:\n- If repo argument is provided, use it.\n- If omitted, use active project from registry.\n- If no active project, error clearly.\n- Do not guess from current directory unless command semantics already support `.`.\n\nAcceptance:\n- `vibecode project use STOCKS` then `vibecode context --task \"...\"` works.\n- Error tells user to pass repo or run `vibecode project use`.\n- Tests cover Windows-style paths.",
-      "completed": true
-    },
-    {
-      "title": "Update docs for project registry workflow",
-      "description": "Purpose: document the ergonomic workflow without replacing explicit-path commands.\n\nDocs should show:\n- explicit path workflow still works\n- registry workflow with `vibecode project add STOCKS C:\\DATA\\PROJECTS\\STOCKS`, `vibecode project use STOCKS`, and `vibecode context --task \"...\"`\n- registry lives outside repo\n- registry is local machine state, not committed\n\nAcceptance:\n- README/QUICKSTART are concise.\n- Docs do not imply GUI exists.",
-      "completed": true
-    },
-    {
-      "title": "Add end-to-end smoke for controlled agent preparation",
-      "description": "Purpose: verify the full pre-agent workflow without launching a real agent.\n\nFlow in temp repo:\n1. `vibecode init`\n2. `vibecode index`\n3. `vibecode context --task \"...\"`\n4. `vibecode export-agents`\n5. `vibecode guard`\n6. `vibecode check` with safe dummy check\n7. `vibecode handoff-check`\n\nAcceptance:\n- Test uses temp repo and safe commands.\n- Generated/runtime files stay ignored/untracked.\n- Context pack includes relevant files.\n- AGENTS export is safe.\n- Guard/check/handoff commands produce expected statuses.",
-      "completed": true
-    },
-    {
-      "title": "Add stale index detection",
-      "description": "Purpose: warn when generated index was built for an older commit or file state.\n\nBehavior:\n- Compare last index git commit/path set to current HEAD/status where available.\n- If repo changed since index, warn or require re-index before `context`, `guard`, or `run`.\n- Do not block docs-only changes unless policy says so.\n- Provide clear command: `vibecode index <repo>`.\n\nAcceptance:\n- Stale index warning appears in context/run preflight.\n- Fresh index reports clean.\n- Tests cover changed file after index.",
-      "completed": true
-    },
-    {
-      "title": "Add context-pack quality regression test",
-      "description": "Purpose: ensure future context packs remain useful and compact.\n\nTest using VibecodeApp repo or fixture:\n- generate context for `Improve relevant-file scoring`\n- assert relevant files include scoring.py and relevant tests\n- assert generated/runtime paths are absent from top relevant files\n- assert required checks are deduplicated\n- assert protected path section exists\n- assert handoff section exists\n- assert context length is within limit\n\nAcceptance:\n- Test catches scoring/context regressions.\n- Test does not require exact full markdown.",
-      "completed": true
-    },
-    {
-      "title": "Verify and fix post-run custom protected path enforcement",
-      "description": "Purpose: resolve the most important disagreement between the two audits. One audit claims `vibecode run` evaluates post-agent changes but may not load custom `.vibecode/checks/protected_paths.yaml` rules during post-run guard evaluation. Another audit claims protected path enforcement is correct. This task must prove the truth with a targeted regression test and fix the code if the test fails.\n\nScope: Work mainly in `vibecode/run.py`, `vibecode/guard.py`, `vibecode/config.py`, and `tests/test_vibecode_run_post.py` or an equivalent run-post test file. Do not modify scoring, repo tree generation, AGENTS export, registry, or docs unless a direct test fixture requires a minimal update.\n\nRequired test scenario: create a temporary git repo, initialize Vibecode, add a custom protected path rule to `.vibecode/checks/protected_paths.yaml` that is not already covered by default guard rules, use a fake OpenCode command that modifies that custom protected file after launch, run `vibecode run` against the temp repo, and assert the run fails or is marked incomplete due to a protected-path violation from the project policy. The test must prove this is not just the default README rule.\n\nExpected behavior: standalone `vibecode guard` and post-run `vibecode run` must enforce the same project protected path policy. Post-run guard must evaluate the delta introduced by the external agent after context/prompt generation. Generated/runtime files created by Vibecode itself before the external run must not be misclassified as agent changes.\n\nImplementation guidance: if `evaluate_guard()` currently uses only default protected rules, add a way to pass project-loaded protected rules into run post-checks. Prefer a shared helper so CLI guard and run post-checks do not drift again.\n\nAcceptance criteria: fake OpenCode changing a custom protected path fails the run; fake OpenCode changing README still fails under README/protected rules; fake OpenCode making no changes still succeeds when checks and handoff pass; generated/runtime outputs remain ignored/untracked; full tests pass.\n\nVerification commands: `python -m pytest tests/test_vibecode_run_post.py -p no:cacheprovider`; `python -m pytest tests/test_vibecode_guard.py tests/test_vibecode_run_post.py -p no:cacheprovider`; `python -m pytest -p no:cacheprovider`; `git ls-files .vibecode/current .vibecode/generated .vibecode/logs .vibecode/runs .ralphy`; `git ls-files \".vibecode/index/*.generated.*\"`.",
-      "completed": true
-    },
-    {
-      "title": "Make export-agents idempotent with committed AGENTS.md",
-      "description": "Purpose: fix the shared high-priority issue found by both audits. `vibecode/context/agents_export.py` generates an AGENTS block that is weaker than the committed root `AGENTS.md`. Running `vibecode export-agents .` must not silently downgrade the repo's own agent instructions.\n\nScope: Work mainly in `vibecode/context/agents_export.py`, `tests/test_vibecode_agents_export.py`, and root `AGENTS.md` only if needed to keep the generated and committed managed block aligned. Do not change guard, run, scoring, registry, or unrelated docs.\n\nRequired content alignment: the generated AGENTS block must include `PRD.json` as source truth; must include `.vibecode/runs/*` in generated/runtime or do-not-edit paths; must include the available command list matching current CLI reality, including `init`, `index`, `map`, `context`, `validate`, `export-agents`, `guard`, `check`, `handoff-check`, `history`, `run`, `run-plan`, and `project`; must tell agents to generate task-specific context and start from relevant files with reasons; must not tell agents to trust stale generated artifacts.\n\nIdempotency requirement: after this task, running `python -m vibecode.cli export-agents .` in the repo should not create a diff in `AGENTS.md` when it is already Vibecode-managed and up to date. Generated `.vibecode/generated/AGENTS.generated.md` remains ignored and must not be committed.\n\nSafety requirement: export-agents must still not overwrite a manual unmanaged `AGENTS.md` without explicit `--force`. Existing safety tests must remain valid.\n\nAcceptance criteria: generated block and committed root block are materially equivalent; tests assert `PRD.json`, `.vibecode/runs/*`, and available commands appear in generated block; managed AGENTS update is idempotent; manual AGENTS without force is still protected.\n\nVerification commands: `python -m pytest tests/test_vibecode_agents_export.py -p no:cacheprovider`; `python -m vibecode.cli export-agents .`; `git diff AGENTS.md`; `git status --short`; `python -m pytest -p no:cacheprovider`.",
-      "completed": true
-    },
-    {
-      "title": "Update AGENTS.md command doctrine and README edit rule",
-      "description": "Purpose: clean up smaller AGENTS doctrine drift identified by the audits. Root `AGENTS.md` is the first file future coding agents read, so it must not omit implemented commands or state confusing README edit rules.\n\nScope: Work in root `AGENTS.md` and, if AGENTS is generated, keep `vibecode/context/agents_export.py` tests aligned. This task may be merged with the export-agents idempotency task if done in the same narrow commit, but do not broaden into unrelated docs.\n\nRequired corrections: include `run-plan` and `history` in available commands if the CLI exposes them; clarify that README is manual project documentation and should only be edited when the task explicitly scopes README/docs, unless generated markers are introduced in the future; preserve the rule that generated/runtime files must not be manually edited; preserve instruction to generate task-specific context before implementation.\n\nAcceptance criteria: `AGENTS.md` command list matches `python -m vibecode.cli --help`; README rule is not misleading; `export-agents` still produces the same managed content; no stale text says guard/check/handoff/run are planned if implemented.\n\nVerification commands: `python -m vibecode.cli --help`; `python -m pytest tests/test_vibecode_agents_export.py -p no:cacheprovider`; `python -m pytest -p no:cacheprovider`; grep or ripgrep for stale phrases such as `planned`, `not wired`, `not started` in `AGENTS.md` where they would be false.",
-      "completed": true
-    },
-    {
-      "title": "Fix stale history policy wording and placeholder semantics",
-      "description": "Purpose: fix history documentation drift and make sure empty history summaries cannot masquerade as durable project truth. Audits found `.vibecode/history/README.md` still referring to guard/check workflow as future and noted that generated history templates may include `_Not yet filled._` without that being treated as placeholder content.\n\nScope: Work in `.vibecode/history/README.md`, `vibecode/history.py`, and `tests/test_vibecode_history.py`. Do not implement a broad memory system. Do not create real history summary files in the repo unless tests use temp repos.\n\nRequired documentation fix: history README must say the guard/handoff workflow exists where it exists. It must explain that `.vibecode/history/*.md` is durable project memory only when it contains real project truth, not raw logs or placeholder drafts. `.vibecode/runs/*` remains runtime output and ignored.\n\nRequired validation fix: treat `_Not yet filled._` as placeholder text or explicitly mark newly generated history summaries as drafts that do not pass durable-history validation until filled. Prefer validation that catches `_Not yet filled._`, heading-only content, TODO/TBD, placeholder text, and empty bullets.\n\nAcceptance criteria: history README no longer says implemented guard/check workflow is future; generated empty history summary is not accepted as durable truth; valid filled summary passes; tests cover placeholder rejection and valid summary acceptance.\n\nVerification commands: `python -m pytest tests/test_vibecode_history.py -p no:cacheprovider`; `python -m pytest -p no:cacheprovider`; grep for `future` in `.vibecode/history/README.md` and confirm any remaining use is accurate.",
-      "completed": true
-    },
-    {
-      "title": "Label Architecture Map PRD as phase document or update stale OpenCode non-goals",
-      "description": "Purpose: resolve a documentation contradiction found by both audits. `docs/ARCHITECTURE_MAP_PRD.md` still says OpenCode launch/run adapter is out of scope or not implemented, while the current control-layer now has `vibecode run`. This old PRD can mislead future agents.\n\nScope: Work only in `docs/ARCHITECTURE_MAP_PRD.md` and possibly `docs/ARCHITECTURE_MAP_STATUS.md` if a cross-reference is needed. Do not rewrite the whole old PRD. Do not introduce version labels like `v0.1` or `v1`.\n\nPreferred fix: add a clear note at the top saying this document describes the earlier Architecture Map Core phase and is superseded for full control-layer scope by `PRD.json` and current status docs. Keep old non-goals as historical phase boundaries, but make it impossible for an agent to read them as current product truth.\n\nAlternative fix: update the stale non-goal statements directly to distinguish `context --platform opencode` prompt export from `run --platform opencode` external orchestration. Keep the statement that Vibecode does not edit code itself and does not implement GUI/MCP/swarm.\n\nAcceptance criteria: no maintained doc falsely tells future agents that OpenCode run is not implemented; old architecture PRD is clearly contextualized; README/QUICKSTART/status are not contradicted.\n\nVerification commands: grep or ripgrep for phrases like `OpenCode run adapter`, `out of scope`, `no CLI command launches OpenCode`, `does not launch OpenCode`; `python -m pytest tests/test_vibecode_quickstart.py -p no:cacheprovider` if docs tests exist; `python -m pytest -p no:cacheprovider`.",
-      "completed": true
-    },
-    {
-      "title": "Align generated/runtime doctrine across write rules, docs, guard, and gitignore",
-      "description": "Purpose: eliminate doctrine drift around generated/runtime paths. One audit found `.gitignore` and docs include `.vibecode/runs/`, `.vibecode/tmp/`, and `.vibecode/cache/`, while internal write-rule constants may omit some of these paths.\n\nScope: Work in `vibecode/write_rules.py`, `.vibecode/README.md`, `AGENTS.md` or generated AGENTS block if needed, `.vibecode/architecture/STRUCTURE.md` or `INVARIANTS.md` if they list generated paths, and tests for write rules. Do not track generated files.\n\nRequired alignment: the same generated/runtime doctrine should be reflected consistently for `.vibecode/current/*`, `.vibecode/generated/*`, `.vibecode/logs/*`, `.vibecode/runs/*`, `.vibecode/tmp/*`, `.vibecode/cache/*`, `.vibecode/index/*.generated.*`, and `.ralphy/*` where relevant. Human-maintained files such as `.vibecode/architecture/*.md`, `.vibecode/checks/*.yaml`, `.vibecode/handoff/*.md`, `.vibecode/history/README.md`, `.vibecode/index/schema.json`, `.vibecode/index/README.md`, and `.vibecode/agents/*.json` must remain commit-eligible.\n\nAcceptance criteria: write_rules generated/runtime prefixes match `.gitignore` and docs; tests assert runtime dirs are treated as generated/non-manual where appropriate; no generated/runtime files become tracked; AGENTS/export does not omit runtime paths.\n\nVerification commands: `python -m pytest tests/test_vibecode_write_rules.py -p no:cacheprovider`; `git ls-files .vibecode/current .vibecode/generated .vibecode/logs .vibecode/runs .vibecode/tmp .vibecode/cache .ralphy`; `git ls-files \".vibecode/index/*.generated.*\"`; `python -m pytest -p no:cacheprovider`.",
-      "completed": true
-    },
-    {
-      "title": "Add generated/runtime ignore verification to run preflight",
-      "description": "Purpose: make `vibecode run` safer before launching an external agent. One audit found that run preflight does not explicitly verify generated/runtime ignore rules. If generated/runtime outputs are not ignored, a run can pollute git state or confuse guard baselines.\n\nScope: Work in `vibecode/run.py`, `vibecode/run_plan.py`, and tests such as `tests/test_vibecode_run.py` or `tests/test_vibecode_run_plan.py`. Do not change OpenCode invocation semantics except preflight failure/warning behavior.\n\nRequired behavior: before launching external OpenCode, preflight should verify that critical generated/runtime paths are ignored or at least not tracked: `.vibecode/current/`, `.vibecode/generated/`, `.vibecode/runs/`, `.vibecode/logs/`, `.vibecode/tmp/`, `.vibecode/cache/`, and `.vibecode/index/*.generated.*`. If ignore policy is missing or unsafe, run should fail or produce a hard preflight error before launching the external command. `run-plan` should surface the same issue without launching.\n\nTesting: use temp repos with intentionally missing `.gitignore` entries to prove preflight catches the problem. Tests must not require real OpenCode.\n\nAcceptance criteria: unsafe ignore setup is caught before external process launch; safe setup passes; run-plan reports the same preflight status; generated/runtime outputs remain untracked.\n\nVerification commands: `python -m pytest tests/test_vibecode_run.py tests/test_vibecode_run_plan.py -p no:cacheprovider`; `python -m pytest -p no:cacheprovider`.",
-      "completed": true
-    },
-    {
-      "title": "Clarify and optionally harden shell command execution model",
-      "description": "Purpose: address audit concerns around `shell=True` in `vibecode run` and `vibecode check`. This is a local trusted-repo tool, but the trust model must be explicit. If feasible, reduce shell injection surface without breaking Windows workflows.\n\nScope: Inspect `vibecode/run.py`, `vibecode/check.py`, OpenCode adapter code, tests using fake commands, and docs describing required checks / OPENCODE_COMMAND. Do not casually break command strings on Windows. Do not remove support for user-configured commands unless replaced with documented behavior.\n\nDecision required: either document that required checks and OPENCODE_COMMAND are trusted local shell commands from the user/repo, or migrate to safer list-form command execution where possible. If hardening `run.py`, prefer parsing configured command with `shlex.split()` when safe, `shell=False`, and preserve support for compound commands used by tests. If hardening `check.py`, consider supporting YAML list-form commands in addition to string commands rather than breaking existing command strings.\n\nAcceptance criteria: the command execution trust model is documented; tests cover compound command behavior; fake OpenCode tests still pass; required checks still work on Windows-style command strings; if `shell=True` remains, docs explicitly call it trusted local execution.\n\nVerification commands: `python -m pytest tests/test_vibecode_run.py tests/test_vibecode_run_post.py tests/test_vibecode_check.py -p no:cacheprovider`; `python -m pytest -p no:cacheprovider`.",
-      "completed": true
-    },
-    {
-      "title": "Strengthen stale index detection with path-set or file-state fingerprinting",
-      "description": "Purpose: improve stale-index detection beyond age and git commit. Audits agree stale detection exists, but one audit says it is coarse and may miss file-state/path-set drift.\n\nScope: Work in index run metadata, likely `vibecode/indexer/run_record.py`, `vibecode/indexer/__init__.py`, stale detection logic, `vibecode/run_plan.py`, `vibecode/run.py`, and tests such as `tests/test_vibecode_stale_index.py`. Do not regenerate committed artifacts.\n\nRequired behavior: index metadata should record enough deterministic file-state information to detect when tracked source/docs/config files changed or file set changed since last index, even without a new commit where feasible. This can be a path set hash, tracked file list hash, or combined lightweight fingerprint. Generated/runtime paths must not participate in the fingerprint.\n\nContext integration: `context`, `run-plan`, or `run` should surface stale-index warnings when the fingerprint differs. If current design only warns in run/run-plan, document that clearly.\n\nAcceptance criteria: tests cover changed file after indexing, added tracked-like source file after indexing, generated/runtime change ignored for stale detection, and fresh index clean state; warning message tells user to run `vibecode index`.\n\nVerification commands: `python -m pytest tests/test_vibecode_stale_index.py tests/test_vibecode_run_plan.py tests/test_vibecode_context_pack.py -p no:cacheprovider`; `python -m pytest -p no:cacheprovider`.",
-      "completed": true
-    },
-    {
-      "title": "Clarify project registry fallback behavior in docs and tests",
-      "description": "Purpose: resolve nuance found by the stricter audit: some docs may imply all commands fall back to the active project or current directory uniformly, while implementation treats explicit repo args, active registry, `.` defaults, and `run-plan` differently.\n\nScope: Work in `README.md`, `docs/QUICKSTART.md`, `AGENTS.md` or generated AGENTS command guidance if needed, and tests only if docs reveal actual behavior bugs. Do not change registry behavior unless tests prove it contradicts intended semantics.\n\nRequired documentation: explicitly state that explicit repo path wins; commands designed for registry fallback use active project when repo is omitted; `run-plan` may default to `.` if that is intended; commands that require a repo should error clearly if no active project exists. Include one explicit-path example and one registry example.\n\nAcceptance criteria: docs no longer overclaim universal fallback behavior; registry docs match `python -m vibecode.cli project --help` and command behavior; tests still pass.\n\nVerification commands: `python -m pytest tests/test_vibecode_active_project_fallback.py tests/test_vibecode_project_cli.py -p no:cacheprovider`; `python -m pytest -p no:cacheprovider`.",
-      "completed": true
-    },
-    {
-      "title": "Fix CLI help typo and command-list drift",
-      "description": "Purpose: small polish but important for agent clarity. Audits found `--no-index` help typo and command-list drift around `run-plan` and `history`.\n\nScope: Work in `vibecode/cli.py`, root `AGENTS.md`, `vibecode/context/agents_export.py`, and docs only if needed. Keep this task tiny.\n\nRequired fixes: change `generation/refres` to `generation/refresh`; ensure `run-plan` and `history` are either listed as available commands or explicitly marked as secondary commands; keep generated AGENTS and committed AGENTS in sync.\n\nAcceptance criteria: `python -m vibecode.cli run --help` shows correct spelling; command lists in AGENTS/export/docs match current CLI; no unrelated docs rewrite.\n\nVerification commands: `python -m vibecode.cli run --help`; `python -m pytest tests/test_vibecode_cli.py tests/test_vibecode_agents_export.py -p no:cacheprovider`; `python -m pytest -p no:cacheprovider`.",
-      "completed": true
-    },
-    {
-      "title": "Update STRUCTURE.md with current source and test map",
-      "description": "Purpose: keep human-maintained architecture docs useful. One audit found `.vibecode/architecture/STRUCTURE.md` missing newer test files such as run, run_post, stale_index, full_workflow, diff_summary, registry, project_cli, and active-project fallback tests.\n\nScope: Work only in `.vibecode/architecture/STRUCTURE.md` unless a tightly related doc needs a cross-reference. Do not regenerate repo tree or generated indexes as a source fix.\n\nRequired update: add or update sections listing important modules and test coverage for guard, check, handoff, history, run, run-plan, registry, stale index, diff summary, full workflow, and project CLI. Keep it concise. Do not turn STRUCTURE.md into a full file inventory. It should orient agents to key areas and their tests.\n\nAcceptance criteria: STRUCTURE.md mentions important current implementation areas and their key tests; no stale claim that control-layer commands are missing; docs remain concise.\n\nVerification commands: `python -m pytest -p no:cacheprovider`; optional grep for missing key test file names in STRUCTURE.md.",
-      "completed": true
-    },
-    {
-      "title": "Resolve dead or reserved history check command",
-      "description": "Purpose: clean up confusing dead code found by one audit. `cmd_history_check()` in `history.py` reportedly raises `NotImplementedError` and is not wired to CLI. Dead reserved functions are future-agent traps.\n\nScope: Work in `vibecode/history.py`, `vibecode/cli.py` only if wiring is chosen, and history tests. Do not implement broad history automation.\n\nDecision: either remove the unused `cmd_history_check()` function if it is not part of the intended CLI, or implement a real `vibecode history check` subcommand with tests. Prefer the smaller safe fix: remove or clearly mark internal-only code if no CLI plan exists. If implementing, it must validate `.vibecode/history/*.md` summaries and fail placeholder drafts.\n\nAcceptance criteria: no reachable or discoverable history function raises `NotImplementedError`; tests cover the chosen behavior; CLI help is accurate.\n\nVerification commands: `python -m pytest tests/test_vibecode_history.py -p no:cacheprovider`; `python -m vibecode.cli history --help`; `python -m pytest -p no:cacheprovider`.",
-      "completed": true
-    },
-    {
-      "title": "Decide whether permission profiles are advisory or passed to OpenCode",
-      "description": "Purpose: resolve interpretive drift. Profiles are committed and validated, but audits disagree whether this counts as enforcement. Vibecode should not overclaim that it constrains OpenCode permissions unless it actually passes or translates profile settings to OpenCode.\n\nScope: Work in `.vibecode/agents/*.json`, `vibecode/permissions.py`, `vibecode/run.py`, OpenCode adapter docs/tests, README/QUICKSTART/AGENTS if wording needs correction. Do not invent unsupported OpenCode flags. If OpenCode does not support direct profile ingestion in the current adapter, document profiles as Vibecode-side preflight metadata and future integration surface.\n\nRequired decision: if profiles are advisory metadata, docs must say so clearly: Vibecode validates selected profile exists and records it in run plan/metadata, while actual OpenCode tool permissions depend on OpenCode configuration. If profiles can be passed to OpenCode safely, implement and test the exact mechanism.\n\nAcceptance criteria: docs and code no longer imply stronger enforcement than implemented; `run --profile nonexistent` fails before launch; run metadata records selected profile; tests cover profile selection and missing profile.\n\nVerification commands: `python -m pytest tests/test_vibecode_run.py tests/test_vibecode_opencode_adapter.py -p no:cacheprovider`; `python -m pytest -p no:cacheprovider`.",
-      "completed": true
-    },
-    {
-      "title": "Produce final control-layer audit artifact and close PRD task 43",
-      "description": "Purpose: close the PRD cleanly after repair tasks. Task 43 expects a final control-layer audit report, but chat output alone is not a durable repo artifact unless intentionally recorded.\n\nScope: Create a concise committed report only after the critical fixes above are done, or explicitly decide that `PRD.json` task 43 should remain false until such report exists. Candidate path: `docs/CONTROL_LAYER_FINAL_AUDIT.md`. Do not dump raw chat logs. Do not create a giant report that will rot immediately.\n\nReport content: implementation stage by subsystem, command list, source-truth vs generated/runtime doctrine, test result summary, known remaining limitations, and next recommended dogfooding/stabilization tasks. It must not claim GUI/MCP/swarm exists. It must not overclaim permission profile enforcement if it is advisory.\n\nAcceptance criteria: report is concise and factual; PRD task 43 can be marked completed only after report exists; `python -m json.tool PRD.json` passes; tests pass.\n\nVerification commands: `python -m json.tool PRD.json`; `python -m pytest -p no:cacheprovider`; grep for false claims about GUI/MCP/swarm/OpenCode permission enforcement.",
-      "completed": true
+      "title": "Doplnit dokumentaci pro příkazy serve a dashboard",
+      "description": "Do README.md přidej sekce 'MCP Server' a 'Interaktivní dashboard'. Vysvětli, jak spustit, jaké nástroje MCP poskytuje a jak integrovat s Cursor/Windsurf. U dashboardu popiš ovládání.",
+      "completed": false
     }
   ]
 }

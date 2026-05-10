@@ -312,6 +312,8 @@ def test_init_created_files_covered_by_write_rules(tmp_path):
         ".vibecode/handoff/NEXT.md",
         ".vibecode/handoff/BLOCKERS.md",
         ".vibecode/history/README.md",
+        ".vibecode/index/README.md",
+        ".vibecode/index/schema.json",
         ".vibecode/agents/safe.json",
         ".vibecode/agents/fast.json",
         ".vibecode/agents/audit.json",

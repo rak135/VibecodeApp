@@ -240,7 +240,7 @@ class TestBuildRunPlanCleanRepo:
 
 
 class TestBuildRunPlanDirtyRepo:
-    def test_dirty_repo_emits_warning(self, tmp_path: Path):
+    def test_dirty_repo_emits_error(self, tmp_path: Path):
         _init_repo(tmp_path)
         _write(tmp_path / "src" / "app.py", "print('hello')\n")
         _commit_all(tmp_path)
@@ -255,9 +255,9 @@ class TestBuildRunPlanDirtyRepo:
         assert len(plan.dirty_paths) >= 1
         assert any("app.py" in p for p in plan.dirty_paths)
 
-        # Must contain a dirty-tree warning
-        dirty_warnings = [w for w in plan.preflight_warnings if "dirty" in w.message.lower()]
-        assert len(dirty_warnings) >= 1
+        dirty_errors = [e for e in plan.preflight_errors if "dirty" in e.message.lower()]
+        assert len(dirty_errors) >= 1
+        assert not any("onboarding baseline" in e.message.lower() for e in dirty_errors)
 
 
 # ---------------------------------------------------------------------------
@@ -1129,6 +1129,8 @@ class TestBuildRunPlanOnboardingBaseline:
         errors = [e for e in plan.preflight_errors]
         assert any("onboarding baseline" in e.message.lower() for e in errors)
         assert any("--allow-dirty" in e.message for e in errors)
+        assert any("commit/stash the Vibecode baseline" in e.message for e in errors)
+        assert any("diagnostic planning only" in e.message for e in errors)
 
     def test_vibecode_and_source_dirty_reports_normal_dirty(self, tmp_path: Path):
         """When both .vibecode and source files are dirty, report normal dirty."""
@@ -1178,9 +1180,10 @@ class TestBuildRunPlanOnboardingBaseline:
         assert len(dirty_errors) == 0
         dirty_warnings = [w for w in plan.preflight_warnings if "dirty" in w.message.lower() or "onboarding" in w.message.lower()]
         assert len(dirty_warnings) >= 1
+        assert any("diagnostic planning only" in w.message for w in dirty_warnings)
 
-    def test_gitignore_only_in_onboarding_is_setup(self, tmp_path: Path):
-        """When only .gitignore is dirty alongside .vibecode files, it's still setup."""
+    def test_gitignore_dirty_with_onboarding_reports_normal_dirty(self, tmp_path: Path):
+        """.gitignore dirt is not a Vibecode source-truth baseline file."""
         _init_repo(tmp_path)
         _write(tmp_path / "app.py", "x = 1\n")
         _commit_all(tmp_path)
@@ -1191,7 +1194,27 @@ class TestBuildRunPlanOnboardingBaseline:
 
         assert plan.dirty is True
         errors = [e for e in plan.preflight_errors]
-        assert any("onboarding baseline" in e.message.lower() for e in errors)
+        assert any("Git working tree is dirty" in e.message for e in errors)
+        assert not any("onboarding baseline" in e.message.lower() for e in errors)
+
+    def test_tracked_pyc_dirty_with_onboarding_reports_normal_dirty(self, tmp_path: Path):
+        """Tracked bytecode dirt must remain a normal dirty repo problem."""
+        _init_repo(tmp_path)
+        _write(tmp_path / "app.py", "x = 1\n")
+        pyc = tmp_path / "pkg" / "__pycache__" / "app.cpython-312.pyc"
+        _write(pyc, "old bytecode")
+        _commit_all(tmp_path)
+
+        _write(tmp_path / ".vibecode" / "project.yaml", "project:\n  id: test\n  name: Test\n  root: .\n")
+        _write(pyc, "new bytecode")
+
+        plan = build_run_plan(tmp_path, task="test", platform="opencode")
+
+        assert plan.dirty is True
+        errors = [e for e in plan.preflight_errors]
+        assert any("__pycache__" in e.message for e in errors)
+        assert any("Git working tree is dirty" in e.message for e in errors)
+        assert not any("onboarding baseline" in e.message.lower() for e in errors)
 
 
 # ---------------------------------------------------------------------------

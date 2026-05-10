@@ -115,14 +115,14 @@ def _verify_gitignore_policy(
 
 
 def _is_vibecode_setup_path(rel_path: str) -> bool:
-    """Return True if *rel_path* is a Vibecode setup/baseline path (under .vibecode/)."""
-    return rel_path.startswith(".vibecode/") or rel_path == ".gitignore"
+    """Return True if *rel_path* is a human-maintained Vibecode baseline file."""
+    return rel_path.replace("\\", "/") in _HUMAN_MAINTAINED_PATHS
 
 
 def _classify_dirty_paths(dirty_paths: tuple[str, ...]) -> tuple[tuple[str, ...], tuple[str, ...]]:
     """Split *dirty_paths* into (setup_paths, source_paths).
 
-    setup_paths are under .vibecode/ or .gitignore (onboarding baseline).
+    setup_paths are human-maintained Vibecode baseline files.
     source_paths are everything else (real dirty changes).
     """
     setup: list[str] = []
@@ -204,20 +204,30 @@ def build_run_plan(
                 count = len(dirty_paths)
                 setup_paths, source_paths = _classify_dirty_paths(dirty_paths)
                 if allow_dirty:
-                    warnings.append(RunPlanWarning(
-                        "warn",
-                        f"Git working tree is dirty — {count} changed file(s): "
-                        + ", ".join(dirty_paths[:8])
-                        + (" ..." if count > 8 else ""),
-                    ))
+                    if not source_paths:
+                        warnings.append(RunPlanWarning(
+                            "warn",
+                            f"Vibecode onboarding baseline is pending — {count} setup file(s): "
+                            + ", ".join(dirty_paths[:8])
+                            + (" ..." if count > 8 else "")
+                            + "\n  Review and commit/stash the Vibecode baseline before running an external agent."
+                            + "\n  --allow-dirty is intended for deliberate diagnostic planning only.",
+                        ))
+                    else:
+                        warnings.append(RunPlanWarning(
+                            "warn",
+                            f"Git working tree is dirty — {count} changed file(s): "
+                            + ", ".join(dirty_paths[:8])
+                            + (" ..." if count > 8 else ""),
+                        ))
                 elif not source_paths:
                     errors.append(RunPlanWarning(
                         "error",
-                        f"Vibecode onboarding baseline is pending — {count} new setup file(s): "
+                        f"Vibecode onboarding baseline is pending — {count} setup file(s): "
                         + ", ".join(dirty_paths[:8])
                         + (" ..." if count > 8 else "")
-                        + "\n  Review and commit the .vibecode baseline before running an agent."
-                        + "\n  Or pass --allow-dirty to launch on an uncommitted setup baseline.",
+                        + "\n  Review and commit/stash the Vibecode baseline before running an external agent."
+                        + "\n  Or use --allow-dirty deliberately for diagnostic planning only.",
                     ))
                 else:
                     errors.append(RunPlanWarning(

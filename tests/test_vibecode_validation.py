@@ -31,6 +31,32 @@ def test_validate_valid_indexed_fixture_exits_zero(tmp_path, capsys):
     assert report["status"] == "ok"
 
 
+def test_fresh_init_index_map_validate_has_index_source_truth_files(tmp_path, capsys):
+    assert main(["init", str(tmp_path), "--id", "freshproj", "--name", "Fresh Project"]) == 0
+    _write(tmp_path / "app.py", "def hello():\n    return 'hi'\n")
+
+    assert main(["index", str(tmp_path)]) == 0
+    capsys.readouterr()
+
+    readme = tmp_path / ".vibecode" / "index" / "README.md"
+    schema = tmp_path / ".vibecode" / "index" / "schema.json"
+    assert readme.is_file()
+    assert schema.is_file()
+    assert json.loads(schema.read_text(encoding="utf-8"))["human_maintained"] == [
+        "README.md",
+        "schema.json",
+    ]
+
+    assert main(["map", str(tmp_path)]) == 0
+    map_out = capsys.readouterr().out
+    assert "some human-maintained files are missing" not in map_out
+    assert ".vibecode/index/README.md, .vibecode/index/schema.json" not in map_out
+
+    assert main(["validate", str(tmp_path)]) == 0
+    validate_out = capsys.readouterr().out
+    assert "some human-maintained files are missing" not in validate_out
+
+
 def test_validate_missing_project_yaml_exits_nonzero(tmp_path, capsys):
     rc = main(["validate", str(tmp_path)])
     captured = capsys.readouterr()

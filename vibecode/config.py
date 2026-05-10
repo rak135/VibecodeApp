@@ -69,6 +69,20 @@ DEFAULT_PROTECTED_PATH_RULES = (
         ),
     ),
     ProtectedPathRule(
+        path=".vibecode/history/README.md",
+        rule=(
+            "Durable history policy; edit only when the project memory workflow "
+            "itself changes."
+        ),
+    ),
+    ProtectedPathRule(
+        path=".vibecode/agents/",
+        rule=(
+            "Agent permission/profile definitions; edit only when changing how "
+            "agents are allowed to operate."
+        ),
+    ),
+    ProtectedPathRule(
         path=".vibecode/index/*",
         rule=(
             "Generated index output; regenerate through index commands instead "
@@ -81,44 +95,32 @@ DEFAULT_PROTECTED_PATH_RULES = (
         rule="Runtime/session state; do not commit or treat as source truth.",
     ),
     ProtectedPathRule(
+        path=".vibecode/generated/*",
+        rule="Generated output; regenerate instead of manual edits.",
+    ),
+    ProtectedPathRule(
+        path=".vibecode/logs/*",
+        rule="Runtime logs; do not commit or treat as source truth.",
+    ),
+    ProtectedPathRule(
+        path=".vibecode/runs/*",
+        rule="Agent run metadata; do not commit or treat as source truth.",
+    ),
+    ProtectedPathRule(
+        path=".vibecode/tmp/*",
+        rule="Temporary runtime state; do not commit or treat as source truth.",
+    ),
+    ProtectedPathRule(
+        path=".vibecode/cache/*",
+        rule="Runtime cache; do not commit or treat as source truth.",
+    ),
+    ProtectedPathRule(
         path="README.md",
         rule=(
             "Manual-only until generated block markers are introduced; only "
             "README/docs tasks may change it."
         ),
         explicit_task_scope_required=False,
-    ),
-    ProtectedPathRule(
-        path="vibecode/indexer/scanner.py",
-        rule=(
-            "Scanner semantics define repository inventory; require task scope and "
-            "tests for path/include/exclude behavior."
-        ),
-        required_tests=("python -m pytest tests/test_vibecode_indexer.py",),
-    ),
-    ProtectedPathRule(
-        path="vibecode/indexer/repo_tree.py",
-        rule=(
-            "Repository tree rendering controls generated map output; require task "
-            "scope and tests for tree output."
-        ),
-        required_tests=("python -m pytest tests/test_vibecode_repo_tree.py",),
-    ),
-    ProtectedPathRule(
-        path="vibecode/context/scoring.py",
-        rule=(
-            "Context relevance scoring controls agent context; require task scope "
-            "and tests for ranking behavior."
-        ),
-        required_tests=("python -m pytest tests/test_vibecode_relevant_files.py",),
-    ),
-    ProtectedPathRule(
-        path="vibecode/context/renderer.py",
-        rule=(
-            "Context-pack rendering controls agent-facing output; require task "
-            "scope and tests for rendered sections/limits."
-        ),
-        required_tests=("python -m pytest tests/test_vibecode_context_pack.py",),
     ),
 )
 
