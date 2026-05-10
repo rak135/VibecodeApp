@@ -304,6 +304,17 @@ def create_parser() -> argparse.ArgumentParser:
     # project current
     project_sub.add_parser("current", help="Show the currently active project.")
 
+    # serve
+    serve_parser = subparsers.add_parser(
+        "serve", help="Start the vibecode MCP server with stdio transport."
+    )
+    serve_parser.add_argument(
+        "repo_root",
+        nargs="?",
+        default=None,
+        help="Repository root directory (default: active project from registry).",
+    )
+
     # export-agents
     export_agents_parser = subparsers.add_parser(
         "export-agents", help="Export agent instructions to AGENTS.md."
@@ -468,6 +479,12 @@ def _dispatch(args, parser) -> int:
     if args.command == "history":
         from vibecode.history import cmd_history
         return cmd_history(args)
+
+    if args.command == "serve":
+        args.repo_root = _resolve_repo_root(args)
+        _require_root_exists(args.repo_root)
+        from vibecode.mcp_server import cmd_serve
+        return cmd_serve(args)
 
     if args.command == "export-agents":
         args.repo_root = normalise_root(args.repo_root)

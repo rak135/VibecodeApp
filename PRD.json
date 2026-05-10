@@ -15,7 +15,7 @@
     {
       "title": "Implement MCP server with OpenCode‑focused tools",
       "description": "Create `src/vibecodeapp/mcp_server.py` using the `mcp` package. Define a `VibecodeServer` class that reads `file_inventory.json` and `risk_report.json` at startup. Register three tools: `get_file_card(file_path: str)` – returns a human‑readable card with purpose, symbols, snippet, facts and heuristics; `find_symbol(symbol_name: str)` – returns a JSON array of file paths and symbol details; `list_high_risk()` – returns high‑severity heuristics from the risk report. Add a CLI command `vibecode serve` that starts the server with stdio transport and prints a ready‑to‑paste OpenCode MCP configuration snippet to stderr. Handle edge cases (missing inventory, unknown symbol) with clear error messages. This task focuses purely on writing the server code; do not yet test it.",
-      "completed": false
+      "completed": true
     },
     {
       "title": "Check & fix: test MCP server with Inspector, refine tool behavior",
