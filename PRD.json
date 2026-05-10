@@ -25,7 +25,7 @@
     {
       "title": "Build TUI dashboard with card table, stats footer and detail screen",
       "description": "Add `textual` as a dependency. Create `src/vibecodeapp/tui_app.py` containing a `VibecodeTUI` app. Implement the main screen with a `DataTable` populated from the loaded context cards (columns: File, Purpose, Symbols). Add a `Footer` widget that shows total file count, card count, and high‑risk item count (read from `risk_report.json`). Bind the Enter key to push a new screen with the full card detail: purpose, a table of symbols, lists of facts and heuristics, and a code snippet block. Style the interface with an external `tui_theme.tcss` file using a dark, CLI‑friendly palette. Wire this into the CLI as `vibecode dashboard`, reusing the same data loader function (to be created later, for now inline loading is acceptable). This task produces a self‑contained navigable dashboard ready for review.",
-      "completed": false
+      "completed": true
     },
     {
       "title": "Check & fix: run dashboard, verify navigation and data integrity",

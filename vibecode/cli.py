@@ -315,6 +315,17 @@ def create_parser() -> argparse.ArgumentParser:
         help="Repository root directory (default: active project from registry).",
     )
 
+    # dashboard
+    dashboard_parser = subparsers.add_parser(
+        "dashboard", help="Launch the interactive TUI context-card dashboard."
+    )
+    dashboard_parser.add_argument(
+        "repo_root",
+        nargs="?",
+        default=None,
+        help="Repository root directory (default: active project from registry).",
+    )
+
     # export-agents
     export_agents_parser = subparsers.add_parser(
         "export-agents", help="Export agent instructions to AGENTS.md."
@@ -485,6 +496,13 @@ def _dispatch(args, parser) -> int:
         _require_root_exists(args.repo_root)
         from vibecode.mcp_server import cmd_serve
         return cmd_serve(args)
+
+    if args.command == "dashboard":
+        args.repo_root = _resolve_repo_root(args)
+        _require_root_exists(args.repo_root)
+        from vibecode.tui_app import VibecodeTUI
+        VibecodeTUI(repo_root=args.repo_root).run()
+        return 0
 
     if args.command == "export-agents":
         args.repo_root = normalise_root(args.repo_root)
