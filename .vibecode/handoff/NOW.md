@@ -17,3 +17,4 @@
 - `vibecode run` orchestrates external OpenCode only when explicitly invoked, validates selected permission profiles before launch, and evaluates guard/check/handoff against the post-agent working tree.
 - Default permission profiles live in committed `.vibecode/agents/{safe,fast,audit}.json`.
 - Post-run guard evaluation now uses the same project-loaded protected path policy as standalone `vibecode guard`, with regression coverage for custom `.vibecode/checks/protected_paths.yaml` rules.
+- AGENTS export now preserves the committed managed block content, including `PRD.json`, run metadata, and the current CLI command list.

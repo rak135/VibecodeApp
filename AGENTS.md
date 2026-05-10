@@ -40,6 +40,8 @@ Treat source code, tests, `PRD.json`, and human-maintained docs (`.vibecode/arch
 - `vibecode guard` — check diff against protected/generated paths
 - `vibecode check` — run required checks from `.vibecode/checks/required_checks.yaml`
 - `vibecode handoff-check` — validate handoff file quality
+- `vibecode history` — manage durable history summaries
 - `vibecode run` — explicitly orchestrate an external OpenCode run and then run guard/check/handoff
+- `vibecode run-plan` — assemble an agent run plan without launching it
 - `vibecode project` — manage the local project registry outside the repo
 <!-- vibecode:agents:end -->

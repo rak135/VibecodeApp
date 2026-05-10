@@ -4,8 +4,6 @@ from __future__ import annotations
 
 from pathlib import Path
 
-import pytest
-
 from vibecode.cli import main
 from vibecode.context.agents_export import (
     AGENTS_GENERATED_PATH,
@@ -34,6 +32,7 @@ def test_render_agents_block_references_cli_context_command():
     block = render_agents_block()
     assert "vibecode.cli context" in block
     assert "--task" in block
+    assert "Relevant files with reasons" in block
 
 
 def test_render_agents_block_does_not_reference_stale_context_pack():
@@ -44,6 +43,7 @@ def test_render_agents_block_does_not_reference_stale_context_pack():
 def test_render_agents_block_source_of_truth_section():
     block = render_agents_block()
     assert "## Source of truth" in block
+    assert "PRD.json" in block
 
 
 def test_render_agents_block_references_architecture_files():
@@ -67,9 +67,36 @@ def test_render_agents_block_rules_section():
     assert "handoff" in block
 
 
+def test_render_agents_block_do_not_edit_paths_include_run_metadata():
+    block = render_agents_block()
+    assert ".vibecode/runs/*" in block
+
+
+def test_render_agents_block_lists_available_commands():
+    block = render_agents_block()
+    expected_commands = [
+        "init",
+        "index",
+        "map",
+        "context",
+        "validate",
+        "export-agents",
+        "guard",
+        "check",
+        "handoff-check",
+        "history",
+        "run",
+        "run-plan",
+        "project",
+    ]
+    assert "## Available commands" in block
+    for command in expected_commands:
+        assert f"`vibecode {command}`" in block
+
+
 def test_render_agents_block_is_short():
     block = render_agents_block()
-    assert len(block.splitlines()) < 30, "Generated block should remain concise"
+    assert len(block.splitlines()) < 50, "Generated block should remain concise"
 
 
 def test_render_agents_block_mentions_vibecode_source_of_truth():
@@ -99,6 +126,11 @@ def test_render_agents_file_contains_block_content():
     content = render_agents_file()
     assert "## Before you start" in content
     assert "## Rules" in content
+
+
+def test_committed_agents_md_matches_rendered_file():
+    repo_root = Path(__file__).resolve().parents[1]
+    assert (repo_root / AGENTS_ROOT_PATH).read_text(encoding="utf-8") == render_agents_file()
 
 
 # ---------------------------------------------------------------------------
@@ -208,6 +240,15 @@ def test_write_agents_export_update_preserves_surrounding_content(tmp_path):
     content = agents_md.read_text(encoding="utf-8")
     assert "# My Notes" in content
     assert "More text." in content
+
+
+def test_write_agents_export_managed_agents_md_is_idempotent(tmp_path):
+    agents_md = tmp_path / AGENTS_ROOT_PATH
+    agents_md.write_text(render_agents_file(), encoding="utf-8")
+    before = agents_md.read_text(encoding="utf-8")
+    _, written = write_agents_export(tmp_path)
+    assert written == agents_md
+    assert agents_md.read_text(encoding="utf-8") == before
 
 
 # ---------------------------------------------------------------------------
