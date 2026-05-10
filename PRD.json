@@ -30,7 +30,7 @@
     {
       "title": "Check & fix: run dashboard, verify navigation and data integrity",
       "description": "Launch `vibecode dashboard` and inspect the table. Check that all Python files appear with correct purpose and a representative symbol list. Press Enter on several rows to confirm the detail screen loads and displays all card fields. Test the back button. Ensure the footer counters match the actual number of cards and high‑risk items. If any card is missing a field that causes the detail screen to crash, fix the data loader to provide safe defaults (e.g., empty lists instead of None). Validate the theme applies correctly. This step guarantees the TUI is a reliable visual companion to the MCP server.",
-      "completed": false
+      "completed": true
     },
     {
       "title": "Unify data loading and connect TUI + MCP + CLI",

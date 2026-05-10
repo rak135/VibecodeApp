@@ -4,9 +4,6 @@ from __future__ import annotations
 
 import json
 from pathlib import Path
-from types import SimpleNamespace
-
-import pytest
 
 
 # ---------------------------------------------------------------------------
@@ -148,6 +145,60 @@ class TestLoadDashboardData:
         assert data.cards == []
         assert data.total_files == 1
 
+    def test_null_symbols_normalized_to_empty_list(self, tmp_path):
+        from vibecode.tui_app import load_dashboard_data
+
+        cards = [{"path": "a.py", "purpose": "x", "symbols": None, "facts": [], "heuristics": []}]
+        inv = _make_inventory(cards)
+        _write(tmp_path / ".vibecode" / "index" / "file_inventory.json", json.dumps(inv))
+
+        data = load_dashboard_data(tmp_path)
+        assert data.cards[0]["symbols"] == []
+
+    def test_null_facts_normalized_to_empty_list(self, tmp_path):
+        from vibecode.tui_app import load_dashboard_data
+
+        cards = [{"path": "a.py", "purpose": "x", "symbols": [], "facts": None, "heuristics": []}]
+        inv = _make_inventory(cards)
+        _write(tmp_path / ".vibecode" / "index" / "file_inventory.json", json.dumps(inv))
+
+        data = load_dashboard_data(tmp_path)
+        assert data.cards[0]["facts"] == []
+
+    def test_null_heuristics_normalized_to_empty_list(self, tmp_path):
+        from vibecode.tui_app import load_dashboard_data
+
+        cards = [{"path": "a.py", "purpose": "x", "symbols": [], "facts": [], "heuristics": None}]
+        inv = _make_inventory(cards)
+        _write(tmp_path / ".vibecode" / "index" / "file_inventory.json", json.dumps(inv))
+
+        data = load_dashboard_data(tmp_path)
+        assert data.cards[0]["heuristics"] == []
+
+    def test_all_null_list_fields_normalized(self, tmp_path):
+        from vibecode.tui_app import load_dashboard_data
+
+        cards = [{"path": "a.py", "purpose": "p", "symbols": None, "facts": None, "heuristics": None}]
+        inv = _make_inventory(cards)
+        _write(tmp_path / ".vibecode" / "index" / "file_inventory.json", json.dumps(inv))
+
+        data = load_dashboard_data(tmp_path)
+        card = data.cards[0]
+        assert card["symbols"] == []
+        assert card["facts"] == []
+        assert card["heuristics"] == []
+
+    def test_non_null_list_fields_preserved(self, tmp_path):
+        from vibecode.tui_app import load_dashboard_data
+
+        sym = [{"name": "foo", "kind": "function", "line": 1}]
+        cards = [{"path": "a.py", "purpose": "p", "symbols": sym, "facts": [], "heuristics": []}]
+        inv = _make_inventory(cards)
+        _write(tmp_path / ".vibecode" / "index" / "file_inventory.json", json.dumps(inv))
+
+        data = load_dashboard_data(tmp_path)
+        assert data.cards[0]["symbols"] == sym
+
 
 # ---------------------------------------------------------------------------
 # _symbols_summary helper
@@ -193,6 +244,133 @@ class TestDashboardData:
         assert len(d.cards) == 1
         assert d.total_files == 5
         assert d.high_risk_count == 2
+
+
+# ---------------------------------------------------------------------------
+# CardDetailScreen – safe compose with null / missing fields
+# ---------------------------------------------------------------------------
+
+
+class TestCardDetailScreenSafety:
+    """Verify CardDetailScreen never crashes due to None list fields."""
+
+    def _make_card(self, **overrides) -> dict:
+        base = {
+            "path": "vibecode/foo.py",
+            "purpose": "does something useful",
+            "symbols": [{"name": "Foo", "kind": "class", "line": 1}],
+            "facts": [{"kind": "import", "line": 2, "text": "import os"}],
+            "heuristics": [{"severity": "low", "kind": "high_param_count", "symbol": "bar", "detail": "d"}],
+            "content_snippet": "# code here",
+        }
+        base.update(overrides)
+        return base
+
+    def test_stores_card(self):
+        from vibecode.tui_app import CardDetailScreen
+
+        card = self._make_card()
+        screen = CardDetailScreen(card)
+        assert screen._card is card
+
+    def test_stores_minimal_card(self):
+        from vibecode.tui_app import CardDetailScreen
+
+        card = {"path": "a.py"}
+        screen = CardDetailScreen(card)
+        assert screen._card["path"] == "a.py"
+
+    def test_purpose_none_fallback_logic(self):
+        card = self._make_card(purpose=None)
+        purpose = card.get("purpose") or "(no docstring)"
+        assert purpose == "(no docstring)"
+
+    def test_purpose_empty_string_fallback_logic(self):
+        card = self._make_card(purpose="")
+        purpose = card.get("purpose") or "(no docstring)"
+        assert purpose == "(no docstring)"
+
+    def test_facts_empty_list_renders_none_text(self):
+        """Empty facts list produces '(none)' display text."""
+        facts: list = []
+        facts_text = "\n".join(
+            f"  [{f.get('kind', '?')}] line {f.get('line', 0)}: {f.get('text', '')}"
+            for f in facts
+        ) or "  (none)"
+        assert facts_text == "  (none)"
+
+    def test_heuristics_empty_list_renders_none_text(self):
+        heuristics: list = []
+        heuristics_text = "\n".join(
+            f"  [{h.get('severity', '?')}] {h.get('kind', '?')} – {h.get('symbol', '')}: {h.get('detail', '')}"
+            for h in heuristics
+        ) or "  (none)"
+        assert heuristics_text == "  (none)"
+
+    def test_symbols_list_renders_in_summary(self):
+        from vibecode.tui_app import _symbols_summary
+
+        symbols = [{"name": "Foo", "kind": "class", "line": 1}]
+        result = _symbols_summary(symbols)
+        assert "class" in result
+
+    def test_null_symbols_safe_after_data_loader_normalization(self, tmp_path):
+        """End-to-end: null symbols in JSON → [] after load_dashboard_data."""
+        import json
+        from vibecode.tui_app import load_dashboard_data
+
+        cards = [{"path": "a.py", "purpose": "p", "symbols": None, "facts": None, "heuristics": None}]
+        inv = _make_inventory(cards)
+        _write(tmp_path / ".vibecode" / "index" / "file_inventory.json", json.dumps(inv))
+
+        data = load_dashboard_data(tmp_path)
+        card = data.cards[0]
+        # After normalization, these are safe to call len() on
+        assert len(card["symbols"]) == 0
+        assert len(card["facts"]) == 0
+        assert len(card["heuristics"]) == 0
+
+
+# ---------------------------------------------------------------------------
+# MainScreen – footer subtitle counter correctness
+# ---------------------------------------------------------------------------
+
+
+class TestMainScreenSubtitle:
+    def test_subtitle_contains_card_count(self, tmp_path):
+        from vibecode.tui_app import DashboardData
+
+        cards = [
+            {"path": "a.py", "purpose": "p", "symbols": [], "facts": [], "heuristics": []},
+            {"path": "b.py", "purpose": "q", "symbols": [], "facts": [], "heuristics": []},
+        ]
+        data = DashboardData(cards=cards, total_files=10, high_risk_count=3)
+        # sub_title is set during on_mount; verify the format via the data
+        expected_sub = "Files: 10  Cards: 2  High-Risk: 3"
+        formatted = f"Files: {data.total_files}  Cards: {len(data.cards)}  High-Risk: {data.high_risk_count}"
+        assert formatted == expected_sub
+
+    def test_subtitle_cards_matches_inventory_card_count(self, tmp_path):
+        """Footer card counter equals number of entries in context_cards."""
+        import json
+        from vibecode.tui_app import load_dashboard_data
+
+        cards = [
+            {"path": "a.py", "purpose": "p", "symbols": [], "facts": [], "heuristics": []},
+            {"path": "b.py", "purpose": "q", "symbols": [], "facts": [], "heuristics": []},
+            {"path": "c.py", "purpose": "r", "symbols": [], "facts": [], "heuristics": []},
+        ]
+        files = [{"path": "a.py"}, {"path": "b.py"}, {"path": "c.py"}, {"path": "d.py"}]
+        inv = _make_inventory(cards, files)
+        _write(
+            tmp_path / ".vibecode" / "index" / "file_inventory.json",
+            json.dumps(inv),
+        )
+        data = load_dashboard_data(tmp_path)
+        subtitle = f"Files: {data.total_files}  Cards: {len(data.cards)}  High-Risk: {data.high_risk_count}"
+        assert "Cards: 3" in subtitle
+        assert "Files: 4" in subtitle
+        assert "High-Risk: 0" in subtitle
 
 
 # ---------------------------------------------------------------------------

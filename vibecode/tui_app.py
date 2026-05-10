@@ -37,6 +37,10 @@ def load_dashboard_data(repo_root: Path) -> DashboardData:
             data = {}
         total_files = len(data.get("files", []))
         cards = data.get("context_cards", [])
+        for card in cards:
+            for _field in ("symbols", "facts", "heuristics"):
+                if card.get(_field) is None:
+                    card[_field] = []
 
     risk_path = index_dir / "risk_report.json"
     high_risk_count = 0
