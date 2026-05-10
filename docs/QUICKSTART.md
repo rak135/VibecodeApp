@@ -343,7 +343,11 @@ python -m vibecode.cli run C:\path\to\example-repo --task "Add rate limiting to 
 6. Run post-run guard, required checks, and handoff validation
 7. Write session metadata to `.vibecode/runs/<session_id>.json` and a summary
 
-Permission profiles control what the agent may do:
+Permission profiles are **Vibecode-side advisory metadata**.  Vibecode validates
+that the selected profile exists on disk and records it in run plans and session
+metadata, but does **not** directly constrain OpenCode tool permissions.  Actual
+OpenCode tool permissions are controlled separately through OpenCode configuration
+(``opencode.json``, agent definitions, or ``OPENCODE_PERMISSION``).
 
 | Profile | `allows` | `prompts` | `denies` | Use case |
 |---|---|---|---|---|

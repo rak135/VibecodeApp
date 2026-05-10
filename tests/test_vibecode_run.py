@@ -18,7 +18,7 @@ import pytest
 
 from vibecode.cli import main
 from vibecode.permissions import PROFILES
-from vibecode.run import cmd_run, _run_git_check, _write_run_metadata
+from vibecode.run import cmd_run, _run_git_check, _write_run_metadata, _validate_permission_profile
 from vibecode.run_plan import build_run_plan, RunPlan
 
 
@@ -566,3 +566,134 @@ class TestBuildRunPlanForRun:
         plan = build_run_plan(tmp_path, task="session test", platform="opencode")
         assert plan.metadata["platform"] == "opencode"
         assert "started_at" in plan.metadata
+
+
+# ---------------------------------------------------------------------------
+# _validate_permission_profile
+# ---------------------------------------------------------------------------
+
+
+class TestValidatePermissionProfile:
+    def test_known_profile_passes(self, tmp_path: Path):
+        _init_repo(tmp_path)
+        _minimal_vibecode(tmp_path)
+        _commit_all(tmp_path)
+
+        ok, err = _validate_permission_profile(tmp_path, "safe")
+        assert ok is True
+        assert err is None
+
+    def test_unknown_profile_fails(self, tmp_path: Path):
+        _init_repo(tmp_path)
+        _minimal_vibecode(tmp_path)
+        _commit_all(tmp_path)
+
+        ok, err = _validate_permission_profile(tmp_path, "nonexistent")
+        assert ok is False
+        assert "Unknown permission profile" in err
+
+    def test_missing_file_fails(self, tmp_path: Path):
+        _init_repo(tmp_path)
+        _minimal_vibecode(tmp_path)
+        (tmp_path / ".vibecode" / "agents" / "safe.json").unlink()
+        _commit_all(tmp_path)
+
+        ok, err = _validate_permission_profile(tmp_path, "safe")
+        assert ok is False
+        assert "missing at" in err
+
+    def test_corrupt_json_fails(self, tmp_path: Path):
+        _init_repo(tmp_path)
+        _minimal_vibecode(tmp_path)
+        profile_path = tmp_path / ".vibecode" / "agents" / "safe.json"
+        profile_path.write_text("not valid json{{{", encoding="utf-8")
+        _commit_all(tmp_path)
+
+        ok, err = _validate_permission_profile(tmp_path, "safe")
+        assert ok is False
+        assert "not valid JSON" in err
+
+    def test_json_array_fails(self, tmp_path: Path):
+        _init_repo(tmp_path)
+        _minimal_vibecode(tmp_path)
+        profile_path = tmp_path / ".vibecode" / "agents" / "safe.json"
+        profile_path.write_text('["not", "a", "dict"]', encoding="utf-8")
+        _commit_all(tmp_path)
+
+        ok, err = _validate_permission_profile(tmp_path, "safe")
+        assert ok is False
+        assert "must be a JSON object" in err
+
+
+# ---------------------------------------------------------------------------
+# Profile recording in metadata
+# ---------------------------------------------------------------------------
+
+
+class TestProfileInMetadata:
+    def test_run_plan_metadata_records_profile(self, tmp_path: Path):
+        _init_repo(tmp_path)
+        _minimal_vibecode(tmp_path)
+        _commit_all(tmp_path)
+
+        plan = build_run_plan(tmp_path, task="test", profile_name="audit")
+        assert plan.metadata["profile"] == "audit"
+
+        plan2 = build_run_plan(tmp_path, task="test", profile_name="fast")
+        assert plan2.metadata["profile"] == "fast"
+
+        # Default is "safe" when no profile specified
+        plan3 = build_run_plan(tmp_path, task="test")
+        assert plan3.metadata["profile"] == "safe"
+
+    def test_run_summary_records_profile(self):
+        from vibecode.run import RunSummary
+
+        summary = RunSummary(
+            session_id="test-session",
+            started_at="2026-01-01T00:00:00Z",
+            finished_at="2026-01-01T00:01:00Z",
+            platform="opencode",
+            profile="audit",
+            repo_root="/test",
+            task="test task",
+            dirty=False,
+            index_fresh=True,
+            command="opencode",
+            exit_code=0,
+            stdout="OK",
+            stderr="",
+            agent_status="success",
+        )
+        assert summary.profile == "audit"
+        data = summary.as_dict()
+        assert data["profile"] == "audit"
+
+    def test_run_metadata_json_includes_profile(self, tmp_path: Path):
+        _init_repo(tmp_path)
+        _minimal_vibecode(tmp_path)
+        _commit_all(tmp_path)
+
+        from vibecode.run import _write_run_metadata, RunSummary, _write_run_summary
+
+        plan = build_run_plan(tmp_path, task="test", profile_name="fast")
+        path = _write_run_metadata(
+            tmp_path / ".vibecode", "session-prof",
+            plan, command="opencode", exit_code=0, stdout="OK", stderr="",
+        )
+        data = json.loads(path.read_text(encoding="utf-8"))
+        assert data["profile"] == "fast"
+
+    def test_all_profiles_accepted_and_recorded(self, tmp_path: Path):
+        _init_repo(tmp_path)
+        _minimal_vibecode(tmp_path)
+        _commit_all(tmp_path)
+
+        for profile_name in ("safe", "fast", "audit"):
+            plan = build_run_plan(tmp_path, task="test", profile_name=profile_name)
+            assert plan.metadata["profile"] == profile_name
+            # No preflight errors for valid profiles
+            assert not any(
+                e.level == "error" and "profile" in e.message.lower()
+                for e in plan.preflight_errors
+            )

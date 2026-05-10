@@ -280,7 +280,7 @@
     {
       "title": "Decide whether permission profiles are advisory or passed to OpenCode",
       "description": "Purpose: resolve interpretive drift. Profiles are committed and validated, but audits disagree whether this counts as enforcement. Vibecode should not overclaim that it constrains OpenCode permissions unless it actually passes or translates profile settings to OpenCode.\n\nScope: Work in `.vibecode/agents/*.json`, `vibecode/permissions.py`, `vibecode/run.py`, OpenCode adapter docs/tests, README/QUICKSTART/AGENTS if wording needs correction. Do not invent unsupported OpenCode flags. If OpenCode does not support direct profile ingestion in the current adapter, document profiles as Vibecode-side preflight metadata and future integration surface.\n\nRequired decision: if profiles are advisory metadata, docs must say so clearly: Vibecode validates selected profile exists and records it in run plan/metadata, while actual OpenCode tool permissions depend on OpenCode configuration. If profiles can be passed to OpenCode safely, implement and test the exact mechanism.\n\nAcceptance criteria: docs and code no longer imply stronger enforcement than implemented; `run --profile nonexistent` fails before launch; run metadata records selected profile; tests cover profile selection and missing profile.\n\nVerification commands: `python -m pytest tests/test_vibecode_run.py tests/test_vibecode_opencode_adapter.py -p no:cacheprovider`; `python -m pytest -p no:cacheprovider`.",
-      "completed": false
+      "completed": true
     },
     {
       "title": "Produce final control-layer audit artifact and close PRD task 43",

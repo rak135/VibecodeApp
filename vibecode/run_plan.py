@@ -3,6 +3,10 @@
 Builds a structured plan for an OpenCode (or other platform) run without
 actually launching an agent.  This lets the user inspect the plan, confirm
 preflight checks, and decide whether to proceed.
+
+Permission profiles are validated and recorded as Vibecode-side advisory
+metadata.  They are not passed to OpenCode -- actual OpenCode tool
+permissions are controlled by the user's OpenCode configuration.
 """
 
 from __future__ import annotations
@@ -313,7 +317,7 @@ def build_run_plan(
                 vibecode_dir / "current" / "opencode_prompt.md"
             )
 
-    # --- 6. Permission profile ----------------------------------------------
+    # --- 6. Permission profile (advisory — validated, recorded, not passed to OpenCode) ---
     profile_name = profile_name or "safe"
     profile_file = vibecode_dir / "agents" / f"{profile_name}.json"
     permission_profile: str | None = None

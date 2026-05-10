@@ -156,7 +156,7 @@ def create_parser() -> argparse.ArgumentParser:
     run_parser.add_argument(
         "--profile",
         default=None,
-        help="Permission profile name (default: safe).",
+        help="Advisory permission profile name (validated + recorded; does not constrain OpenCode). Default: safe.",
     )
     run_parser.add_argument(
         "--allow-dirty",
@@ -194,7 +194,7 @@ def create_parser() -> argparse.ArgumentParser:
     run_plan_parser.add_argument(
         "--profile",
         default=None,
-        help="Permission profile name (default: safe).",
+        help="Advisory permission profile name (validated + recorded; does not constrain OpenCode). Default: safe.",
     )
     run_plan_parser.add_argument(
         "--allow-dirty",

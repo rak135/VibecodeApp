@@ -200,7 +200,7 @@ Agent-facing files have different lifecycles:
 - Root `AGENTS.md` is stable agent instruction for the repository.
 - `.vibecode/current/context_pack.md` is task-specific runtime output.
 - `.vibecode/generated/AGENTS.generated.md` is generated export output and remains ignored.
-- `.vibecode/agents/safe.json`, `.vibecode/agents/fast.json`, and `.vibecode/agents/audit.json` are committed permission profiles; `vibecode init` creates missing defaults without overwriting customized profiles unless `--force` is used.
+- `.vibecode/agents/safe.json`, `.vibecode/agents/fast.json`, and `.vibecode/agents/audit.json` are committed permission profiles used as Vibecode-side advisory metadata.  Vibecode validates and records the selected profile but does not directly constrain OpenCode tool permissions (those are controlled by OpenCode configuration).  `vibecode init` creates missing defaults without overwriting customized profiles unless `--force` is used.
 
 `export-agents` writes `.vibecode/generated/AGENTS.generated.md` and creates or updates root `AGENTS.md` only when it is absent or Vibecode-managed. A manual root `AGENTS.md` is not overwritten without `--force`.
 

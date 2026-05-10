@@ -1,9 +1,21 @@
 """Agent permission profiles for vibecode run workflows.
 
-Permission profiles define what an agent is allowed to do during a run:
+Permission profiles are **Vibecode-side advisory metadata**.  Vibecode validates
+that a selected profile exists and records it in run plans and session metadata,
+but does **not** currently translate profiles into OpenCode tool permissions.
+
+Actual OpenCode tool permissions are controlled by the user's OpenCode
+configuration (``opencode.json``, agent definitions, or the
+``OPENCODE_PERMISSION`` environment variable).
+
+Profile definitions (used for preflight validation and run-plan assembly):
 - safe:   read allow, grep/glob allow, edit ask, bash ask, generated files deny
 - fast:   edit allow, bash ask, guard after run
 - audit:  read only, no edit, no write
+
+Future integration surface: Vibecode profiles could be translated into
+OpenCode-compatible permission objects (e.g. ``OPENCODE_PERMISSION`` env var
+or ``--agent`` frontmatter).  This is not implemented yet.
 """
 
 from __future__ import annotations

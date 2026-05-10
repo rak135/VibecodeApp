@@ -10,6 +10,19 @@ Flow:
   7. Write session metadata and summary under .vibecode/runs/<timestamp>/.
   8. Print concise result.
 
+Permission profiles
+-------------------
+The ``--profile`` flag selects a Vibecode-side advisory profile (``safe``,
+``fast``, or ``audit``).  Vibecode validates the profile exists on disk and
+records it in run plans and session metadata.  It does **not** pass the
+profile to OpenCode or constrain OpenCode tool permissions -- those are
+controlled by the user's OpenCode configuration (``opencode.json``, agent
+definitions, or the ``OPENCODE_PERMISSION`` environment variable).
+
+Profiles are preflight metadata that Vibecode validates, records, and may
+use in future integration surfaces (e.g. translating to OpenCode-compatible
+permission objects).
+
 Trust model
 -----------
 The platform command (resolved from the ``OPENCODE_COMMAND`` environment
