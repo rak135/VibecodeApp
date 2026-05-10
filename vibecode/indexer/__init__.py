@@ -67,6 +67,7 @@ __all__ = [
     "analyze_heuristics",
     "build_risk_report",
     "write_risk_report",
+    "cmd_inventory",
 ]
 
 
@@ -143,6 +144,81 @@ def check_index_freshness(
             )
 
     return True, "fresh"
+
+
+def cmd_inventory(args) -> int:
+    """Scan repo, write file_inventory.json with context_cards and risk_report.json."""
+    repo_root = Path(args.repo_root).resolve()
+
+    vibecode_dir = repo_root / ".vibecode"
+    if not (vibecode_dir / "project.yaml").exists():
+        print(
+            f"Error: No project.yaml found in {vibecode_dir}.\n"
+            "       Run 'vibecode init' to initialize the project.",
+            file=sys.stderr,
+        )
+        return 1
+
+    from vibecode.config import load_config
+
+    cfg = load_config(vibecode_dir)
+    include = cfg.include
+    exclude = cfg.exclude
+    project_id = cfg.project_id
+    protected_paths = cfg.protected_paths
+    risk_rules = [r for r in cfg.risk_rules if isinstance(r, dict)]
+
+    print(f"Inventory: scanning {repo_root}", file=sys.stderr)
+    files = scan(repo_root, include=include, exclude=exclude)
+
+    run_log: list[str] = []
+    records = [classify(f.path, f.size) for f in files]
+    risk_index = build_risk_index(records, protected_paths, risk_rules, run_log=run_log)
+
+    card_cfg = _load_card_config(vibecode_dir)
+
+    inventory_path = vibecode_dir / "index" / "file_inventory.json"
+    write_inventory(
+        project_id,
+        repo_root,
+        files,
+        inventory_path,
+        risk_index=risk_index,
+        generate_cards=True,
+        card_detail=card_cfg["detail_level"],
+        compute_heuristics=card_cfg["compute_heuristics"],
+    )
+    py_count = sum(1 for f in files if f.path.endswith(".py"))
+    print(
+        f"  {len(files)} file(s) scanned, {py_count} Python file(s) with context cards",
+        file=sys.stderr,
+    )
+    print(
+        f"  inventory written to {inventory_path.relative_to(repo_root).as_posix()}",
+        file=sys.stderr,
+    )
+
+    risk_report_path = vibecode_dir / "index" / "risk_report.json"
+    risk_items = _build_risk_items(
+        repo_root,
+        files,
+        risk_index,
+        card_cfg["compute_heuristics"],
+    )
+    write_risk_report(project_id, repo_root, risk_items, risk_report_path)
+    print(
+        f"  risk report written to {risk_report_path.relative_to(repo_root).as_posix()}",
+        file=sys.stderr,
+    )
+
+    if run_log:
+        print(f"  {len(run_log)} warning(s):", file=sys.stderr)
+        for msg in run_log:
+            print(f"    {msg}", file=sys.stderr)
+
+    return 0
+
+
 def cmd_index(args) -> int:
     repo_root = Path(args.repo_root).resolve()
     started_at = datetime.now(tz=timezone.utc)

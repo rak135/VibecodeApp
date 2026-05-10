@@ -17,6 +17,7 @@ class ParseResult:
     module_docstring: str | None
     symbols: list[str] = field(default_factory=list)
     functions: list[dict] = field(default_factory=list)
+    symbol_records: list[dict] = field(default_factory=list)  # [{name, kind, line}, ...]
 
 
 _EMPTY = ParseResult(module_docstring=None)
@@ -41,10 +42,13 @@ def parse_python_file(path: Path) -> ParseResult:
     docstring = ast.get_docstring(tree)
     symbols: list[str] = []
     functions: list[dict] = []
+    symbol_records: list[dict] = []
 
     for node in ast.walk(tree):
         if isinstance(node, (ast.FunctionDef, ast.AsyncFunctionDef)):
+            kind = "async_function" if isinstance(node, ast.AsyncFunctionDef) else "function"
             symbols.append(node.name)
+            symbol_records.append({"name": node.name, "kind": kind, "line": node.lineno})
             args = node.args
             param_count = (
                 len(getattr(args, "posonlyargs", []))
@@ -60,9 +64,11 @@ def parse_python_file(path: Path) -> ParseResult:
             })
         elif isinstance(node, ast.ClassDef):
             symbols.append(node.name)
+            symbol_records.append({"name": node.name, "kind": "class", "line": node.lineno})
 
     return ParseResult(
         module_docstring=docstring,
         symbols=symbols,
         functions=functions,
+        symbol_records=symbol_records,
     )

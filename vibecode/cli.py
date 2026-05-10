@@ -38,6 +38,18 @@ def create_parser() -> argparse.ArgumentParser:
         "--force", action="store_true", help="Overwrite existing human-maintained files."
     )
 
+    # inventory
+    inventory_parser = subparsers.add_parser(
+        "inventory",
+        help="Scan repository and write file_inventory.json with context cards and risk_report.json.",
+    )
+    inventory_parser.add_argument(
+        "repo_root",
+        nargs="?",
+        default=None,
+        help="Repository root directory (default: active project from registry).",
+    )
+
     # index
     index_parser = subparsers.add_parser("index", help="Scan and index repository files.")
     index_parser.add_argument(
@@ -393,6 +405,12 @@ def _dispatch(args, parser) -> int:
         args.repo_root = normalise_root(args.repo_root)
         from vibecode.project import cmd_init
         return cmd_init(args)
+
+    if args.command == "inventory":
+        args.repo_root = _resolve_repo_root(args)
+        _require_root_exists(args.repo_root)
+        from vibecode.indexer import cmd_inventory
+        return cmd_inventory(args)
 
     if args.command == "index":
         args.repo_root = _resolve_repo_root(args)

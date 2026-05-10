@@ -21,6 +21,7 @@ class Heuristic:
     kind: str  # "high_param_count", "suspicious_name"
     symbol: str
     detail: str
+    severity: str = "low"  # "low", "medium", "high"
 
 
 @dataclass
@@ -40,8 +41,9 @@ class ContextCard:
 
     path: str
     language: str
-    module_docstring: str | None
-    symbols: list[str] = field(default_factory=list)
+    purpose: str | None  # module docstring
+    symbols: list[dict] = field(default_factory=list)  # each: {name, kind, line}
+    content_snippet: str = ""  # first 200 characters of file
     facts: list[Fact] = field(default_factory=list)
     heuristics: list[Heuristic] = field(default_factory=list)
     detail_level: str = "basic"

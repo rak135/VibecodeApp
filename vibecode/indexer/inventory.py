@@ -42,12 +42,14 @@ def _build_card_dict(
     card: dict = {
         "path": card_rec["path"],
         "language": "python",
-        "module_docstring": parsed.module_docstring,
-        "symbols": parsed.symbols,
+        "purpose": parsed.module_docstring,
+        "symbols": parsed.symbol_records,
+        "content_snippet": content[:200],
         "detail_level": detail_level,
         "facts": [{"kind": f.kind, "line": f.line, "text": f.text} for f in facts],
         "heuristics": [
-            {"kind": h.kind, "symbol": h.symbol, "detail": h.detail} for h in heuristics
+            {"kind": h.kind, "symbol": h.symbol, "detail": h.detail, "severity": h.severity}
+            for h in heuristics
         ],
     }
     return card
@@ -109,7 +111,7 @@ def build_inventory(
                 card = _build_card_dict(rec, root, card_detail, compute_heuristics)
                 if card is not None:
                     cards.append(card)
-        result["cards"] = cards
+        result["context_cards"] = cards
 
     return result
 

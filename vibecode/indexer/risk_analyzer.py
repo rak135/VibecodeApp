@@ -74,6 +74,7 @@ def analyze_heuristics(functions: list[dict]) -> list[Heuristic]:
                 kind="high_param_count",
                 symbol=fn["name"],
                 detail=f"{fn['param_count']} parameters",
+                severity="medium",
             ))
         name_lower = fn["name"].lower()
         for sus in _SUSPICIOUS_NAMES:
@@ -82,6 +83,7 @@ def analyze_heuristics(functions: list[dict]) -> list[Heuristic]:
                     kind="suspicious_name",
                     symbol=fn["name"],
                     detail=f"name contains '{sus}'",
+                    severity="low",
                 ))
                 break
     return heuristics

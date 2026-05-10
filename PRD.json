@@ -10,7 +10,7 @@
     {
       "title": "Check & fix: verify context cards and risk report, correct imperfections",
       "description": "Run `vibecode inventory` on the project itself. Check that `.vibecode/file_inventory.json` contains a `context_cards` key with valid cards for all Python files. Each card must have a non-empty `purpose` (the docstring), a list of symbols with `name`, `kind`, and `line`, and the `content_snippet` of the first 200 characters. Verify that `.vibecode/risk_report.json` contains separated `facts` and `heuristics` lists, and that the heuristic items include severity levels. Spot‑check a few files manually. If any field is missing or incorrectly formatted, fix the extraction logic. Adjust the config loader to handle missing files gracefully. Correct any import errors. Document any remaining quirks. This step ensures the foundation for MCP and TUI is rock‑solid.",
-      "completed": false
+      "completed": true
     },
     {
       "title": "Implement MCP server with OpenCode‑focused tools",

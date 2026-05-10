@@ -16,7 +16,7 @@ def _fact_to_dict(fact: Fact) -> dict:
 
 
 def _heuristic_to_dict(h: Heuristic) -> dict:
-    return {"kind": h.kind, "symbol": h.symbol, "detail": h.detail}
+    return {"kind": h.kind, "symbol": h.symbol, "detail": h.detail, "severity": h.severity}
 
 
 def build_risk_report(
