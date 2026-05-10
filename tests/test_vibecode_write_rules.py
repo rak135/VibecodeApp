@@ -127,6 +127,21 @@ def test_is_human_maintained_false_for_generated_inventory(tmp_path):
     assert is_human_maintained(path, tmp_path) is False
 
 
+def test_generated_index_outputs_are_not_human_maintained(tmp_path):
+    generated_outputs = (
+        "file_inventory.json",
+        "symbol_map.json",
+        "dependency_map.json",
+        "test_map.json",
+        "entrypoints.md",
+        "risky_files.md",
+        "repo_tree.generated.md",
+    )
+    for name in generated_outputs:
+        path = tmp_path / ".vibecode" / "index" / name
+        assert is_human_maintained(path, tmp_path) is False, name
+
+
 def test_is_human_maintained_false_for_generated_context_pack(tmp_path):
     path = tmp_path / ".vibecode" / "current" / "context_pack.md"
     assert is_human_maintained(path, tmp_path) is False

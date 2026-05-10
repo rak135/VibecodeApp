@@ -18,7 +18,7 @@ from datetime import datetime, timezone
 from pathlib import Path
 from typing import Any
 
-from vibecode.adapters.opencode import check_opencode
+from vibecode.adapters.opencode import check_opencode, resolve_opencode_command
 from vibecode.config import load_config
 from vibecode.git_state import GitState, current_git_commit, inspect_git_state
 from vibecode.indexer import check_inventory_health, compute_current_file_set_fingerprint
@@ -342,9 +342,11 @@ def build_run_plan(
     # --- 6. OpenCode availability check ---------------------------------------
     opencode_available: bool | None = None
     opencode_message: str | None = None
+    opencode_command: str | None = None
 
     if platform == "opencode":
-        opencode_status = check_opencode()
+        opencode_command = resolve_opencode_command()
+        opencode_status = check_opencode(opencode_command)
         opencode_available = bool(opencode_status)
         opencode_message = opencode_status.message
         if not opencode_status:
@@ -365,6 +367,8 @@ def build_run_plan(
     if not opencode_available and platform == "opencode":
         commands.append("# OpenCode is not available — install it or set OPENCODE_COMMAND.")
     commands.append(f"# Platform: {platform}")
+    if opencode_command:
+        commands.append(f"# OpenCode command: {opencode_command}")
     commands.append(f"# Permission profile: {profile_name}")
     if context_pack_path:
         commands.append(f"# Context pack: {context_pack_path}")
@@ -395,6 +399,7 @@ def build_run_plan(
             "started_at": datetime.now(tz=timezone.utc).isoformat(),
             "platform": platform,
             "profile": profile_name,
+            "opencode_command": opencode_command,
         },
     )
 

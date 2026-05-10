@@ -173,7 +173,7 @@ Key points:
 - Registry state is local to your machine and is never committed to version
   control.
 - Explicit repo paths always win — when you pass ``--repo`` or a positional
-  path argument, the registry is never consulted.
+  path argument, including ``.``, the registry is never consulted.
 - These commands use the active project as a fallback when no path is given:
   ``index``, ``map``, ``validate``, ``guard``, ``check``, ``handoff-check``,
   ``run``, ``context``.  If no active project exists, they **error** with a
@@ -204,7 +204,7 @@ Agent-facing files have different lifecycles:
 
 `export-agents` writes `.vibecode/generated/AGENTS.generated.md` and creates or updates root `AGENTS.md` only when it is absent or Vibecode-managed. A manual root `AGENTS.md` is not overwritten without `--force`.
 
-Generated indexes and runtime/current files are not source of truth. Regenerate `.vibecode/index/*` and `.vibecode/current/*` before giving the context to another agent. Human-maintained project rules live under `.vibecode/project.yaml`, `.vibecode/architecture/`, `.vibecode/checks/`, `.vibecode/handoff/`, `.vibecode/history/`, and `.vibecode/agents/`.
+Generated indexes and runtime/current files are not source of truth. Under `.vibecode/index/`, only `README.md` and `schema.json` are human-maintained; generated outputs such as `file_inventory.json`, `symbol_map.json`, `dependency_map.json`, `test_map.json`, `entrypoints.md`, `risky_files.md`, and `repo_tree.generated.md` must be regenerated, ignored, and not manually edited. Human-maintained project rules live under `.vibecode/project.yaml`, `.vibecode/architecture/`, `.vibecode/checks/`, `.vibecode/handoff/`, `.vibecode/history/`, and `.vibecode/agents/`.
 
 
 

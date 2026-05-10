@@ -19,7 +19,7 @@
 - `.vibecode/history/README.md` is human-maintained.
 - `.vibecode/agents/*.json` is human-maintained.
 - `.vibecode/index/schema.json` and `.vibecode/index/README.md` are human-maintained.
-- `.vibecode/index/*.generated.*` is generated.
+- All other `.vibecode/index/*` outputs are generated index maps and must be regenerated, not manually edited.
 - `.vibecode/current/*` is runtime/session state.
 - `.vibecode/generated/*` is generated/export.
 - `.vibecode/logs/*` is runtime logs.

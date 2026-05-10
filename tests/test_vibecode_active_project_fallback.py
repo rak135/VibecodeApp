@@ -122,6 +122,38 @@ class TestIndexWithRegistryFallback:
         err = capsys.readouterr().err
         assert "No repository root given" not in err
 
+    def test_explicit_dot_targets_current_directory(
+        self, tmp_path, tmp_registry, sample_project, monkeypatch, capsys
+    ):
+        """`vibecode index .` must use cwd, not the active registry project."""
+        _register_and_activate(tmp_registry, "SAMPLE", sample_project)
+        other = tmp_path / "other-dot"
+        other.mkdir()
+        vdir = other / ".vibecode"
+        vdir.mkdir()
+        (vdir / "project.yaml").write_text(
+            "project:\n  id: otherdot\n  name: Other Dot\n  root: .\n"
+            "indexing:\n  include: []\n  exclude: []\n"
+            "protected_paths: []\nrisk_rules: []\n",
+            encoding="utf-8",
+        )
+        (vdir / "architecture").mkdir()
+        (vdir / "architecture" / "INVARIANTS.md").write_text(
+            "# Invariants\n\n- Test invariant.\n", encoding="utf-8"
+        )
+        (vdir / "checks").mkdir()
+        (vdir / "checks" / "required_checks.yaml").write_text(
+            "checks: []\n", encoding="utf-8"
+        )
+        (other / "app.py").write_text("x = 1\n", encoding="utf-8")
+
+        monkeypatch.chdir(other)
+        rc = main(["index", "."])
+        err = capsys.readouterr().err
+
+        assert rc == 0
+        assert f"Indexing {other.resolve()}" in err
+
 
 # ---------------------------------------------------------------------------
 # map
@@ -415,11 +447,11 @@ class TestResolveRepoRoot:
     def test_dot_repo_root_with_fallback_checks_registry(
         self, tmp_path, tmp_registry, sample_project
     ):
-        """Explicit '.' triggers registry fallback."""
+        """Explicit '.' means the current directory, not registry fallback."""
         _register_and_activate(tmp_registry, "SAMPLE", sample_project)
         args = SimpleNamespace(repo_root=".")
         result = _resolve_repo_root(args, allow_fallback=True)
-        assert result.resolve() == sample_project.resolve()
+        assert result == Path.cwd().resolve()
 
     def test_dot_repo_root_without_fallback_uses_cwd(self):
         args = SimpleNamespace(repo_root=".")

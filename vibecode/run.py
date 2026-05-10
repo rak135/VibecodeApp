@@ -42,7 +42,6 @@ from __future__ import annotations
 
 import json
 import os
-import shutil
 import subprocess
 import sys
 from dataclasses import dataclass
@@ -50,7 +49,7 @@ from datetime import datetime, timezone
 from pathlib import Path
 from typing import Any
 
-from vibecode.adapters.opencode import check_opencode
+from vibecode.adapters.opencode import check_opencode, resolve_opencode_command
 from vibecode.check import CheckRun, run_checks, write_check_results
 from vibecode.config import load_config
 from vibecode.context import cmd_context
@@ -65,17 +64,7 @@ from vibecode.run_plan import build_run_plan
 
 def _get_opencode_command(config: Any | None, env: dict[str, str]) -> str | None:
     """Resolve the OpenCode command from config or environment."""
-    # Check environment variable first.
-    env_cmd = env.get("OPENCODE_COMMAND")
-    if env_cmd:
-        return env_cmd
-
-    # Fall back to the default binary name.
-    default_cmd = "opencode"
-    if shutil.which(default_cmd):
-        return default_cmd
-
-    return None
+    return resolve_opencode_command(env)
 
 
 @dataclass

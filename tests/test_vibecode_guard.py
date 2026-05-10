@@ -51,6 +51,13 @@ def test_generated_runtime_change_fails_for_generated_index_file():
     assert result.findings[0].path == ".vibecode/index/repo_tree.generated.md"
 
 
+def test_generated_runtime_change_fails_for_index_map_output():
+    result = check_generated_runtime_changes((".vibecode/index/file_inventory.json",))
+
+    assert result.passed is False
+    assert result.findings[0].path == ".vibecode/index/file_inventory.json"
+
+
 def test_generated_runtime_change_fails_for_runtime_directories():
     paths = (
         ".vibecode/logs/run.log",

@@ -69,8 +69,12 @@ DEFAULT_PROTECTED_PATH_RULES = (
         ),
     ),
     ProtectedPathRule(
-        path=".vibecode/index/*.generated.*",
-        rule="Regenerate through index commands instead of manual edits.",
+        path=".vibecode/index/*",
+        rule=(
+            "Generated index output; regenerate through index commands instead "
+            "of manual edits. Only .vibecode/index/README.md and "
+            ".vibecode/index/schema.json are human-maintained source truth."
+        ),
     ),
     ProtectedPathRule(
         path=".vibecode/current/*",

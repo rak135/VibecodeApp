@@ -55,7 +55,7 @@
 
 ## Generated/runtime locations
 
-- `.vibecode/index/*.generated.*` contains regenerated indexes.
+- Generated `.vibecode/index/*` outputs such as file inventory, symbol map, dependency map, test map, entrypoint/risk maps, and repo tree are regenerated indexes; only `README.md` and `schema.json` there are human-maintained.
 - `.vibecode/current/*` contains current task/session outputs.
 - `.vibecode/generated/*` contains export artifacts.
 - `.vibecode/logs/*` contains runtime logs.

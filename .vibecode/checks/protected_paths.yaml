@@ -11,8 +11,8 @@ protected_paths:
   - path: ".vibecode/handoff/"
     rule: "Edit only to record current scope or handoff state; do not treat it as generated output."
 
-  - path: ".vibecode/index/*.generated.*"
-    rule: "Regenerate through index commands instead of manual edits."
+  - path: ".vibecode/index/*"
+    rule: "Generated index output; regenerate through index commands instead of manual edits. Only .vibecode/index/README.md and .vibecode/index/schema.json are human-maintained source truth."
 
   - path: ".vibecode/current/*"
     rule: "Runtime/session state; do not commit or treat as source truth."

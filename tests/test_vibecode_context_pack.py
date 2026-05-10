@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import json
+from datetime import datetime, timedelta, timezone
 from pathlib import Path
 
 from vibecode.cli import main
@@ -253,8 +254,8 @@ def test_context_pack_renders_protected_path_policy_details(tmp_path):
     _write(
         tmp_path / ".vibecode" / "checks" / "protected_paths.yaml",
         "protected_paths:\n"
-        "  - path: \".vibecode/index/*.generated.*\"\n"
-        "    rule: \"Regenerate through index commands instead of manual edits.\"\n"
+        "  - path: \".vibecode/index/*\"\n"
+        "    rule: \"Generated index output; regenerate through index commands instead of manual edits. Only README.md and schema.json are human-maintained.\"\n"
         "  - path: \"vibecode/context/renderer.py\"\n"
         "    rule: \"Context rendering changes require tests.\"\n"
         "    required_tests:\n"
@@ -271,7 +272,7 @@ def test_context_pack_renders_protected_path_policy_details(tmp_path):
 
     assert "## Protected paths / edit constraints" in content
     assert "Policy source: `.vibecode/checks/protected_paths.yaml`." in content
-    assert "`.vibecode/index/*.generated.*`: rule: Regenerate through index commands" in content
+    assert "`.vibecode/index/*`: rule: Generated index output; regenerate through index commands" in content
     assert "explicit task scope: not manually editable" in content
     assert "`vibecode/context/renderer.py`: rule: Context rendering changes require tests." in content
     assert "explicit task scope: required" in content
@@ -462,6 +463,59 @@ def test_context_pack_contains_all_required_sections(tmp_path):
     assert "## Protected paths / edit constraints" in content
     assert "## Handoff required" in content
     assert "## Working rule" in content
+
+
+def test_context_pack_warns_when_index_is_stale_by_age(tmp_path):
+    _minimal_repo(tmp_path)
+    stale_time = datetime.now(tz=timezone.utc) - timedelta(seconds=600)
+    _write(
+        tmp_path / ".vibecode" / "current" / "last_index.json",
+        json.dumps({
+            "root": str(tmp_path),
+            "started_at": stale_time.isoformat(),
+            "counts": {"files": 1},
+        }),
+    )
+
+    content = render_context_pack(tmp_path, "check stale index")
+
+    assert "WARNING: generated index is stale or missing" in content
+    assert "run `vibecode index" in content.lower()
+
+
+def test_context_pack_fresh_index_has_no_stale_warning(tmp_path):
+    _minimal_repo(tmp_path)
+    now = datetime.now(tz=timezone.utc)
+    _write(
+        tmp_path / ".vibecode" / "current" / "last_index.json",
+        json.dumps({
+            "root": str(tmp_path),
+            "started_at": now.isoformat(),
+            "counts": {"files": 1},
+        }),
+    )
+
+    content = render_context_pack(tmp_path, "fresh index")
+
+    assert "WARNING: generated index is stale or missing" not in content
+
+
+def test_context_pack_generated_runtime_change_does_not_trigger_stale_warning(tmp_path):
+    _minimal_repo(tmp_path)
+    now = datetime.now(tz=timezone.utc)
+    _write(
+        tmp_path / ".vibecode" / "current" / "last_index.json",
+        json.dumps({
+            "root": str(tmp_path),
+            "started_at": now.isoformat(),
+            "counts": {"files": 1},
+        }),
+    )
+    _write(tmp_path / ".vibecode" / "cache" / "example.cache", "runtime\n")
+
+    content = render_context_pack(tmp_path, "runtime cache")
+
+    assert "WARNING: generated index is stale or missing" not in content
 
 
 def test_context_pack_does_not_contain_raw_source_files(tmp_path):

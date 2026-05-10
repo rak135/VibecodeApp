@@ -15,7 +15,7 @@ Treat source code, tests, `PRD.json`, and human-maintained docs (`.vibecode/arch
 ## Do not manually edit
 
 - `.vibecode/current/*` — session state
-- `.vibecode/index/*.generated.*` — generated index
+- `.vibecode/index/*` — generated index outputs except `README.md` and `schema.json`
 - `.vibecode/generated/*` — export artifacts
 - `.vibecode/logs/*` — runtime logs
 - `.vibecode/runs/*` — run metadata

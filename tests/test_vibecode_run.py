@@ -548,6 +548,51 @@ class TestCmdRunPreflight:
         assert rc == 0
         assert marker.exists()
 
+    def test_env_only_opencode_command_reaches_fake_runner(self, tmp_path: Path, monkeypatch):
+        """run and run-plan should both accept OPENCODE_COMMAND without default opencode."""
+        _init_repo(tmp_path)
+        _minimal_vibecode(tmp_path)
+        _write(tmp_path / "app.py", "x = 1\n")
+        _commit_all(tmp_path)
+
+        marker = tmp_path / ".vibecode" / "tmp" / "launched.txt"
+        fake_dir = (tmp_path / ".." / "fake_bin_env").resolve()
+        fake_dir.mkdir(parents=True, exist_ok=True)
+        script = fake_dir / "fake_opencode_env.py"
+        script.write_text(
+            "import sys\n"
+            "from pathlib import Path\n"
+            "sys.stdin.read()\n"
+            f"marker = Path({str(marker)!r})\n"
+            "marker.parent.mkdir(parents=True, exist_ok=True)\n"
+            "marker.write_text('yes', encoding='utf-8')\n"
+            "sys.stdout.write('OK\\n')\n",
+            encoding="utf-8",
+        )
+        monkeypatch.setenv("OPENCODE_COMMAND", f"{sys.executable} {script}")
+
+        rc = main(["run", str(tmp_path), "--task", "test", "--no-index"])
+
+        assert rc == 0
+        assert marker.exists()
+
+    def test_invalid_env_opencode_command_fails_before_launch(
+        self, tmp_path: Path, monkeypatch, capsys
+    ):
+        _init_repo(tmp_path)
+        _minimal_vibecode(tmp_path)
+        _write(tmp_path / "app.py", "x = 1\n")
+        _commit_all(tmp_path)
+
+        monkeypatch.setenv("OPENCODE_COMMAND", "definitely-not-opencode")
+
+        rc = main(["run", str(tmp_path), "--task", "test", "--no-index"])
+
+        assert rc == 1
+        err = capsys.readouterr().err
+        assert "OpenCode check failed" in err
+        assert "definitely-not-opencode" in err
+
 
 # ---------------------------------------------------------------------------
 # build_run_plan integration with run module

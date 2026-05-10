@@ -310,7 +310,7 @@ def _resolve_repo_root(args, allow_fallback: bool = True) -> Path:
     """Resolve the repo root from args, falling back to the active project in the registry.
 
     Priority:
-    1. Explicit ``repo_root`` argument from CLI (positional, not ``"."``).
+    1. Explicit ``repo_root`` argument from CLI, including ``"."``.
     2. Active project from the registry (if *allow_fallback* is True).
 
     Raises ``FileNotFoundError`` with a clear message if no repo can be resolved.
@@ -321,10 +321,10 @@ def _resolve_repo_root(args, allow_fallback: bool = True) -> Path:
     from vibecode.registry import ProjectRegistry
 
     raw = getattr(args, "repo_root", None)
-    if raw is not None and raw != ".":
+    if raw is not None:
         return normalise_root(raw)
 
-    # The user did not explicitly pass a repo root (or passed ".").
+    # The user did not explicitly pass a repo root.
     if not allow_fallback:
         # Commands whose semantics already default to cwd (".").
         return normalise_root(".")

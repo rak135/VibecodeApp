@@ -78,6 +78,13 @@ def test_render_agents_block_do_not_edit_paths_include_run_metadata():
     assert ".vibecode/runs/*" in block
 
 
+def test_render_agents_block_mentions_generated_index_doctrine():
+    block = render_agents_block()
+    assert ".vibecode/index/*" in block
+    assert "README.md" in block
+    assert "schema.json" in block
+
+
 def test_render_agents_block_lists_available_commands():
     block = render_agents_block()
     expected_commands = [

@@ -4,6 +4,7 @@ from __future__ import annotations
 
 import json
 import subprocess
+import sys
 from pathlib import Path
 from unittest.mock import MagicMock, patch
 
@@ -751,6 +752,45 @@ class TestBuildRunPlanOpenCode:
             e for e in plan.preflight_errors if "OpenCode" in e.message
         ]
         assert len(opencode_errors) == 0
+
+    def test_env_only_opencode_command_is_used_when_default_missing(
+        self, tmp_path, monkeypatch
+    ):
+        """OPENCODE_COMMAND should satisfy run-plan even when default opencode is absent."""
+        _init_repo(tmp_path)
+        _minimal_vibecode(tmp_path)
+        _commit_all(tmp_path)
+
+        script = tmp_path / "fake_opencode_env.py"
+        script.write_text("import sys\nsys.exit(0)\n", encoding="utf-8")
+        command = f"{sys.executable} {script}"
+        monkeypatch.setenv("OPENCODE_COMMAND", command)
+
+        plan = build_run_plan(tmp_path, task="test task", platform="opencode")
+
+        assert plan.opencode_available is True
+        assert plan.metadata["opencode_command"] == command
+        assert not [
+            e for e in plan.preflight_errors if "OpenCode" in e.message
+        ]
+
+    @patch("vibecode.adapters.opencode.shutil.which", return_value=None)
+    def test_invalid_env_opencode_command_adds_clear_error(
+        self, _which, tmp_path, monkeypatch
+    ):
+        """An invalid OPENCODE_COMMAND should fail run-plan availability preflight."""
+        _init_repo(tmp_path)
+        _minimal_vibecode(tmp_path)
+        _commit_all(tmp_path)
+        monkeypatch.setenv("OPENCODE_COMMAND", "definitely-not-opencode")
+
+        plan = build_run_plan(tmp_path, task="test task", platform="opencode")
+
+        assert plan.opencode_available is False
+        assert any(
+            "definitely-not-opencode" in e.message and "not found" in e.message.lower()
+            for e in plan.preflight_errors
+        )
 
     @patch("vibecode.adapters.opencode.shutil.which", return_value=None)
     def test_non_opencode_platform_skips_availability_check(self, _which, tmp_path):

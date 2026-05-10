@@ -6,9 +6,11 @@ without launching a coding session.
 
 from __future__ import annotations
 
+import os
 import shutil
 import subprocess
 from dataclasses import dataclass
+from collections.abc import Mapping
 
 
 @dataclass(frozen=True)
@@ -31,6 +33,23 @@ class OpenCodeStatus:
 def _default_command() -> str:
     """Return the default OpenCode command name."""
     return "opencode"
+
+
+def resolve_opencode_command(env: Mapping[str, str] | None = None) -> str | None:
+    """Resolve the OpenCode command used by run and run-plan.
+
+    ``OPENCODE_COMMAND`` wins even when the default ``opencode`` binary is not
+    on PATH.  If no explicit command is configured, return the default command
+    only when it can be found on PATH.
+    """
+    source = env if env is not None else os.environ
+    env_cmd = source.get("OPENCODE_COMMAND")
+    if env_cmd:
+        return env_cmd
+    default_cmd = _default_command()
+    if shutil.which(default_cmd):
+        return default_cmd
+    return None
 
 
 def check_opencode(command: str | None = None) -> OpenCodeStatus:

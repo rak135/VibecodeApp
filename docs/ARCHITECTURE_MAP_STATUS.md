@@ -9,13 +9,15 @@ This document is the short implementation-status companion to the Architecture M
 - `.vibecode/architecture/*.md`
 - `.vibecode/checks/required_checks.yaml`
 - `.vibecode/agents/*.json`
+- `.vibecode/index/README.md`
+- `.vibecode/index/schema.json`
 - `docs/ARCHITECTURE_MAP_PRD.md` (historical Architecture Map Core phase; see phase-boundary note at top)
 - `docs/ARCHITECTURE_MAP_STATUS.md`
 
 ## Not Source Of Truth
 
 - `.vibecode/current/*`
-- `.vibecode/index/*.generated.*`
+- generated `.vibecode/index/*` outputs other than `README.md` and `schema.json`
 - `.ralphy/progress.txt`
 - README roadmap checkboxes
 - generated context packs

@@ -8,6 +8,7 @@ from typing import NamedTuple
 
 from vibecode.config import load_protected_path_records
 from vibecode.context.scoring import score_relevant_files
+from vibecode.indexer import check_index_freshness
 from vibecode.indexer.code_intelligence import DEFAULT_PROVIDER as _code_intelligence_provider
 from vibecode.project import TEMPLATE_UNFILLED_MARKER
 
@@ -233,14 +234,27 @@ def _relevant_files(repo_root: Path, task: str) -> list[str]:
 
 def _generated_index_status(repo_root: Path) -> list[str]:
     index_dir = repo_root / INDEX_DIR
+    fresh, detail = check_index_freshness(repo_root)
+    freshness_lines: list[str] = []
+    if not fresh:
+        freshness_lines.append(
+            f"- WARNING: generated index is stale or missing: {detail} "
+            f"Run `vibecode index {repo_root.as_posix()}`."
+        )
     if not index_dir.is_dir():
-        return ["- Missing `.vibecode/index/`; run `vibecode index` before relying on generated context."]
+        return [
+            *freshness_lines,
+            "- Missing `.vibecode/index/`; run `vibecode index` before relying on generated context.",
+        ]
 
     files = sorted(path for path in index_dir.iterdir() if path.is_file())
     if not files:
-        return ["- `.vibecode/index/` exists but contains no index files."]
+        return [*freshness_lines, "- `.vibecode/index/` exists but contains no index files."]
 
-    lines = ["Generated indexes are derived and must be regenerated when repository structure changes."]
+    lines = [
+        *freshness_lines,
+        "Generated indexes are derived and must be regenerated when repository structure changes.",
+    ]
     for path in files:
         rel = _rel(repo_root, path)
         generated = ".generated." in path.name

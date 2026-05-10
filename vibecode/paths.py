@@ -94,7 +94,7 @@ def is_generated_runtime_path(path: str) -> bool:
     if not path.startswith(".vibecode/index/"):
         return False
     name = path.removeprefix(".vibecode/index/")
-    return "/" not in name and ".generated." in name
+    return name not in {"README.md", "schema.json"}
 
 
 def is_source_path(path: str) -> bool:

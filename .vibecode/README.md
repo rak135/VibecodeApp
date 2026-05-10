@@ -18,7 +18,11 @@
 - `.vibecode/runs/*`
 - `.vibecode/tmp/*`
 - `.vibecode/cache/*`
-- `.vibecode/index/*.generated.*`
+- generated `.vibecode/index/*` outputs other than `README.md` and `schema.json`
+
+Generated index outputs include `file_inventory.json`, `symbol_map.json`,
+`dependency_map.json`, `test_map.json`, `entrypoints.md`, `risky_files.md`,
+`repo_tree.generated.md`, and similar maps written by `vibecode index`.
 
 ## Rule
 
