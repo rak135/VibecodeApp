@@ -269,7 +269,9 @@ def build_run_plan(
             if index_fresh:
                 recorded_fingerprint = record.get("file_set_fingerprint")
                 if recorded_fingerprint:
-                    current_fingerprint = compute_current_file_set_fingerprint(root)
+                    _inc = cfg.include if cfg else None
+                    _exc = cfg.exclude if cfg else None
+                    current_fingerprint = compute_current_file_set_fingerprint(root, include=_inc, exclude=_exc)
                     if current_fingerprint is not None and current_fingerprint != recorded_fingerprint:
                         warnings.append(RunPlanWarning(
                             "warn",

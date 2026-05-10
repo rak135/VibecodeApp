@@ -107,10 +107,21 @@ def check_index_freshness(
                 "but HEAD is now {current_commit} -- re-index."
             ).format(recorded_commit=recorded_commit, current_commit=current_commit)
 
-    # Check file-set fingerprint against current inventory.
+    # Check file-set fingerprint against current disk scan.
     recorded_fingerprint = record.get("file_set_fingerprint")
     if recorded_fingerprint:
-        current_fingerprint = compute_current_file_set_fingerprint(repo_root)
+        include = None
+        exclude = None
+        try:
+            from vibecode.config import load_config as _load_cfg
+            cfg = _load_cfg(repo_root / ".vibecode")
+            include = cfg.include
+            exclude = cfg.exclude
+        except Exception:
+            pass
+        current_fingerprint = compute_current_file_set_fingerprint(
+            repo_root, include=include, exclude=exclude
+        )
         if current_fingerprint is not None and current_fingerprint != recorded_fingerprint:
             return False, (
                 "Indexed file set has changed since the last index "
@@ -351,6 +362,7 @@ def _print_validation_summary(report: dict) -> None:
 _FINGERPRINT_EXCLUDED_PREFIXES: tuple[str, ...] = (
     ".vibecode/current/",
     ".vibecode/generated/",
+    ".vibecode/index/",
     ".vibecode/logs/",
     ".vibecode/runs/",
     ".vibecode/tmp/",
@@ -387,41 +399,23 @@ def _compute_file_set_fingerprint(files: list[IndexedFile]) -> str:
     return h.hexdigest()
 
 
-def compute_current_file_set_fingerprint(repo_root: Path) -> str | None:
+def compute_current_file_set_fingerprint(
+    repo_root: Path,
+    include: list[str] | None = None,
+    exclude: list[str] | None = None,
+) -> str | None:
     """Compute a lightweight fingerprint of the current relevant file set.
 
-    Used by freshness checks after indexing to detect added/removed
-    source files even before the next commit.  Returns None when the
-    fingerprint cannot be determined (e.g. missing inventory).
+    Scans the current repository file set (same include/exclude as the
+    indexer) and hashes paths excluding generated/runtime directories.
+    Returns None when the fingerprint cannot be determined (e.g. scan
+    failure).
     """
-    inventory_path = repo_root / ".vibecode" / "index" / "file_inventory.json"
-    if not inventory_path.is_file():
-        return None
     try:
-        data = json.loads(inventory_path.read_text(encoding="utf-8"))
-    except (OSError, json.JSONDecodeError):
+        files = scan(repo_root, include=include, exclude=exclude)
+    except Exception:
         return None
-    files = data.get("files") or []
-    if not isinstance(files, list):
-        return None
-    # Re-use the same fingerprint logic by constructing lightweight IndexedFile
-    # lookalikes from the inventory paths.
-    inventory_paths: list[str] = []
-    for entry in files:
-        raw = entry.get("path") if isinstance(entry, dict) else str(entry)
-        p = raw.replace("\\", "/")
-        if any(p.startswith(prefix) for prefix in _FINGERPRINT_EXCLUDED_PREFIXES):
-            continue
-        parts = set(p.split("/"))
-        if parts & _FINGERPRINT_EXCLUDED_PARTS:
-            continue
-        inventory_paths.append(p)
-    inventory_paths.sort()
-    h = hashlib.sha256()
-    for p in inventory_paths:
-        h.update(p.encode("utf-8"))
-        h.update(b"\n")
-    return h.hexdigest()
+    return _compute_file_set_fingerprint(files)
 
 
 _INVENTORY_REL_PATH = ".vibecode/index/file_inventory.json"

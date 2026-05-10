@@ -20,3 +20,4 @@
 - AGENTS export now preserves the committed managed block content, including `PRD.json`, run metadata, and the current CLI command list.
 - Root `AGENTS.md` now clarifies README is manual project documentation unless README/docs are explicitly scoped, and its generated command list follows top-level CLI help order.
 - `docs/ARCHITECTURE_MAP_PRD.md` now carries a phase-boundary note at the top clarifying it describes the earlier Architecture Map Core phase; the OpenCode run adapter non-goal entry has been updated to reflect current implementation status (`vibecode run`).
+- Stale-index detection now uses a disk-scan file-set fingerprint to detect added/removed tracked source files even without a new git commit; `check_index_freshness`, `cmd_run`, and `build_run_plan` all use the disk-scan fingerprint; generated/runtime paths (including `.vibecode/index/`) are excluded from the fingerprint.

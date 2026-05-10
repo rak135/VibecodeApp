@@ -255,7 +255,7 @@
     {
       "title": "Strengthen stale index detection with path-set or file-state fingerprinting",
       "description": "Purpose: improve stale-index detection beyond age and git commit. Audits agree stale detection exists, but one audit says it is coarse and may miss file-state/path-set drift.\n\nScope: Work in index run metadata, likely `vibecode/indexer/run_record.py`, `vibecode/indexer/__init__.py`, stale detection logic, `vibecode/run_plan.py`, `vibecode/run.py`, and tests such as `tests/test_vibecode_stale_index.py`. Do not regenerate committed artifacts.\n\nRequired behavior: index metadata should record enough deterministic file-state information to detect when tracked source/docs/config files changed or file set changed since last index, even without a new commit where feasible. This can be a path set hash, tracked file list hash, or combined lightweight fingerprint. Generated/runtime paths must not participate in the fingerprint.\n\nContext integration: `context`, `run-plan`, or `run` should surface stale-index warnings when the fingerprint differs. If current design only warns in run/run-plan, document that clearly.\n\nAcceptance criteria: tests cover changed file after indexing, added tracked-like source file after indexing, generated/runtime change ignored for stale detection, and fresh index clean state; warning message tells user to run `vibecode index`.\n\nVerification commands: `python -m pytest tests/test_vibecode_stale_index.py tests/test_vibecode_run_plan.py tests/test_vibecode_context_pack.py -p no:cacheprovider`; `python -m pytest -p no:cacheprovider`.",
-      "completed": false
+      "completed": true
     },
     {
       "title": "Clarify project registry fallback behavior in docs and tests",

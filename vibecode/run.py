@@ -45,7 +45,7 @@ from vibecode.diff_summary import DiffSummary, diff_summarise
 from vibecode.guard import GuardResult, _load_test_map, evaluate_project_guard, write_guard_result
 from vibecode.git_state import GitState, current_git_commit, inspect_git_state
 from vibecode.handoff import HandoffResult, validate_handoff_files
-from vibecode.indexer import check_inventory_health, cmd_index
+from vibecode.indexer import check_inventory_health, cmd_index, compute_current_file_set_fingerprint
 from vibecode.permissions import PROFILES, profile_path
 from vibecode.run_plan import build_run_plan
 
@@ -411,6 +411,29 @@ def cmd_run(args) -> int:
                             print(
                                 f"Index was built for commit {recorded_commit}, "
                                 f"but HEAD is now {current_commit} — re-indexing.",
+                                file=sys.stderr,
+                            )
+                            stale = True
+                # Check file-set fingerprint for added/removed files.
+                if not stale:
+                    recorded_fingerprint = record.get("file_set_fingerprint")
+                    if recorded_fingerprint:
+                        include = None
+                        exclude = None
+                        try:
+                            from vibecode.config import load_config as _load_cfg
+                            _cfg = _load_cfg(vibecode_dir)
+                            include = _cfg.include
+                            exclude = _cfg.exclude
+                        except Exception:
+                            pass
+                        current_fingerprint = compute_current_file_set_fingerprint(
+                            root, include=include, exclude=exclude
+                        )
+                        if current_fingerprint is not None and current_fingerprint != recorded_fingerprint:
+                            print(
+                                "Indexed file set has changed since the last index "
+                                "-- running 'vibecode index' to refresh.",
                                 file=sys.stderr,
                             )
                             stale = True

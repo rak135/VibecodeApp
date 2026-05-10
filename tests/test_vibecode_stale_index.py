@@ -193,3 +193,92 @@ class TestCheckIndexFreshnessIntegration:
         fresh, detail = check_index_freshness(tmp_path)
         assert fresh is False, "Expected stale, got: {}".format(detail)
         assert "re-index" in detail.lower()
+
+    def test_stale_after_adding_source_file(self, tmp_path):
+        _setup_complete_vibecode(tmp_path)
+        from vibecode.indexer import cmd_index
+        rc = cmd_index(SimpleNamespace(repo_root=str(tmp_path), debug=False))
+        assert rc == 0
+        fresh, _ = check_index_freshness(tmp_path)
+        assert fresh is True
+
+        (tmp_path / "new_module.py").write_text("def foo(): pass\n", encoding="utf-8")
+        subprocess.run(["git", "add", "new_module.py"], cwd=tmp_path, check=True, capture_output=True)
+
+        fresh, detail = check_index_freshness(tmp_path)
+        assert fresh is False, "Expected stale by fingerprint, got: {}".format(detail)
+        assert "run 'vibecode index'" in detail.lower()
+
+    def test_stale_after_removing_tracked_file(self, tmp_path):
+        _setup_complete_vibecode(tmp_path)
+        from vibecode.indexer import cmd_index
+        rc = cmd_index(SimpleNamespace(repo_root=str(tmp_path), debug=False))
+        assert rc == 0
+        fresh, _ = check_index_freshness(tmp_path)
+        assert fresh is True
+
+        (tmp_path / "app.py").unlink()
+        subprocess.run(["git", "rm", "--cached", "app.py"], cwd=tmp_path, check=True, capture_output=True)
+
+        fresh, detail = check_index_freshness(tmp_path)
+        assert fresh is False, "Expected stale by fingerprint, got: {}".format(detail)
+        assert "run 'vibecode index'" in detail.lower()
+
+    def test_generated_runtime_change_ignored(self, tmp_path):
+        _setup_complete_vibecode(tmp_path)
+        from vibecode.indexer import cmd_index
+        rc = cmd_index(SimpleNamespace(repo_root=str(tmp_path), debug=False))
+        assert rc == 0
+        fresh, _ = check_index_freshness(tmp_path)
+        assert fresh is True
+
+        current_dir = tmp_path / ".vibecode" / "current"
+        current_dir.mkdir(parents=True, exist_ok=True)
+        (current_dir / "run_log.txt").write_text("log content\n", encoding="utf-8")
+
+        fresh, detail = check_index_freshness(tmp_path)
+        assert fresh is True, "Expected fresh (generated dir ignored), got: {}".format(detail)
+
+    def test_fingerprint_stale_without_commit(self, tmp_path):
+        _setup_complete_vibecode(tmp_path)
+        from vibecode.indexer import cmd_index
+        rc = cmd_index(SimpleNamespace(repo_root=str(tmp_path), debug=False))
+        assert rc == 0
+        fresh, _ = check_index_freshness(tmp_path)
+        assert fresh is True
+
+        (tmp_path / "untracked_helper.py").write_text("x = 42\n", encoding="utf-8")
+
+        fresh, detail = check_index_freshness(tmp_path)
+        assert fresh is False, "Expected stale by fingerprint (untracked file), got: {}".format(detail)
+        assert "run 'vibecode index'" in detail.lower()
+
+    def test_fresh_after_adding_generated_cache_dir_file(self, tmp_path):
+        _setup_complete_vibecode(tmp_path)
+        from vibecode.indexer import cmd_index
+        rc = cmd_index(SimpleNamespace(repo_root=str(tmp_path), debug=False))
+        assert rc == 0
+        fresh, _ = check_index_freshness(tmp_path)
+        assert fresh is True
+
+        cache_dir = tmp_path / ".vibecode" / "cache"
+        cache_dir.mkdir(parents=True, exist_ok=True)
+        (cache_dir / "data.bin").write_bytes(b"\x00\x01\x02")
+
+        fresh, detail = check_index_freshness(tmp_path)
+        assert fresh is True, "Expected fresh (cache dir ignored), got: {}".format(detail)
+
+    def test_fresh_after_adding_log_file(self, tmp_path):
+        _setup_complete_vibecode(tmp_path)
+        from vibecode.indexer import cmd_index
+        rc = cmd_index(SimpleNamespace(repo_root=str(tmp_path), debug=False))
+        assert rc == 0
+        fresh, _ = check_index_freshness(tmp_path)
+        assert fresh is True
+
+        logs_dir = tmp_path / ".vibecode" / "logs"
+        logs_dir.mkdir(parents=True, exist_ok=True)
+        (logs_dir / "index.log").write_text("index run\n", encoding="utf-8")
+
+        fresh, detail = check_index_freshness(tmp_path)
+        assert fresh is True, "Expected fresh (logs dir ignored), got: {}".format(detail)
