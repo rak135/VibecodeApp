@@ -38,6 +38,24 @@ def test_run_command_timeout(tmp_path):
     assert exit_code != 0 or "timed out" in stderr.lower()
 
 
+def test_run_command_list_success(tmp_path):
+    exit_code, stdout, stderr = run_command(["python", "-c", "print('ok')"], cwd=tmp_path)
+    assert exit_code == 0
+    assert "ok" in stdout
+    assert stderr == ""
+
+
+def test_run_command_list_failure(tmp_path):
+    exit_code, stdout, stderr = run_command(["python", "-c", "import sys; sys.exit(1)"], cwd=tmp_path)
+    assert exit_code == 1
+
+
+def test_run_command_list_timeout_shell_command_keeps_string_behavior(tmp_path):
+    """String commands still work via shell=True for Windows builtins like timeout."""
+    exit_code, stdout, stderr = run_command("timeout /t 5", cwd=tmp_path)
+    assert exit_code != 0 or "timed out" in stderr.lower()
+
+
 # ---------------------------------------------------------------------------
 # Unit: CheckResult status
 # ---------------------------------------------------------------------------
@@ -65,6 +83,37 @@ def test_check_result_status(exit_code, required, expected_status):
         stderr="",
     )
     assert result.status == expected_status
+
+
+def test_check_result_as_dict_with_list_command():
+    """List-form command is serialized as space-joined string."""
+    result = CheckResult(
+        name="list test",
+        command=["python", "-m", "pytest"],
+        required=True,
+        exit_code=0,
+        duration_seconds=1.0,
+        stdout="2 passed",
+        stderr="",
+    )
+    data = result.as_dict()
+    assert data["command"] == "python -m pytest"
+    assert data["status"] == "pass"
+
+
+def test_check_result_as_dict_with_string_command():
+    """String command is serialized as-is."""
+    result = CheckResult(
+        name="string test",
+        command="python -m pytest",
+        required=True,
+        exit_code=0,
+        duration_seconds=1.0,
+        stdout="2 passed",
+        stderr="",
+    )
+    data = result.as_dict()
+    assert data["command"] == "python -m pytest"
 
 
 # ---------------------------------------------------------------------------
@@ -267,3 +316,77 @@ checks:
     assert "stdout ok" in check["stdout"]
     assert "stderr ok" in check["stderr"]
     assert "duration_seconds" in check
+
+
+def test_check_integration_list_form_command(tmp_path, capsys):
+    """List-form commands (YAML list) run with shell=False."""
+    vdir = tmp_path / ".vibecode"
+    vdir.mkdir()
+    (vdir / "project.yaml").write_text(
+        "project:\n  id: testproj\n  name: Test\n  root: .\n",
+        encoding="utf-8",
+    )
+    (vdir / "checks").mkdir()
+    (vdir / "checks" / "required_checks.yaml").write_text(
+        """\
+checks:
+  - name: list form success
+    command: [python, -c, "print('list-ok')"]
+    required: true
+  - name: list form optional
+    command: [python, -c, "import sys; sys.exit(1)"]
+    required: false
+""",
+        encoding="utf-8",
+    )
+
+    rc = main(["check", str(tmp_path)])
+    captured = capsys.readouterr()
+
+    assert rc == 0
+    assert "PASS" in captured.out
+    assert "WARN" in captured.out
+
+    report_path = vdir / "current" / "check_results.json"
+    assert report_path.exists()
+    report = json.loads(report_path.read_text(encoding="utf-8"))
+    assert report["status"] == "ok"
+    assert report["summary"]["passed"] == 1
+    assert report["summary"]["warnings"] == 1
+    # List-form commands are serialized as space-joined strings
+    assert "list-ok" in report["checks"][0]["stdout"]
+
+
+def test_check_integration_list_and_string_commands_mixed(tmp_path, capsys):
+    """List-form and string commands can coexist in the same file."""
+    vdir = tmp_path / ".vibecode"
+    vdir.mkdir()
+    (vdir / "project.yaml").write_text(
+        "project:\n  id: testproj\n  name: Test\n  root: .\n",
+        encoding="utf-8",
+    )
+    (vdir / "checks").mkdir()
+    (vdir / "checks" / "required_checks.yaml").write_text(
+        """\
+checks:
+  - name: string form
+    command: python -c "print('string-ok')"
+    required: true
+  - name: list form
+    command: [python, -c, "print('list-ok')"]
+    required: true
+""",
+        encoding="utf-8",
+    )
+
+    rc = main(["check", str(tmp_path)])
+    captured = capsys.readouterr()
+
+    assert rc == 0
+    assert "PASS" in captured.out
+    assert "FAIL" not in captured.out
+
+    report_path = vdir / "current" / "check_results.json"
+    report = json.loads(report_path.read_text(encoding="utf-8"))
+    assert report["status"] == "ok"
+    assert report["summary"]["passed"] == 2

@@ -1,4 +1,24 @@
-"""Run required checks from .vibecode/checks/required_checks.yaml."""
+"""Run required checks from .vibecode/checks/required_checks.yaml.
+
+Trust model
+-----------
+Check commands defined in ``.vibecode/checks/required_checks.yaml`` are **trusted
+local shell commands** sourced from the repository itself.  When the ``command``
+field is a string, it is executed through the system shell (``shell=True``).
+
+For a safer alternative, use YAML list-form commands — each element becomes an
+argument list passed directly to the OS with ``shell=False``, removing the shell
+injection surface:
+
+.. code-block:: yaml
+
+    checks:
+      - name: unit tests
+        command: [python, -m, pytest]
+        required: true
+
+Both forms are supported and may coexist within the same file.
+"""
 
 from __future__ import annotations
 
@@ -9,6 +29,7 @@ import time
 from dataclasses import dataclass, field
 from datetime import datetime, timezone
 from pathlib import Path
+from typing import Union
 
 from vibecode.config import load_config
 from vibecode.paths import to_posix_str
@@ -19,7 +40,7 @@ _CHECK_RESULTS_SCHEMA = "vibecode/check-results/v1"
 @dataclass
 class CheckResult:
     name: str
-    command: str
+    command: Union[str, list[str]]
     required: bool
     exit_code: int
     duration_seconds: float
@@ -35,9 +56,10 @@ class CheckResult:
         return "warn"
 
     def as_dict(self) -> dict:
+        cmd = self.command if isinstance(self.command, str) else " ".join(self.command)
         return {
             "name": self.name,
-            "command": self.command,
+            "command": cmd,
             "required": self.required,
             "exit_code": self.exit_code,
             "duration_seconds": round(self.duration_seconds, 3),
@@ -92,8 +114,47 @@ class CheckRun:
         }
 
 
-def run_command(command: str, cwd: Path) -> tuple[int, str, str]:
-    """Run a shell command and return (exit_code, stdout, stderr)."""
+def run_command(command: Union[str, list[str]], cwd: Path) -> tuple[int, str, str]:
+    """Run a check command and return (exit_code, stdout, stderr).
+
+    When *command* is a ``list[str]``, each element is a separate argument
+    passed directly to the OS with ``shell=False`` (no shell injection surface).
+
+    When *command* is a ``str``, it is executed through the system shell
+    (``shell=True``).  This is a trusted local execution path — the string
+    originates from ``.vibecode/checks/required_checks.yaml`` which is part
+    of the repository's human-maintained configuration.
+    """
+    if isinstance(command, list):
+        return _run_list(command, cwd)
+    return _run_shell(command, cwd)
+
+
+def _run_list(args: list[str], cwd: Path) -> tuple[int, str, str]:
+    """Execute *args* with ``shell=False``."""
+    try:
+        result = subprocess.run(
+            args,
+            shell=False,
+            cwd=cwd,
+            capture_output=True,
+            text=True,
+            timeout=300,
+        )
+        return result.returncode, result.stdout, result.stderr
+    except subprocess.TimeoutExpired:
+        return 1, "", "Command timed out after 300 seconds"
+    except Exception as exc:
+        return 1, "", str(exc)
+
+
+def _run_shell(command: str, cwd: Path) -> tuple[int, str, str]:
+    """Execute *command* through the system shell.
+
+    **Trust model**: *command* is a trusted local shell command sourced from
+    ``.vibecode/checks/required_checks.yaml``, which is part of the repository's
+    human-maintained configuration.
+    """
     try:
         result = subprocess.run(
             command,

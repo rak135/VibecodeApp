@@ -9,6 +9,20 @@ Flow:
   6. Run post-run checks: guard, required checks, handoff validation.
   7. Write session metadata and summary under .vibecode/runs/<timestamp>/.
   8. Print concise result.
+
+Trust model
+-----------
+The platform command (resolved from the ``OPENCODE_COMMAND`` environment
+variable, or the default ``opencode`` binary name) is a **trusted local
+shell command** configured by the user.  It runs through the system shell
+(``shell=True``) because on Windows ``.cmd`` and ``.bat`` wrappers require
+shell execution, and user-configured commands may include compound syntax
+(e.g. ``python path/to/opencode.py``).
+
+If this trust assumption is not acceptable for your environment, restrict
+``OPENCODE_COMMAND`` to a simple binary path (no spaces or shell
+metacharacters) and run ``vibecode`` in a sandboxed or containerised
+context.
 """
 
 from __future__ import annotations
@@ -508,6 +522,10 @@ def cmd_run(args) -> int:
     print("", file=sys.stderr)
 
     try:
+        # shell=True: the command is a trusted local executable configured
+        # by the user via OPENCODE_COMMAND (or the default 'opencode').
+        # Windows .cmd/.bat wrappers and compound commands require shell
+        # execution.  See the module-level trust-model documentation.
         result = subprocess.run(
             command,
             input=prompt_content,

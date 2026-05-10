@@ -301,7 +301,7 @@ def _load_required_check_records(vibecode_dir: Path) -> list[dict]:
         raise ValueError("required_checks.yaml: 'checks' must be a list")
 
     normalized: list[dict] = []
-    seen_commands: set[str] = set()
+    seen_command_strings: set[str] = set()
     for index, record in enumerate(records, start=1):
         if not isinstance(record, dict):
             raise ValueError(f"required_checks.yaml: check #{index} must be a mapping")
@@ -311,27 +311,46 @@ def _load_required_check_records(vibecode_dir: Path) -> list[dict]:
             raise ValueError(
                 f"required_checks.yaml: check #{index} requires a non-empty name"
             )
-        if not isinstance(command, str) or not command.strip():
-            raise ValueError(
-                f"required_checks.yaml: check #{index} requires a non-empty command"
-            )
         name = name.strip()
-        command = command.strip()
-        if command.lower() in _GENERIC_COMMANDS:
+
+        # Accept both string and list-form commands.
+        if isinstance(command, list):
+            str_command = command
+            if not command:
+                raise ValueError(
+                    f"required_checks.yaml: check #{index} ({name!r}) has an empty command list"
+                )
+            for i, elem in enumerate(command):
+                if not isinstance(elem, str) or not elem.strip():
+                    raise ValueError(
+                        f"required_checks.yaml: check #{index} ({name!r}) "
+                        f"command element #{i + 1} must be a non-empty string"
+                    )
+            command_str = " ".join(command)
+        elif isinstance(command, str) and command.strip():
+            str_command = command.strip()
+            command_str = str_command
+        else:
+            raise ValueError(
+                f"required_checks.yaml: check #{index} requires a non-empty "
+                "command (string or list of strings)"
+            )
+
+        if command_str.lower() in _GENERIC_COMMANDS:
             raise ValueError(
                 f"required_checks.yaml: check #{index} ({name!r}) has a "
-                f"generic command {command!r}; use a concrete command "
+                f"generic command {command_str!r}; use a concrete command "
                 f"(e.g. 'python -m pytest' instead of 'tests')"
             )
-        if command in seen_commands:
+        if command_str in seen_command_strings:
             raise ValueError(
-                f"required_checks.yaml: duplicate command {command!r} "
+                f"required_checks.yaml: duplicate command {command_str!r} "
                 f"(first seen in check #{index})"
             )
-        seen_commands.add(command)
+        seen_command_strings.add(command_str)
         normalized.append({
             "name": name,
-            "command": command,
+            "command": str_command,
             "required": bool(record.get("required", True)),
         })
     return normalized
