@@ -17,6 +17,7 @@ from pathlib import Path
 import pytest
 
 from vibecode.cli import main
+from vibecode.permissions import PROFILES
 from vibecode.run import cmd_run, _run_git_check, _write_run_metadata
 from vibecode.run_plan import build_run_plan, RunPlan
 
@@ -97,6 +98,11 @@ def _minimal_vibecode(repo: Path) -> None:
     _write(handoff_dir / "NOW.md", "# Now\n\nWorking.\n")
     _write(handoff_dir / "NEXT.md", "# Next\n\nDo stuff.\n")
     _write(handoff_dir / "BLOCKERS.md", "# Blockers\n\nNo blockers.\n")
+    for name, data in PROFILES.items():
+        _write(
+            repo / ".vibecode" / "agents" / f"{name}.json",
+            json.dumps(data, indent=2) + "\n",
+        )
 
 
 def _fake_opencode_script(tmp_path: Path, exit_code: int = 0, stdout: str = "OK\n", stderr: str = "") -> Path:
@@ -365,7 +371,7 @@ class TestCmdRunEndToEnd:
 
 
 class TestCmdRunPreflight:
-    def test_no_project_yaml_exits_nonzero(self, tmp_path: Path, capsys):
+    def test_no_project_yaml_exits_nonzero(self, tmp_path: Path, capsys, monkeypatch):
         """Run without .vibecode/project.yaml should fail."""
         _init_repo(tmp_path)
         _write(tmp_path / "app.py", "x = 1\n")
@@ -389,7 +395,7 @@ class TestCmdRunPreflight:
         # Should mention project.yaml or context pack failure.
         assert "project.yaml" in err or "Error" in err
 
-    def test_no_index_without_no_index_flag(self, tmp_path: Path, capsys):
+    def test_no_index_without_no_index_flag(self, tmp_path: Path, capsys, monkeypatch):
         """Run without an existing index and without --no-index should auto-index."""
         _init_repo(tmp_path)
         _minimal_vibecode(tmp_path)
@@ -407,6 +413,61 @@ class TestCmdRunPreflight:
         # with "no index found" — it should try to generate one.
         err = capsys.readouterr().err
         assert "no index found" not in err.lower() or rc == 0
+
+    def test_unknown_profile_fails_before_launch(self, tmp_path: Path, monkeypatch, capsys):
+        _init_repo(tmp_path)
+        _minimal_vibecode(tmp_path)
+        _write(tmp_path / "app.py", "x = 1\n")
+        _commit_all(tmp_path)
+
+        marker = tmp_path / "launched.txt"
+        fake_dir = tmp_path / "fake_bin"
+        fake_dir.mkdir(parents=True, exist_ok=True)
+        script = fake_dir / "opencode.py"
+        script.write_text(
+            f"from pathlib import Path\nPath({str(marker)!r}).write_text('yes')\n",
+            encoding="utf-8",
+        )
+        wrapper = fake_dir / "opencode.cmd"
+        wrapper.write_text(
+            "@echo off\n" + f'"{sys.executable}" "%~dp0opencode.py" %*\n',
+            encoding="utf-8",
+        )
+        monkeypatch.setenv("OPENCODE_COMMAND", str(wrapper))
+
+        rc = main(["run", str(tmp_path), "--task", "test", "--profile", "nonexistent"])
+
+        assert rc == 1
+        assert not marker.exists()
+        assert "Unknown permission profile" in capsys.readouterr().err
+
+    def test_missing_profile_fails_before_launch(self, tmp_path: Path, monkeypatch, capsys):
+        _init_repo(tmp_path)
+        _minimal_vibecode(tmp_path)
+        (tmp_path / ".vibecode" / "agents" / "safe.json").unlink()
+        _write(tmp_path / "app.py", "x = 1\n")
+        _commit_all(tmp_path)
+
+        marker = tmp_path / "launched.txt"
+        fake_dir = tmp_path / "fake_bin"
+        fake_dir.mkdir(parents=True, exist_ok=True)
+        script = fake_dir / "opencode.py"
+        script.write_text(
+            f"from pathlib import Path\nPath({str(marker)!r}).write_text('yes')\n",
+            encoding="utf-8",
+        )
+        wrapper = fake_dir / "opencode.cmd"
+        wrapper.write_text(
+            "@echo off\n" + f'"{sys.executable}" "%~dp0opencode.py" %*\n',
+            encoding="utf-8",
+        )
+        monkeypatch.setenv("OPENCODE_COMMAND", str(wrapper))
+
+        rc = main(["run", str(tmp_path), "--task", "test"])
+
+        assert rc == 1
+        assert not marker.exists()
+        assert "Permission profile 'safe' is missing" in capsys.readouterr().err
 
 
 # ---------------------------------------------------------------------------

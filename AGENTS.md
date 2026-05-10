@@ -10,7 +10,7 @@
 
 ## Source of truth
 
-Treat source code, tests, and human-maintained docs (`.vibecode/architecture/`, `.vibecode/handoff/`, `.vibecode/checks/`) as truth.
+Treat source code, tests, `PRD.json`, and human-maintained docs (`.vibecode/architecture/`, `.vibecode/handoff/`, `.vibecode/checks/`, `.vibecode/history/`, `.vibecode/agents/`) as truth.
 
 ## Do not manually edit
 
@@ -18,6 +18,7 @@ Treat source code, tests, and human-maintained docs (`.vibecode/architecture/`, 
 - `.vibecode/index/*.generated.*` — generated index
 - `.vibecode/generated/*` — export artifacts
 - `.vibecode/logs/*` — runtime logs
+- `.vibecode/runs/*` — run metadata
 
 ## Rules
 
@@ -36,9 +37,9 @@ Treat source code, tests, and human-maintained docs (`.vibecode/architecture/`, 
 - `vibecode context` — generate task-scoped context pack
 - `vibecode validate` — check artifact consistency (run this first)
 - `vibecode export-agents` — write/update root AGENTS.md
-- `vibecode guard` — check diff against protected paths (planned)
-- `vibecode check` — run required checks from `.vibecode/checks/required_checks.yaml` (planned)
-- `vibecode handoff-check` — validate handoff file quality (planned)
-
-Planned commands (`guard`, `check`, `handoff-check`) are not yet wired into the CLI — do not attempt to invoke them.
+- `vibecode guard` — check diff against protected/generated paths
+- `vibecode check` — run required checks from `.vibecode/checks/required_checks.yaml`
+- `vibecode handoff-check` — validate handoff file quality
+- `vibecode run` — explicitly orchestrate an external OpenCode run and then run guard/check/handoff
+- `vibecode project` — manage the local project registry outside the repo
 <!-- vibecode:agents:end -->

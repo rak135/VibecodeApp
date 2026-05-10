@@ -1,0 +1,16 @@
+{
+  "description": "Read allow; grep/glob allow; edit ask; bash ask; generated files deny.",
+  "allows": [
+    "read",
+    "grep",
+    "glob"
+  ],
+  "prompts": [
+    "edit",
+    "bash"
+  ],
+  "denies": [
+    "write_generated",
+    "write_runtime"
+  ]
+}

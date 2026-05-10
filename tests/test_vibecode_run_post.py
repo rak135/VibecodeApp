@@ -22,6 +22,7 @@ from vibecode.cli import main
 from vibecode.check import CheckResult, CheckRun
 from vibecode.guard import GuardFinding, GuardResult
 from vibecode.handoff import HandoffIssue, HandoffResult
+from vibecode.permissions import PROFILES
 from vibecode.run import (
     RunSummary,
     _run_post_checks,
@@ -100,9 +101,20 @@ def _minimal_vibecode(repo: Path) -> None:
             }
         ),
     )
+    for name, data in PROFILES.items():
+        _write(
+            repo / ".vibecode" / "agents" / f"{name}.json",
+            json.dumps(data, indent=2) + "\n",
+        )
 
 
-def _fake_opencode_script(tmp_path: Path, exit_code: int = 0, stdout: str = "OK\n", stderr: str = "") -> Path:
+def _fake_opencode_script(
+    tmp_path: Path,
+    exit_code: int = 0,
+    stdout: str = "OK\n",
+    stderr: str = "",
+    body: str = "",
+) -> Path:
     """Create a fake opencode command by creating both a Python script and a
     .cmd wrapper on PATH (so shutil.which("opencode") finds it).
     Returns the path to the .cmd file.
@@ -118,6 +130,7 @@ if "--version" in argv:
     sys.exit(0)
 
 inp = sys.stdin.read()
+{body}
 sys.stderr.write({stderr!r})
 sys.stdout.write({stdout!r})
 sys.exit({exit_code})
@@ -133,10 +146,18 @@ sys.exit({exit_code})
     return wrapper
 
 
-def _make_fake_opencode(self, exit_code: int = 0, stdout: str = "OK\n", stderr: str = "") -> Path:
+def _make_fake_opencode(
+    self,
+    exit_code: int = 0,
+    stdout: str = "OK\n",
+    stderr: str = "",
+    body: str = "",
+) -> Path:
     fake_bin = (self.repo / ".." / "fake_bin").resolve()
     fake_bin.mkdir(parents=True, exist_ok=True)
-    wrapper = _fake_opencode_script(fake_bin, exit_code=exit_code, stdout=stdout, stderr=stderr)
+    wrapper = _fake_opencode_script(
+        fake_bin, exit_code=exit_code, stdout=stdout, stderr=stderr, body=body
+    )
     # Put fake bin dir on PATH so shutil.which("opencode") finds the .cmd wrapper.
     self.monkeypatch.setenv("PATH", str(fake_bin) + os.pathsep + os.environ.get("PATH", ""))
     return wrapper
@@ -829,10 +850,18 @@ class TestCmdRunWithPostChecks:
         self.repo = tmp_path
         self.monkeypatch = monkeypatch
 
-    def _make_fake_opencode(self, exit_code: int = 0, stdout: str = "OK\n", stderr: str = "") -> Path:
+    def _make_fake_opencode(
+        self,
+        exit_code: int = 0,
+        stdout: str = "OK\n",
+        stderr: str = "",
+        body: str = "",
+    ) -> Path:
         fake_bin = (self.repo / ".." / "fake_bin").resolve()
         fake_bin.mkdir(parents=True, exist_ok=True)
-        script = _fake_opencode_script(fake_bin, exit_code=exit_code, stdout=stdout, stderr=stderr)
+        script = _fake_opencode_script(
+            fake_bin, exit_code=exit_code, stdout=stdout, stderr=stderr, body=body
+        )
         # Set OPENCODE_COMMAND to the .cmd wrapper path directly so it is
         # executed by the shell (not parsed as a Python file argument).
         self.monkeypatch.setenv("OPENCODE_COMMAND", str(script))
@@ -878,19 +907,63 @@ class TestCmdRunWithPostChecks:
         assert data["agent_status"] == "success"
         assert data["guard"]["passed"] is True
         assert data["handoff"]["status"] == "ok"
+        assert data["diff"]["changed_files"] == []
+
+    def test_run_guard_catches_readme_modified_by_agent(self):
+        """Post-run guard must evaluate the actual post-agent working tree."""
+        _write(self.repo / "README.md", "# Test\n")
+        _commit_all(self.repo)
+        body = "from pathlib import Path\nPath('README.md').write_text('# Modified by agent\\n', encoding='utf-8')"
+        self._make_fake_opencode(exit_code=0, stdout="Changed README.\n", body=body)
+
+        rc = main(["run", str(self.repo), "--task", "change app behavior"])
+
+        assert rc == 1
+        summaries = list((self.repo / ".vibecode" / "runs").glob("*/summary.json"))
+        assert len(summaries) >= 1
+        data = json.loads(summaries[0].read_text(encoding="utf-8"))
+        assert data["overall_status"] == "failure"
+        assert data["guard"]["passed"] is False
+        assert any(
+            finding["rule_id"] == "readme-manual-only"
+            for finding in data["guard"]["findings"]
+        )
+        assert any(path["path"] == "README.md" for path in data["diff"]["changed_files"])
+
+    def test_run_reports_source_without_test_warning_for_agent_change(self):
+        """Source-only agent edits should surface as guard warnings."""
+        body = "from pathlib import Path\nPath('app.py').write_text(\"print('changed')\\n\", encoding='utf-8')"
+        self._make_fake_opencode(exit_code=0, stdout="Changed source.\n", body=body)
+
+        rc = main(["run", str(self.repo), "--task", "change app behavior"])
+
+        assert rc == 0
+        summaries = list((self.repo / ".vibecode" / "runs").glob("*/summary.json"))
+        assert len(summaries) >= 1
+        data = json.loads(summaries[0].read_text(encoding="utf-8"))
+        assert data["overall_status"] == "success"
+        assert any(
+            finding["rule_id"] == "source-test-change-balance"
+            and finding["severity"] == "warning"
+            for finding in data["guard"]["findings"]
+        )
+        assert any(path["path"] == "app.py" for path in data["diff"]["changed_files"])
 
     def test_run_summary_reports_guard_failure(self):
         """When guard detects an error, overall status should be 'failure'."""
-        # Create a generated runtime file and commit, then modify it
+        # Create a generated runtime file and commit it, then have the fake
+        # agent modify it after the pre-agent git baseline is captured.
         current_dir = self.repo / ".vibecode" / "current"
         _write(current_dir / "test_generated.md", "# generated\n")
         _commit_all(self.repo)
-        # Modify it to trigger guard — use --allow-dirty
-        _write(current_dir / "test_generated.md", "# modified\n")
+        body = (
+            "from pathlib import Path\n"
+            "Path('.vibecode/current/test_generated.md').write_text('# modified\\n', encoding='utf-8')"
+        )
 
-        self._make_fake_opencode(exit_code=0, stdout="OK\n")
+        self._make_fake_opencode(exit_code=0, stdout="OK\n", body=body)
 
-        rc = main(["run", str(self.repo), "--task", "test task", "--allow-dirty"])
+        rc = main(["run", str(self.repo), "--task", "test task"])
 
         assert rc == 1
         runs_dir = self.repo / ".vibecode" / "runs"

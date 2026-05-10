@@ -2,9 +2,9 @@
 
 # VibecodeApp
 
-VibecodeApp is a local repository architecture-map and context-pack CLI. Its first job is to create a deterministic `.vibecode/` project layer that helps coding agents understand repository structure, important files, entrypoints, tests, dependencies, symbols, protected areas, and current project rules before they edit code.
+VibecodeApp is a local repository control-layer CLI. Its job is to create a deterministic `.vibecode/` project layer that helps coding agents understand repository structure, important files, entrypoints, tests, dependencies, symbols, protected areas, required checks, handoff state, and current project rules before they edit code.
 
-This repository is intentionally CLI-first. It does not launch OpenCode, Codex, or any other agent runtime yet.
+This repository is intentionally CLI-first. VibecodeApp does not edit code itself; `vibecode run` can orchestrate an external OpenCode process when explicitly invoked.
 
 ## Table of Contents
 
@@ -29,6 +29,7 @@ VibecodeApp is meant to become the project control layer around agentic coding w
 - preserving human-maintained architecture and handoff files
 - validating generated artifacts
 - generating task-scoped context packs and prompt export files
+- enforcing guard/check/handoff requirements around external agent runs
 
 Non-goals:
 
@@ -193,10 +194,11 @@ Agent-facing files have different lifecycles:
 - Root `AGENTS.md` is stable agent instruction for the repository.
 - `.vibecode/current/context_pack.md` is task-specific runtime output.
 - `.vibecode/generated/AGENTS.generated.md` is generated export output and remains ignored.
+- `.vibecode/agents/safe.json`, `.vibecode/agents/fast.json`, and `.vibecode/agents/audit.json` are committed permission profiles; `vibecode init` creates missing defaults without overwriting customized profiles unless `--force` is used.
 
 `export-agents` writes `.vibecode/generated/AGENTS.generated.md` and creates or updates root `AGENTS.md` only when it is absent or Vibecode-managed. A manual root `AGENTS.md` is not overwritten without `--force`.
 
-Generated indexes and runtime/current files are not source of truth. Regenerate `.vibecode/index/*` and `.vibecode/current/*` before giving the context to another agent. Human-maintained project rules live under `.vibecode/project.yaml`, `.vibecode/architecture/`, `.vibecode/checks/`, `.vibecode/handoff/`, and `.vibecode/history/`.
+Generated indexes and runtime/current files are not source of truth. Regenerate `.vibecode/index/*` and `.vibecode/current/*` before giving the context to another agent. Human-maintained project rules live under `.vibecode/project.yaml`, `.vibecode/architecture/`, `.vibecode/checks/`, `.vibecode/handoff/`, `.vibecode/history/`, and `.vibecode/agents/`.
 
 
 

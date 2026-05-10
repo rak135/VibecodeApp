@@ -1,0 +1,20 @@
+{
+  "description": "Edit allow; bash ask; guard after run.",
+  "allows": [
+    "read",
+    "grep",
+    "glob",
+    "edit"
+  ],
+  "prompts": [
+    "bash"
+  ],
+  "denies": [
+    "write_generated",
+    "write_runtime"
+  ],
+  "post_run": [
+    "guard",
+    "check"
+  ]
+}

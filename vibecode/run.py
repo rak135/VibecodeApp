@@ -32,6 +32,7 @@ from vibecode.guard import GuardResult, evaluate_guard, write_guard_result
 from vibecode.git_state import GitState, current_git_commit, inspect_git_state
 from vibecode.handoff import HandoffResult, validate_handoff_files
 from vibecode.indexer import cmd_index
+from vibecode.permissions import PROFILES, profile_path
 from vibecode.run_plan import build_run_plan
 
 
@@ -211,11 +212,70 @@ def _run_git_check(root: Path, allow_dirty: bool) -> tuple[bool, list[str]]:
     return True, messages
 
 
+def _validate_permission_profile(root: Path, profile_name: str) -> tuple[bool, str | None]:
+    """Validate that a selected run permission profile exists before launch."""
+    if profile_name not in PROFILES:
+        known = ", ".join(sorted(PROFILES))
+        return False, f"Unknown permission profile '{profile_name}'. Known profiles: {known}."
+
+    rel = profile_path(profile_name)
+    target = root / Path(rel)
+    if not target.exists():
+        return False, f"Permission profile '{profile_name}' is missing at {rel}."
+
+    try:
+        data = json.loads(target.read_text(encoding="utf-8"))
+    except (OSError, json.JSONDecodeError) as exc:
+        return False, f"Permission profile '{profile_name}' is not valid JSON: {exc}"
+    if not isinstance(data, dict):
+        return False, f"Permission profile '{profile_name}' must be a JSON object."
+    return True, None
+
+
+def _changed_path_set(git_state: GitState | None) -> set[str]:
+    if not git_state:
+        return set()
+    return set(git_state.changed_paths) | set(git_state.diff_name_only) | set(git_state.untracked_paths)
+
+
+def _agent_delta_git_state(before: GitState | None, after: GitState | None) -> GitState | None:
+    """Return a git state containing only paths changed after the agent baseline."""
+    if after is None:
+        return None
+    if before is None or not before.is_git_repo:
+        return after
+
+    before_paths = _changed_path_set(before)
+
+    def only_new(paths: tuple[str, ...]) -> tuple[str, ...]:
+        return tuple(path for path in paths if path not in before_paths)
+
+    status_paths = tuple(
+        entry for entry in after.status_paths if entry.path not in before_paths
+    )
+
+    return GitState(
+        is_git_repo=after.is_git_repo,
+        status_paths=status_paths,
+        changed_paths=tuple(entry.path for entry in status_paths),
+        staged_paths=only_new(after.staged_paths),
+        unstaged_paths=only_new(after.unstaged_paths),
+        untracked_paths=only_new(after.untracked_paths),
+        deleted_paths=only_new(after.deleted_paths),
+        diff_name_only=only_new(after.diff_name_only),
+        staged_diff_name_only=only_new(after.staged_diff_name_only),
+        diff_stat=after.diff_stat,
+        staged_diff_stat=after.staged_diff_stat,
+        error=after.error,
+    )
+
+
 def _run_post_checks(
     root: Path,
     vibecode_dir: Path,
     git_state: GitState | None,
     session_id: str,
+    task: str = "",
 ) -> tuple[GuardResult | None, CheckRun | None, HandoffResult | None]:
     """Run post-agent quality checks: guard, required checks, handoff validation.
 
@@ -230,7 +290,7 @@ def _run_post_checks(
     # --- Post-check 1: Guard ---
     try:
         if git_state and git_state.is_git_repo:
-            guard_result = evaluate_guard(git_state, task="")
+            guard_result = evaluate_guard(git_state, task=task)
             try:
                 write_guard_result(guard_result, vibecode_dir, root)
             except Exception:
@@ -266,6 +326,7 @@ def cmd_run(args) -> int:
     task = getattr(args, "task", None) or ""
     platform = getattr(args, "platform", "opencode")
     profile = getattr(args, "profile", None)
+    profile_name = profile or "safe"
     allow_dirty = getattr(args, "allow_dirty", False)
     no_index = getattr(args, "no_index", False)
 
@@ -277,6 +338,15 @@ def cmd_run(args) -> int:
     root: Path = repo_arg
     vibecode_dir = root / ".vibecode"
     session_id = datetime.now(tz=timezone.utc).strftime("%Y%m%dT%H%M%S%fZ")
+
+    if not (vibecode_dir / "project.yaml").exists():
+        print("Error: no .vibecode/project.yaml found. Run 'vibecode init' first.", file=sys.stderr)
+        return 1
+
+    profile_ok, profile_error = _validate_permission_profile(root, profile_name)
+    if not profile_ok:
+        print(f"Error: {profile_error}", file=sys.stderr)
+        return 1
 
     # ------------------------------------------------------------------
     # 1. Git status check
@@ -291,11 +361,11 @@ def cmd_run(args) -> int:
         for msg in messages:
             print(f"Warning: {msg}", file=sys.stderr)
 
-    # Capture git state now, before any tool-generated artifacts,
-    # so post-run checks evaluate the user's changes only.
-    pre_run_git_state = None
+    # Capture early state for preflight/dirty comparison. The agent baseline is
+    # captured later, after Vibecode writes context/runtime files.
+    initial_git_state = None
     try:
-        pre_run_git_state = inspect_git_state(root)
+        initial_git_state = inspect_git_state(root)
     except Exception as exc:
         print(f"Warning: could not inspect git state for post-run checks: {exc}", file=sys.stderr)
 
@@ -385,7 +455,7 @@ def cmd_run(args) -> int:
         # Write metadata even on command-not-found so callers can inspect it.
         _write_run_metadata(
             vibecode_dir, session_id,
-            build_run_plan(root, task=task, platform=platform, profile_name=profile, allow_dirty=allow_dirty),
+            build_run_plan(root, task=task, platform=platform, profile_name=profile_name, allow_dirty=allow_dirty),
             command=None, exit_code=-1, stdout="", stderr="OpenCode command not found.",
         )
         return 1
@@ -396,7 +466,7 @@ def cmd_run(args) -> int:
         print(f"Error: OpenCode check failed — {status.message}", file=sys.stderr)
         _write_run_metadata(
             vibecode_dir, session_id,
-            build_run_plan(root, task=task, platform=platform, profile_name=profile, allow_dirty=allow_dirty),
+            build_run_plan(root, task=task, platform=platform, profile_name=profile_name, allow_dirty=allow_dirty),
             command=command, exit_code=-1, stdout="", stderr=status.message,
         )
         return 1
@@ -406,7 +476,13 @@ def cmd_run(args) -> int:
     # ------------------------------------------------------------------
     prompt_content = prompt_path.read_text(encoding="utf-8") if prompt_path.exists() else context_pack_path.read_text(encoding="utf-8")
 
-    run_plan = build_run_plan(root, task=task, platform=platform, profile_name=profile, allow_dirty=allow_dirty)
+    run_plan = build_run_plan(root, task=task, platform=platform, profile_name=profile_name, allow_dirty=allow_dirty)
+
+    try:
+        pre_agent_git_state = inspect_git_state(root)
+    except Exception as exc:
+        pre_agent_git_state = initial_git_state
+        print(f"Warning: could not inspect pre-agent git state: {exc}", file=sys.stderr)
 
     print(f"Running {command} ...", file=sys.stderr)
     print(f"  session:  {session_id}", file=sys.stderr)
@@ -454,20 +530,22 @@ def cmd_run(args) -> int:
     # -------------------------------------------------------------------------
     print("\nRunning post-run checks ...", file=sys.stderr)
 
-    guard_result, check_result, handoff_result = _run_post_checks(
-        root, vibecode_dir, pre_run_git_state, session_id,
-    )
-
-    # -------------------------------------------------------------------------
-    # 7b. Diff summary — compare pre-run and post-run git state
-    # -------------------------------------------------------------------------
     post_run_git_state = None
     try:
         post_run_git_state = inspect_git_state(root)
     except Exception as exc:
         print(f"Warning: could not inspect post-run git state: {exc}", file=sys.stderr)
 
-    diff_summary = diff_summarise(pre_run_git_state, post_run_git_state, repo_root=root)
+    agent_git_state = _agent_delta_git_state(pre_agent_git_state, post_run_git_state)
+
+    guard_result, check_result, handoff_result = _run_post_checks(
+        root, vibecode_dir, agent_git_state, session_id, task=task,
+    )
+
+    # -------------------------------------------------------------------------
+    # 7b. Diff summary — compare agent baseline and post-run git state
+    # -------------------------------------------------------------------------
+    diff_summary = diff_summarise(pre_agent_git_state, post_run_git_state, repo_root=root)
 
     # -------------------------------------------------------------------------
     # 8. Write session metadata and summary
@@ -479,7 +557,7 @@ def cmd_run(args) -> int:
         started_at=started_at,
         finished_at=datetime.now(tz=timezone.utc).isoformat(),
         platform=platform,
-        profile=profile or "safe",
+        profile=profile_name,
         repo_root=str(root),
         task=task,
         dirty=run_plan.dirty,

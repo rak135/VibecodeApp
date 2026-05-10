@@ -1,0 +1,16 @@
+{
+  "description": "Read only; no edit; no write.",
+  "allows": [
+    "read",
+    "grep",
+    "glob"
+  ],
+  "prompts": [],
+  "denies": [
+    "edit",
+    "write",
+    "write_generated",
+    "write_runtime",
+    "bash"
+  ]
+}

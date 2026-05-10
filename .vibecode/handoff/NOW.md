@@ -14,3 +14,5 @@
 - README guard evaluation now treats root `README.md` as manual-only unless the task explicitly mentions README/docs; docs files such as `docs/QUICKSTART.md` are not blocked.
 - Architecture truth guard evaluation now requires same-change handoff/history acknowledgement for `.vibecode/architecture/*.md` changes.
 - Guard evaluation now warns when source and test changes are not paired, using test-map suggestions when available and allowing explicit test-only work.
+- `vibecode run` orchestrates external OpenCode only when explicitly invoked, validates selected permission profiles before launch, and evaluates guard/check/handoff against the post-agent working tree.
+- Default permission profiles live in committed `.vibecode/agents/{safe,fast,audit}.json`.

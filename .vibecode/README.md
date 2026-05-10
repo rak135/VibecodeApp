@@ -6,6 +6,7 @@
 - `.vibecode/checks/*.yaml`
 - `.vibecode/handoff/*.md`
 - `.vibecode/history/` (policy + summaries when durable; see `history/README.md`)
+- `.vibecode/agents/*.json`
 - `.vibecode/index/README.md`
 - `.vibecode/index/schema.json`
 

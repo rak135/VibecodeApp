@@ -6,7 +6,7 @@ The current control layer is deterministic and filesystem-based.
 ## Control layer role
 
 - VibecodeApp owns project orientation artifacts, not code editing.
-- Coding agents may consume Vibecode context, but VibecodeApp does not launch them yet.
+- Coding agents may consume Vibecode context; `vibecode run` can explicitly launch an external OpenCode process and evaluate the post-run working tree.
 - Human-maintained architecture docs define project truth that generated indexes must reflect.
 
 ## Current implementation scope
@@ -18,12 +18,13 @@ The current control layer is deterministic and filesystem-based.
 - `vibecode context` generates task-specific context packs.
 - `vibecode guard`, `vibecode check`, `vibecode handoff-check` handle post-run audit.
 - `vibecode run` orchestrates the full agent loop.
+- `vibecode project` manages a local registry outside the repository.
 - `vibecode export-agents` writes agent-facing instructions to AGENTS.md.
 - Root `AGENTS.md` and `vibecode export-agents` provide agent-facing instructions and safe export support.
+- `.vibecode/agents/safe.json`, `fast.json`, and `audit.json` are committed permission profile defaults.
 
 ## Not implemented yet
 
-- OpenCode run adapter
-- Project registry
 - GUI work
 - MCP server integration
+- Swarm coordination
