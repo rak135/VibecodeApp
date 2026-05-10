@@ -265,7 +265,7 @@
     {
       "title": "Fix CLI help typo and command-list drift",
       "description": "Purpose: small polish but important for agent clarity. Audits found `--no-index` help typo and command-list drift around `run-plan` and `history`.\n\nScope: Work in `vibecode/cli.py`, root `AGENTS.md`, `vibecode/context/agents_export.py`, and docs only if needed. Keep this task tiny.\n\nRequired fixes: change `generation/refres` to `generation/refresh`; ensure `run-plan` and `history` are either listed as available commands or explicitly marked as secondary commands; keep generated AGENTS and committed AGENTS in sync.\n\nAcceptance criteria: `python -m vibecode.cli run --help` shows correct spelling; command lists in AGENTS/export/docs match current CLI; no unrelated docs rewrite.\n\nVerification commands: `python -m vibecode.cli run --help`; `python -m pytest tests/test_vibecode_cli.py tests/test_vibecode_agents_export.py -p no:cacheprovider`; `python -m pytest -p no:cacheprovider`.",
-      "completed": false
+      "completed": true
     },
     {
       "title": "Update STRUCTURE.md with current source and test map",

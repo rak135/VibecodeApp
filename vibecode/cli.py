@@ -168,7 +168,7 @@ def create_parser() -> argparse.ArgumentParser:
         "--no-index",
         action="store_true",
         default=False,
-        help="Skip automatic index generation/refres.",
+        help="Skip automatic index generation/refresh.",
     )
 
     # run-plan -- keeps "." default (no registry fallback)
