@@ -8,9 +8,8 @@
 
 ## Implementation scope
 
-- Current control-layer scope covers architecture-map/index generation, context packs, AGENTS export, and post-run audit (guard/check/handoff-check).
+- Current control-layer scope covers architecture-map/index generation, context packs, AGENTS export, project registry, OpenCode run/run-plan orchestration, and post-run audit (guard/check/handoff-check).
 - No UI work before architecture-map core is stable.
-- No OpenCode run or project registry work before protected paths policy exists.
 
 ## File ownership
 

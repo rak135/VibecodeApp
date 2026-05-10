@@ -270,7 +270,7 @@
     {
       "title": "Update STRUCTURE.md with current source and test map",
       "description": "Purpose: keep human-maintained architecture docs useful. One audit found `.vibecode/architecture/STRUCTURE.md` missing newer test files such as run, run_post, stale_index, full_workflow, diff_summary, registry, project_cli, and active-project fallback tests.\n\nScope: Work only in `.vibecode/architecture/STRUCTURE.md` unless a tightly related doc needs a cross-reference. Do not regenerate repo tree or generated indexes as a source fix.\n\nRequired update: add or update sections listing important modules and test coverage for guard, check, handoff, history, run, run-plan, registry, stale index, diff summary, full workflow, and project CLI. Keep it concise. Do not turn STRUCTURE.md into a full file inventory. It should orient agents to key areas and their tests.\n\nAcceptance criteria: STRUCTURE.md mentions important current implementation areas and their key tests; no stale claim that control-layer commands are missing; docs remain concise.\n\nVerification commands: `python -m pytest -p no:cacheprovider`; optional grep for missing key test file names in STRUCTURE.md.",
-      "completed": false
+      "completed": true
     },
     {
       "title": "Resolve dead or reserved history check command",
