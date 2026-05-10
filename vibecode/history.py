@@ -23,6 +23,18 @@ REQUIRED_SECTIONS: tuple[str, ...] = (
 # Section heading prefix used in history summaries.
 _SECTION_PREFIX = "### "
 
+_PLACEHOLDER_PATTERNS: tuple[re.Pattern[str], ...] = (
+    re.compile(r"\bTODO\b", re.IGNORECASE),
+    re.compile(r"\bTBD\b", re.IGNORECASE),
+)
+
+_PLACEHOLDER_PHRASES: tuple[str, ...] = (
+    "_not yet filled._",
+    "not yet filled",
+    "fill in later",
+    "to be filled",
+)
+
 
 @dataclass(frozen=True)
 class HistoryIssue:
@@ -69,11 +81,53 @@ def _extract_headings(content: str) -> list[str]:
 
 def _has_placeholder(content: str) -> bool:
     """Return True if the file contains placeholder / unfilled markers."""
-    upper = content.upper()
-    return any(
-        marker in upper
-        for marker in ("TODO", "TBD", "PLACEHOLDER", "<!--")
+    lower = content.lower()
+    return (
+        "<!--" in content
+        or any(phrase in lower for phrase in _PLACEHOLDER_PHRASES)
+        or any(_is_placeholder_marker(line.strip()) for line in content.splitlines())
+        or any(pattern.search(content) for pattern in _PLACEHOLDER_PATTERNS)
     )
+
+
+def _is_placeholder_marker(stripped: str) -> bool:
+    """Return True for lines that are only placeholder marker text."""
+    marker = stripped.strip("`*_[]<>(){}:.- ").lower()
+    return marker in {"placeholder", "placeholder text"}
+
+
+def _section_bodies(content: str) -> dict[str, list[str]]:
+    """Return body lines keyed by lower-case section heading."""
+    bodies: dict[str, list[str]] = {}
+    current: str | None = None
+    for line in content.splitlines():
+        stripped = line.strip()
+        if stripped.startswith(_SECTION_PREFIX):
+            heading_text = stripped.removeprefix(_SECTION_PREFIX).strip()
+            current = heading_text.lower() if heading_text else None
+            if current:
+                bodies.setdefault(current, [])
+            continue
+        if current:
+            bodies[current].append(line)
+    return bodies
+
+
+def _is_empty_bullet(stripped: str) -> bool:
+    """Return True for markdown bullet markers with no actual text."""
+    return bool(re.fullmatch(r"[-*+]\s*(\[[ xX]\])?", stripped))
+
+
+def _has_durable_section_content(lines: list[str]) -> bool:
+    """Return True when a section body contains non-placeholder content."""
+    for line in lines:
+        stripped = line.strip()
+        if not stripped or stripped.startswith("<!--") or _is_empty_bullet(stripped):
+            continue
+        if _has_placeholder(stripped):
+            continue
+        return True
+    return False
 
 
 def validate_history_file(path: Path, repo_root: Path) -> list[HistoryIssue]:
@@ -82,7 +136,7 @@ def validate_history_file(path: Path, repo_root: Path) -> list[HistoryIssue]:
     Rules
     -----
     1. Must contain every section listed in ``REQUIRED_SECTIONS``.
-    2. Must not contain placeholder markers (TODO, TBD, PLACEHOLDER, HTML comments).
+    2. Must not contain placeholder markers (TODO, TBD, unfilled text, HTML comments).
     3. Must not be heading-only (at least one section body is required).
     """
     rel = str(path.relative_to(repo_root)) if path.is_relative_to(repo_root) else path.name
@@ -99,7 +153,7 @@ def validate_history_file(path: Path, repo_root: Path) -> list[HistoryIssue]:
             HistoryIssue(
                 file=rel,
                 message=(
-                    "Contains placeholder text (TODO, TBD, PLACEHOLDER, or HTML comment). "
+                    "Contains placeholder text (TODO, TBD, unfilled marker, or HTML comment). "
                     "History summaries record durable truth, not stubs."
                 ),
             )
@@ -124,29 +178,18 @@ def validate_history_file(path: Path, repo_root: Path) -> list[HistoryIssue]:
             )
         )
 
-    # Heading-only check: at least one section must have body content
-    # (lines between headings that are not themselves headings or comments)
-    lines = content.splitlines()
-    has_body = False
-    in_section = False
-    for line in lines:
-        stripped = line.strip()
-        if stripped.startswith("### "):
-            if in_section and has_body:
-                break  # found at least one section with content
-            in_section = True
-            has_body = False
-            continue
-        if in_section and stripped and not stripped.startswith("<!--"):
-            has_body = True
-    else:
-        if in_section and not has_body:
+    bodies = _section_bodies(content)
+    for required in REQUIRED_SECTIONS:
+        if required.lower() in found and not _has_durable_section_content(
+            bodies.get(required.lower(), [])
+        ):
             issues.append(
                 HistoryIssue(
                     file=rel,
                     message=(
-                        "Contains only headings with no body content. "
-                        "Each section must describe the change."
+                        f"Section '{required}' has no durable content. "
+                        "Each section must describe real project truth, "
+                        "not empty bullets or placeholders."
                     ),
                 )
             )

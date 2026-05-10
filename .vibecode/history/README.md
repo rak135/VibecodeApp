@@ -6,11 +6,11 @@
 
 | Rule | Meaning |
 |------|---------|
-| **Commit only durable truth** | A history file is committed when it captures a real decision or change that future agents must know. Do not commit stubs, drafts, or empty placeholders. |
+| **Commit only durable truth** | A history file is committed when it captures a real decision or change that later agents must know. Do not commit stubs, drafts, or empty placeholders. |
 | **Not a log** | Never dump raw tool output, CI logs, or session transcripts here. Summarise and distill. |
 | **`README.md` is always committed** | This policy file is the one exception — it is committed regardless of content. |
-| **`*.md` only when valuable** | History summaries (`*.md`) are committed only when they contain durable project truth. Remove or do not create them if the work is trivial or already captured in handoff/NOW.md. |
-| **`/runs/` is runtime-only** | `.vibecode/runs/*` is ephemeral output and must never appear in history. |
+| **`*.md` only when valuable** | History summaries (`*.md`) are durable project memory only when they contain real project truth. Remove or do not create them if the work is trivial, already captured in handoff/NOW.md, or still a placeholder draft. |
+| **`/runs/` is runtime-only** | `.vibecode/runs/*` is ephemeral runtime output, ignored by source control, and must never appear in history. |
 
 ## Required sections
 
@@ -22,6 +22,10 @@ Every committed history summary **MUST** contain these sections (order matters):
 4. **Tests run** – Which tests were executed and the outcome.
 5. **Decisions** – Architectural or design choices made (with rationale if non-obvious).
 6. **Follow-up** – Open items or next steps that this change leaves behind.
+
+Every required section must contain real content. `_Not yet filled._`, TODO/TBD,
+placeholder text, heading-only sections, and empty bullets are drafts and do not
+pass durable-history validation.
 
 ## Format
 
@@ -55,5 +59,7 @@ Author: who made the change
 ## Ownership
 
 History files are the **author's responsibility** to keep accurate.
-The guard/check workflow (future) will validate that `.vibecode/architecture/*.md`
-changes are accompanied by a corresponding history entry.
+The guard/check/handoff workflow exists for standalone and post-run audits.
+Architecture truth guard evaluation requires handoff/history acknowledgement for
+`.vibecode/architecture/*.md` changes; history summaries only count when they
+contain durable project truth.

@@ -146,6 +146,25 @@ def test_html_comment_placeholder_fails(tmp_path):
     assert not HistoryResult(root=tmp_path, issues=issues).passed
 
 
+def test_not_yet_filled_placeholder_fails(tmp_path):
+    content = (
+        "# Summary\n\n"
+        "### Task\nDo X.\n\n"
+        "### Changed files\n_Not yet filled._\n\n"
+        "### Behavior changed\nChanged.\n\n"
+        "### Tests run\nPassed.\n\n"
+        "### Decisions\nDecided.\n\n"
+        "### Follow-up\nNone.\n"
+    )
+    history = _history_dir(tmp_path)
+    _write(history / "not-filled.md", content)
+
+    issues = validate_history_file(history / "not-filled.md", tmp_path)
+
+    assert not HistoryResult(root=tmp_path, issues=issues).passed
+    assert any("placeholder" in i.message.lower() for i in issues)
+
+
 # ── Heading-only / no body ────────────────────────────────────────────
 
 
@@ -165,6 +184,26 @@ def test_heading_only_fails(tmp_path):
 
     issues = validate_history_file(history / "empty.md", tmp_path)
     assert not HistoryResult(root=tmp_path, issues=issues).passed
+
+
+def test_empty_bullet_section_fails(tmp_path):
+    """A section with only an empty bullet is not durable content."""
+    content = (
+        "# Empty Bullet\n\n"
+        "### Task\nDo X.\n\n"
+        "### Changed files\n-\n\n"
+        "### Behavior changed\nChanged.\n\n"
+        "### Tests run\nPassed.\n\n"
+        "### Decisions\nDecided.\n\n"
+        "### Follow-up\nNone.\n"
+    )
+    history = _history_dir(tmp_path)
+    _write(history / "empty-bullet.md", content)
+
+    issues = validate_history_file(history / "empty-bullet.md", tmp_path)
+
+    assert not HistoryResult(root=tmp_path, issues=issues).passed
+    assert any("Changed files" in i.message for i in issues)
 
 
 # ── validate_history_dir integration ───────────────────────────────────
@@ -300,6 +339,36 @@ def test_create_summary_uses_placeholder_for_empty_sections(tmp_path):
     dest = create_summary(repo, task="Empty sections")
     content = dest.read_text(encoding="utf-8")
     assert "_Not yet filled._" in content
+
+
+def test_generated_empty_summary_fails_validation(tmp_path):
+    """Generated empty summaries are drafts until filled with durable truth."""
+    repo = tmp_path / "repo"
+    repo.mkdir()
+
+    dest = create_summary(repo, task="Empty sections")
+
+    issues = validate_history_file(dest, repo)
+    assert not HistoryResult(root=repo, issues=issues).passed
+    assert any("placeholder" in i.message.lower() for i in issues)
+
+
+def test_generated_filled_summary_passes_validation(tmp_path):
+    """Generated summaries pass once every section contains real content."""
+    repo = tmp_path / "repo"
+    repo.mkdir()
+
+    dest = create_summary(
+        repo,
+        task="Document history policy",
+        changed_files="- `.vibecode/history/README.md`: Clarified durable memory policy.",
+        behavior_changed="History validation now rejects placeholder summaries.",
+        tests_run="`python -m pytest tests/test_vibecode_history.py`: passed.",
+        decisions="Validate placeholders instead of treating generated drafts as truth.",
+        follow_up="No follow-up required.",
+    )
+
+    assert validate_history_file(dest, repo) == []
 
 
 def test_create_summary_does_not_overwrite(tmp_path):
