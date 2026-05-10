@@ -20,7 +20,7 @@
     {
       "title": "Check & fix: test MCP server with Inspector, refine tool behavior",
       "description": "Use `npx @modelcontextprotocol/inspector` to connect to `vibecode serve`. Test each tool with real project data: call `get_file_card` for an existing file and a non‑existent one (expect error), `find_symbol` for a function that appears in multiple files, and `list_high_risk` after generating a risk report with some high‑severity heuristics. Verify that all responses are well‑structured and informative. If the inspector reveals missing data or crashes, fix the server logic. Adjust the tool output format to be more OpenCode‑friendly (plain text with markdown). Ensure the configuration snippet printed on startup is valid and contains the correct command. This step closes the MCP loop and confirms it works with OpenCode's expected protocol.",
-      "completed": false
+      "completed": true
     },
     {
       "title": "Build TUI dashboard with card table, stats footer and detail screen",

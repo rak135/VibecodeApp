@@ -104,42 +104,75 @@ class VibecodeServer:
         return "\n".join(lines)
 
     def find_symbol(self, symbol_name: str) -> str:
-        """Return a JSON array of file paths and symbol details for *symbol_name*.
+        """Return a markdown-formatted list of locations for *symbol_name*.
 
         Falls back to a case-insensitive match when the exact name is not found.
-        Returns a JSON object with an ``error`` key when nothing matches.
+        Returns a plain-text error message when nothing matches.
         """
+        canonical = symbol_name
         matches = self._symbols.get(symbol_name)
         if not matches:
             lower = symbol_name.lower()
             for name, items in self._symbols.items():
                 if name.lower() == lower:
                     matches = items
+                    canonical = name
                     break
         if not matches:
-            return json.dumps({"error": f"Symbol not found: {symbol_name}", "matches": []})
-        return json.dumps(matches, indent=2)
+            return f"Symbol not found: `{symbol_name}`"
+
+        lines: list[str] = [f"## Symbol: `{canonical}`", ""]
+        lines.append(f"Found in {len(matches)} file(s):")
+        lines.append("")
+        for m in matches:
+            kind = m.get("kind", "?")
+            line_no = m.get("line", "?")
+            fp = m.get("file_path", "?")
+            lines.append(f"- **{fp}** — {kind} at line {line_no}")
+        return "\n".join(lines)
 
     def list_high_risk(self) -> str:
-        """Return high-severity heuristics from the risk report.
+        """Return high-risk files from the risk report as markdown.
 
-        Collects every file that has at least one heuristic with
-        ``severity == "high"`` and returns them as a JSON array.
+        A file is considered high-risk when its ``risk_level`` is ``"high"``
+        or when it contains at least one heuristic with ``severity == "high"``.
+        Both conditions are checked so that files classified high at the
+        project level (but without specific heuristics) are still surfaced.
         """
         results: list[dict] = []
         for item in self._risk_report.get("files", []):
-            high = [h for h in item.get("heuristics", []) if h.get("severity") == "high"]
-            if high:
+            high_h = [h for h in item.get("heuristics", []) if h.get("severity") == "high"]
+            if item.get("risk_level") == "high" or high_h:
                 results.append(
                     {
                         "path": item["path"],
                         "risk_level": item.get("risk_level"),
-                        "high_severity_heuristics": high,
+                        "reasons": item.get("reasons", []),
+                        "high_severity_heuristics": high_h,
                     }
                 )
         if not results:
-            return "No high-severity heuristics found in the risk report."
-        return json.dumps(results, indent=2)
+            return "No high-risk files found in the risk report."
+
+        lines: list[str] = [f"## High-Risk Files ({len(results)})", ""]
+        for r in results:
+            lines.append(f"### {r['path']}")
+            if r.get("risk_level"):
+                lines.append(f"**Risk level:** {r['risk_level']}")
+            reasons = r.get("reasons", [])
+            if reasons:
+                lines.append(f"**Reasons:** {'; '.join(reasons)}")
+            high_h = r.get("high_severity_heuristics", [])
+            if high_h:
+                lines.append("")
+                lines.append("**Heuristics:**")
+                for h in high_h:
+                    lines.append(
+                        f"  - [{h.get('severity', '?')}] {h.get('kind', '?')}:"
+                        f" `{h.get('symbol', '?')}` — {h.get('detail', '')}"
+                    )
+            lines.append("")
+        return "\n".join(lines)
 
 
 def build_mcp_server(inventory_path: Path, risk_report_path: Path):  # type: ignore[return]

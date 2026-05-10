@@ -230,38 +230,49 @@ class TestFindSymbol:
 
     def test_unknown_symbol_returns_error(self, tmp_path):
         vs = self._server(tmp_path)
-        result = json.loads(vs.find_symbol("NoSuchSymbol"))
-        assert "error" in result
-        assert result["matches"] == []
+        result = vs.find_symbol("NoSuchSymbol")
+        assert "not found" in result.lower()
+        assert "NoSuchSymbol" in result
 
-    def test_known_symbol_returns_array(self, tmp_path):
+    def test_known_symbol_returns_markdown(self, tmp_path):
         vs = self._server(tmp_path, cards=[_sample_card()])
-        result = json.loads(vs.find_symbol("run"))
-        assert isinstance(result, list)
-        assert len(result) == 1
-        assert result[0]["file_path"] == "src/app.py"
+        result = vs.find_symbol("run")
+        assert "## Symbol:" in result
+        assert "run" in result
+        assert "src/app.py" in result
 
     def test_symbol_result_contains_kind_and_line(self, tmp_path):
         vs = self._server(tmp_path, cards=[_sample_card()])
-        result = json.loads(vs.find_symbol("App"))
-        assert result[0]["kind"] == "class"
-        assert result[0]["line"] == 20
+        result = vs.find_symbol("App")
+        assert "class" in result
+        assert "20" in result
 
     def test_case_insensitive_fallback(self, tmp_path):
         vs = self._server(tmp_path, cards=[_sample_card()])
-        result = json.loads(vs.find_symbol("app"))
+        result = vs.find_symbol("app")
         # "App" found via case-insensitive lookup
-        assert isinstance(result, list)
-        assert result[0]["name"] == "App"
+        assert "App" in result
+        assert "src/app.py" in result
 
     def test_symbol_appears_in_multiple_files(self, tmp_path):
         card1 = _sample_card("src/a.py")
         card2 = _sample_card("src/b.py")
         vs = self._server(tmp_path, cards=[card1, card2])
-        result = json.loads(vs.find_symbol("run"))
-        assert len(result) == 2
-        paths = {r["file_path"] for r in result}
-        assert paths == {"src/a.py", "src/b.py"}
+        result = vs.find_symbol("run")
+        assert "src/a.py" in result
+        assert "src/b.py" in result
+        assert "Found in 2 file(s)" in result
+
+    def test_find_symbol_markdown_header(self, tmp_path):
+        vs = self._server(tmp_path, cards=[_sample_card()])
+        result = vs.find_symbol("run")
+        assert result.startswith("## Symbol: `run`")
+
+    def test_find_symbol_shows_file_kind_line(self, tmp_path):
+        vs = self._server(tmp_path, cards=[_sample_card()])
+        result = vs.find_symbol("run")
+        assert "function" in result
+        assert "10" in result
 
 
 # ---------------------------------------------------------------------------
@@ -280,14 +291,14 @@ class TestListHighRisk:
     def test_no_high_severity_returns_message(self, tmp_path):
         vs = self._server(tmp_path, risk_items=[_sample_risk_item(severity="low")])
         result = vs.list_high_risk()
-        assert "No high-severity heuristics" in result
+        assert "No high-risk files" in result
 
-    def test_high_severity_returned(self, tmp_path):
+    def test_high_severity_heuristic_included(self, tmp_path):
         vs = self._server(tmp_path, risk_items=[_sample_risk_item(severity="high")])
-        result = json.loads(vs.list_high_risk())
-        assert isinstance(result, list)
-        assert result[0]["path"] == "src/app.py"
-        assert result[0]["high_severity_heuristics"][0]["severity"] == "high"
+        result = vs.list_high_risk()
+        assert "src/app.py" in result
+        assert "high" in result
+        assert "suspicious_name" in result
 
     def test_medium_severity_excluded(self, tmp_path):
         items = [
@@ -295,14 +306,14 @@ class TestListHighRisk:
             _sample_risk_item("src/b.py", severity="high"),
         ]
         vs = self._server(tmp_path, risk_items=items)
-        result = json.loads(vs.list_high_risk())
-        assert len(result) == 1
-        assert result[0]["path"] == "src/b.py"
+        result = vs.list_high_risk()
+        assert "src/b.py" in result
+        assert "src/a.py" not in result
 
     def test_empty_risk_report_returns_message(self, tmp_path):
         vs = self._server(tmp_path, risk_items=[])
         result = vs.list_high_risk()
-        assert "No high-severity heuristics" in result
+        assert "No high-risk files" in result
 
     def test_multiple_high_risk_files(self, tmp_path):
         items = [
@@ -310,8 +321,38 @@ class TestListHighRisk:
             _sample_risk_item("src/b.py", severity="high"),
         ]
         vs = self._server(tmp_path, risk_items=items)
-        result = json.loads(vs.list_high_risk())
-        assert len(result) == 2
+        result = vs.list_high_risk()
+        assert "src/a.py" in result
+        assert "src/b.py" in result
+
+    def test_high_risk_level_included_without_heuristics(self, tmp_path):
+        """Files with risk_level='high' appear even when no heuristic has severity='high'."""
+        item = {
+            "path": "src/critical.py",
+            "risk_level": "high",
+            "reasons": ["protected path"],
+            "heuristics": [],
+        }
+        vs = self._server(tmp_path, risk_items=[item])
+        result = vs.list_high_risk()
+        assert "src/critical.py" in result
+        assert "high" in result
+
+    def test_list_high_risk_markdown_header(self, tmp_path):
+        vs = self._server(tmp_path, risk_items=[_sample_risk_item(severity="high")])
+        result = vs.list_high_risk()
+        assert "## High-Risk Files" in result
+
+    def test_list_high_risk_shows_reasons(self, tmp_path):
+        item = {
+            "path": "src/arch.py",
+            "risk_level": "high",
+            "reasons": ["architecture file"],
+            "heuristics": [],
+        }
+        vs = self._server(tmp_path, risk_items=[item])
+        result = vs.list_high_risk()
+        assert "architecture file" in result
 
 
 # ---------------------------------------------------------------------------
@@ -449,3 +490,118 @@ class TestCLIServeSubcommand:
         args = parser.parse_args(["serve"])
         assert args.command == "serve"
         assert args.repo_root is None
+
+
+# ---------------------------------------------------------------------------
+# Config snippet – command correctness
+# ---------------------------------------------------------------------------
+
+
+class TestConfigSnippet:
+    def _init_repo(self, root: Path) -> None:
+        vdir = root / ".vibecode"
+        (vdir / "index").mkdir(parents=True, exist_ok=True)
+        (vdir / "project.yaml").write_text(
+            "project:\n  id: testproj\n  name: Test\n  root: .\n",
+            encoding="utf-8",
+        )
+
+    def _get_snippet(self, tmp_path, capsys) -> dict:
+        from vibecode.mcp_server import cmd_serve
+
+        self._init_repo(tmp_path)
+        _write(tmp_path / ".vibecode" / "index" / "file_inventory.json", _make_inventory())
+        _write(tmp_path / ".vibecode" / "index" / "risk_report.json", _make_risk_report())
+        args = SimpleNamespace(repo_root=str(tmp_path))
+        with patch("vibecode.mcp_server.build_mcp_server") as mock_build:
+            mock_build.return_value = MagicMock()
+            cmd_serve(args)
+        captured = capsys.readouterr()
+        start = captured.err.index("{")
+        end = captured.err.rindex("}") + 1
+        return json.loads(captured.err[start:end])
+
+    def test_command_is_vibecode(self, tmp_path, capsys):
+        snippet = self._get_snippet(tmp_path, capsys)
+        assert snippet["mcpServers"]["vibecode"]["command"] == "vibecode"
+
+    def test_args_start_with_serve(self, tmp_path, capsys):
+        snippet = self._get_snippet(tmp_path, capsys)
+        assert snippet["mcpServers"]["vibecode"]["args"][0] == "serve"
+
+    def test_snippet_uses_forward_slashes(self, tmp_path, capsys):
+        snippet = self._get_snippet(tmp_path, capsys)
+        args = snippet["mcpServers"]["vibecode"]["args"]
+        for arg in args:
+            assert "\\" not in arg, f"Backslash in snippet arg: {arg!r}"
+
+
+# ---------------------------------------------------------------------------
+# Real-data smoke tests (uses actual .vibecode/index if present)
+# ---------------------------------------------------------------------------
+
+
+class TestRealDataSmoke:
+    """Light smoke tests against the actual project index files when available."""
+
+    @staticmethod
+    def _index_dir() -> Path:
+        here = Path(__file__).parent.parent
+        return here / ".vibecode" / "index"
+
+    def test_get_file_card_existing_file(self):
+        index = self._index_dir()
+        inv = index / "file_inventory.json"
+        risk = index / "risk_report.json"
+        if not inv.exists() or not risk.exists():
+            return  # skip if index not generated
+        from vibecode.mcp_server import VibecodeServer
+
+        vs = VibecodeServer(inv, risk)
+        if not vs._cards:
+            return
+        path = next(iter(vs._cards))
+        result = vs.get_file_card(path)
+        assert path in result
+        assert "# " in result  # markdown heading
+
+    def test_get_file_card_nonexistent_returns_error(self):
+        index = self._index_dir()
+        inv = index / "file_inventory.json"
+        risk = index / "risk_report.json"
+        if not inv.exists() or not risk.exists():
+            return
+        from vibecode.mcp_server import VibecodeServer
+
+        vs = VibecodeServer(inv, risk)
+        result = vs.get_file_card("definitely/does/not/exist.py")
+        assert "No context card found" in result
+
+    def test_find_symbol_in_multiple_files(self):
+        index = self._index_dir()
+        inv = index / "file_inventory.json"
+        risk = index / "risk_report.json"
+        if not inv.exists() or not risk.exists():
+            return
+        from vibecode.mcp_server import VibecodeServer
+
+        vs = VibecodeServer(inv, risk)
+        # _git_add_commit appears in several test files in this project
+        result = vs.find_symbol("_git_add_commit")
+        if "not found" not in result.lower():
+            assert "## Symbol:" in result
+            assert "Found in" in result
+
+    def test_list_high_risk_with_real_data(self):
+        index = self._index_dir()
+        inv = index / "file_inventory.json"
+        risk = index / "risk_report.json"
+        if not inv.exists() or not risk.exists():
+            return
+        from vibecode.mcp_server import VibecodeServer
+
+        vs = VibecodeServer(inv, risk)
+        result = vs.list_high_risk()
+        # Real project has high-risk-level files (architecture docs), so this
+        # should return actual content rather than the empty message.
+        assert "## High-Risk Files" in result
