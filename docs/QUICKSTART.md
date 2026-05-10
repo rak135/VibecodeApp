@@ -125,15 +125,20 @@ Registry commands:
 | `vibecode project current` | Show the currently active project name and path |
 | `vibecode project remove <name>` | Remove a project from the registry |
 
-When a command needs a repo root, resolution order is:
+Explicit repo paths always take priority over registry and default fallbacks.
 
-1. Explicit `--repo` or positional path argument
-2. Active project from the registry
-3. Current working directory (`.`)
+Commands that use the registry when no path is given (``index``, ``map``,
+``validate``, ``guard``, ``check``, ``handoff-check``, ``run``, ``context``):
 
-The context command (`vibecode context "task"`) follows the same resolution:
-if no `--repo` is given, it tries the registry's active project, then falls
-back to `.`.
+1. Explicit ``--repo`` / positional argument — wins.
+2. Active project from the registry — used when no explicit path is given.
+3. If no active project exists, most commands **error** with
+   ``No repository root given and no active project`` (run
+   ``vibecode project use <name>`` first).  ``context`` is the exception:
+   it falls back to ``.`` (current directory).
+
+Commands that default to ``.`` and do **not** consult the registry:
+``init``, ``run-plan``, ``export-agents``, ``history new``.
 
 ---
 

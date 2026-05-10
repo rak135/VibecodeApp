@@ -172,8 +172,14 @@ Key points:
   text sidecar file.
 - Registry state is local to your machine and is never committed to version
   control.
-- Every command that accepts ``--repo`` (or a positional repo root) will use
-  the active project as a fallback when no path is given.
+- Explicit repo paths always win — when you pass ``--repo`` or a positional
+  path argument, the registry is never consulted.
+- These commands use the active project as a fallback when no path is given:
+  ``index``, ``map``, ``validate``, ``guard``, ``check``, ``handoff-check``,
+  ``run``, ``context``.  If no active project exists, they **error** with a
+  clear message (except ``context``, which falls back to ``.``).
+- These commands default to ``.`` (current directory) and do **not** consult
+  the registry: ``init``, ``run-plan``, ``export-agents``, ``history new``.
 
 
 

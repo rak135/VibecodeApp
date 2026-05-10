@@ -260,7 +260,7 @@
     {
       "title": "Clarify project registry fallback behavior in docs and tests",
       "description": "Purpose: resolve nuance found by the stricter audit: some docs may imply all commands fall back to the active project or current directory uniformly, while implementation treats explicit repo args, active registry, `.` defaults, and `run-plan` differently.\n\nScope: Work in `README.md`, `docs/QUICKSTART.md`, `AGENTS.md` or generated AGENTS command guidance if needed, and tests only if docs reveal actual behavior bugs. Do not change registry behavior unless tests prove it contradicts intended semantics.\n\nRequired documentation: explicitly state that explicit repo path wins; commands designed for registry fallback use active project when repo is omitted; `run-plan` may default to `.` if that is intended; commands that require a repo should error clearly if no active project exists. Include one explicit-path example and one registry example.\n\nAcceptance criteria: docs no longer overclaim universal fallback behavior; registry docs match `python -m vibecode.cli project --help` and command behavior; tests still pass.\n\nVerification commands: `python -m pytest tests/test_vibecode_active_project_fallback.py tests/test_vibecode_project_cli.py -p no:cacheprovider`; `python -m pytest -p no:cacheprovider`.",
-      "completed": false
+      "completed": true
     },
     {
       "title": "Fix CLI help typo and command-list drift",
