@@ -62,6 +62,18 @@ def test_generated_path_prefixes_covers_logs():
     assert any(p.startswith(".vibecode/logs/") for p in GENERATED_PATH_PREFIXES)
 
 
+def test_generated_path_prefixes_covers_runs():
+    assert any(p.startswith(".vibecode/runs/") for p in GENERATED_PATH_PREFIXES)
+
+
+def test_generated_path_prefixes_covers_tmp():
+    assert any(p.startswith(".vibecode/tmp/") for p in GENERATED_PATH_PREFIXES)
+
+
+def test_generated_path_prefixes_covers_cache():
+    assert any(p.startswith(".vibecode/cache/") for p in GENERATED_PATH_PREFIXES)
+
+
 def test_human_maintained_paths_not_in_generated_prefixes():
     """No human-maintained path may start with a generated prefix."""
     for rel in HUMAN_MAINTAINED_PATHS:
@@ -106,6 +118,26 @@ def test_is_human_maintained_false_for_log_file(tmp_path):
     assert is_human_maintained(path, tmp_path) is False
 
 
+def test_is_human_maintained_false_for_runs_file(tmp_path):
+    path = tmp_path / ".vibecode" / "runs" / "20240101T000000Z.json"
+    assert is_human_maintained(path, tmp_path) is False
+
+
+def test_is_human_maintained_false_for_tmp_file(tmp_path):
+    path = tmp_path / ".vibecode" / "tmp" / "scratch.txt"
+    assert is_human_maintained(path, tmp_path) is False
+
+
+def test_is_human_maintained_false_for_cache_file(tmp_path):
+    path = tmp_path / ".vibecode" / "cache" / "context_digest.json"
+    assert is_human_maintained(path, tmp_path) is False
+
+
+def test_is_human_maintained_false_for_generated_export(tmp_path):
+    path = tmp_path / ".vibecode" / "generated" / "AGENTS.generated.md"
+    assert is_human_maintained(path, tmp_path) is False
+
+
 def test_is_human_maintained_false_for_unrelated_path(tmp_path):
     path = tmp_path / "src" / "main.py"
     assert is_human_maintained(path, tmp_path) is False
@@ -138,6 +170,30 @@ def test_safe_write_succeeds_for_generated_path(tmp_path):
     path = tmp_path / ".vibecode" / "index" / "file_inventory.json"
     safe_write(path, '{"files": []}', repo_root=tmp_path)
     assert path.read_text(encoding="utf-8") == '{"files": []}'
+
+
+def test_safe_write_succeeds_for_runs_path(tmp_path):
+    path = tmp_path / ".vibecode" / "runs" / "metadata.json"
+    safe_write(path, "{}", repo_root=tmp_path)
+    assert path.exists()
+
+
+def test_safe_write_succeeds_for_tmp_path(tmp_path):
+    path = tmp_path / ".vibecode" / "tmp" / "scratch.txt"
+    safe_write(path, "scratch", repo_root=tmp_path)
+    assert path.exists()
+
+
+def test_safe_write_succeeds_for_cache_path(tmp_path):
+    path = tmp_path / ".vibecode" / "cache" / "digest.json"
+    safe_write(path, "{}", repo_root=tmp_path)
+    assert path.exists()
+
+
+def test_safe_write_succeeds_for_generated_export_path(tmp_path):
+    path = tmp_path / ".vibecode" / "generated" / "output.md"
+    safe_write(path, "# output\n", repo_root=tmp_path)
+    assert path.exists()
 
 
 def test_safe_write_creates_parent_directories(tmp_path):

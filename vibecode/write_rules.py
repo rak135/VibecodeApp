@@ -39,6 +39,9 @@ GENERATED_PATH_PREFIXES: tuple[str, ...] = (
     ".vibecode/index/",
     ".vibecode/current/",
     ".vibecode/logs/",
+    ".vibecode/runs/",
+    ".vibecode/tmp/",
+    ".vibecode/cache/",
     ".vibecode/generated/",
 )
 

@@ -35,4 +35,8 @@
 
 - `.vibecode/index/*.generated.*` contains regenerated indexes.
 - `.vibecode/current/*` contains current task/session outputs.
+- `.vibecode/generated/*` contains export artifacts.
 - `.vibecode/logs/*` contains runtime logs.
+- `.vibecode/runs/*` contains run metadata.
+- `.vibecode/tmp/*` contains temporary files.
+- `.vibecode/cache/*` contains cached artifacts.

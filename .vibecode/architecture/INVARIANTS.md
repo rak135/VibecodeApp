@@ -16,8 +16,17 @@
 
 - `.vibecode/architecture/*.md` is human-maintained.
 - `.vibecode/checks/*.yaml` is human-maintained.
+- `.vibecode/handoff/*.md` is human-maintained.
+- `.vibecode/history/README.md` is human-maintained.
+- `.vibecode/agents/*.json` is human-maintained.
+- `.vibecode/index/schema.json` and `.vibecode/index/README.md` are human-maintained.
 - `.vibecode/index/*.generated.*` is generated.
 - `.vibecode/current/*` is runtime/session state.
+- `.vibecode/generated/*` is generated/export.
+- `.vibecode/logs/*` is runtime logs.
+- `.vibecode/runs/*` is runtime metadata.
+- `.vibecode/tmp/*` is transient scratch.
+- `.vibecode/cache/*` is cache.
 
 ## Agent behavior
 

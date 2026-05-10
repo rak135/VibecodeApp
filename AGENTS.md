@@ -19,6 +19,8 @@ Treat source code, tests, `PRD.json`, and human-maintained docs (`.vibecode/arch
 - `.vibecode/generated/*` — export artifacts
 - `.vibecode/logs/*` — runtime logs
 - `.vibecode/runs/*` — run metadata
+- `.vibecode/tmp/*` — temporary files
+- `.vibecode/cache/*` — cache files
 
 ## Rules
 
