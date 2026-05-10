@@ -9,6 +9,7 @@ from datetime import datetime, timezone
 from pathlib import Path
 
 from vibecode.indexer.classifier import FileRecord, classify
+from vibecode.git_state import current_git_commit
 from vibecode.indexer.inventory import build_inventory, write_inventory
 from vibecode.indexer.risk_engine import RiskResult, build_risk_index
 from vibecode.indexer.risky_files import write_risky_files
@@ -50,9 +51,62 @@ __all__ = [
     "detect_entrypoints",
     "render_entrypoints",
     "write_entrypoints",
+    "check_index_freshness",
 ]
 
 
+
+
+def check_index_freshness(
+    repo_root: Path,
+    max_age_seconds: float = 300.0,
+) -> tuple[bool, str]:
+    """Check whether the existing index is fresh enough to use.
+
+    The index is considered stale if it does not exist, if it was
+    built more than *max_age_seconds* ago, or if the git HEAD changed
+    since the index was built.
+
+    Returns
+    -------
+    (fresh, detail_message)
+        *fresh* is True when the index looks current; False otherwise.
+        *detail_message* explains why it is stale (or "fresh").
+
+    """
+    index_path = repo_root / ".vibecode" / "current" / "last_index.json"
+
+    if not index_path.exists():
+        return False, "No index found -- run 'vibecode index' first."
+
+    try:
+        record = json.loads(index_path.read_text(encoding="utf-8"))
+    except (json.JSONDecodeError, OSError) as exc:
+        return False, "Cannot parse last index record: {exc}".format(exc=exc)
+
+    # Check age.
+    started_at = record.get("started_at", "")
+    if started_at:
+        from datetime import datetime as _dt, timezone as _tz
+        started_dt = _dt.fromisoformat(started_at)
+        age = (_dt.now(tz=_tz.utc) - started_dt).total_seconds()
+        if age > max_age_seconds:
+            return False, (
+                "Index is {age:.0f}s old (>{max_age_seconds:.0f}s) "
+                "-- run 'vibecode index' to refresh."
+            ).format(age=age, max_age_seconds=max_age_seconds)
+
+    # Check git commit.
+    recorded_commit = record.get("git_commit")
+    if recorded_commit and recorded_commit != "unknown":
+        current_commit = current_git_commit(repo_root)
+        if current_commit != "unknown" and current_commit != recorded_commit:
+            return False, (
+                "Index was built for commit {recorded_commit}, "
+                "but HEAD is now {current_commit} -- re-index."
+            ).format(recorded_commit=recorded_commit, current_commit=current_commit)
+
+    return True, "fresh"
 def cmd_index(args) -> int:
     repo_root = Path(args.repo_root).resolve()
     started_at = datetime.now(tz=timezone.utc)
@@ -191,6 +245,7 @@ def cmd_index(args) -> int:
         vibecode_dir=vibecode_dir,
         timestamp=timestamp,
         validation=validation_report,
+        git_commit=_git_commit(repo_root),
     )
     print(f"  last index written to {current_path.relative_to(repo_root).as_posix()}", file=sys.stderr)
     print(f"  run record written to {run_path.relative_to(repo_root).as_posix()}", file=sys.stderr)

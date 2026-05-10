@@ -8,7 +8,7 @@ from pathlib import Path
 
 import pytest
 
-from vibecode.git_state import inspect_git_state
+from vibecode.git_state import current_git_commit, inspect_git_state
 
 
 git_available = pytest.mark.skipif(
@@ -138,3 +138,24 @@ def test_non_git_directory_returns_empty_state(tmp_path):
     assert state.error is None
     assert state.changed_paths == ()
     assert state.status_paths == ()
+
+
+@git_available
+def test_current_git_commit_returns_short_sha(tmp_path):
+    """current_git_commit should return a short SHA for a git repo."""
+    _init_repo(tmp_path)
+    _write(tmp_path / "app.py", "x = 1\n")
+    _commit_all(tmp_path)
+
+    commit = current_git_commit(tmp_path)
+
+    assert commit != "unknown"
+    assert len(commit) >= 7  # short SHA is at least 7 chars
+
+
+@git_available
+def test_current_git_commit_unknown_for_non_git(tmp_path):
+    """current_git_commit should return 'unknown' for a non-git directory."""
+    commit = current_git_commit(tmp_path)
+
+    assert commit == "unknown"

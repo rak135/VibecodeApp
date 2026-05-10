@@ -29,7 +29,7 @@ from vibecode.config import load_config
 from vibecode.context import cmd_context
 from vibecode.diff_summary import DiffSummary, diff_summarise
 from vibecode.guard import GuardResult, evaluate_guard, write_guard_result
-from vibecode.git_state import GitState, inspect_git_state
+from vibecode.git_state import GitState, current_git_commit, inspect_git_state
 from vibecode.handoff import HandoffResult, validate_handoff_files
 from vibecode.indexer import cmd_index
 from vibecode.run_plan import build_run_plan
@@ -304,7 +304,7 @@ def cmd_run(args) -> int:
     # ------------------------------------------------------------------
     index_path = vibecode_dir / "current" / "last_index.json"
     if not no_index and (not index_path.exists() or (root / ".vibecode" / "project.yaml").exists()):
-        # Check if index looks stale: older than 5 minutes.
+        # Check if index looks stale: older than 5 minutes or git commit changed.
         stale = False
         if index_path.exists():
             try:
@@ -317,6 +317,18 @@ def cmd_run(args) -> int:
                     age = (_dt.now(tz=_tz.utc) - started_dt).total_seconds()
                     if age > 300:  # 5 minutes
                         stale = True
+                # Check if the git commit has changed since the index was built.
+                if not stale:
+                    recorded_commit = record.get("git_commit")
+                    if recorded_commit and recorded_commit != "unknown":
+                        current_commit = current_git_commit(root)
+                        if current_commit != "unknown" and current_commit != recorded_commit:
+                            print(
+                                f"Index was built for commit {recorded_commit}, "
+                                f"but HEAD is now {current_commit} — re-indexing.",
+                                file=sys.stderr,
+                            )
+                            stale = True
             except Exception:
                 stale = True
 

@@ -22,6 +22,7 @@ def write_run_record(
     vibecode_dir: Path,
     timestamp: str,
     validation: dict | None = None,
+    git_commit: str | None = None,
 ) -> tuple[Path, Path]:
     """Persist the run record to ``current/last_index.json`` and ``logs/index_runs/<timestamp>.json``.
 
@@ -40,6 +41,8 @@ def write_run_record(
     }
     if validation is not None:
         record["validation"] = validation
+    if git_commit is not None:
+        record["git_commit"] = git_commit
     serialized = json.dumps(record, indent=2, ensure_ascii=False) + "\n"
 
     current_path = vibecode_dir / "current" / "last_index.json"

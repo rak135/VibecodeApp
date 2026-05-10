@@ -15,7 +15,7 @@ from typing import Any
 
 from vibecode.adapters.opencode import check_opencode
 from vibecode.config import load_config
-from vibecode.git_state import GitState, inspect_git_state
+from vibecode.git_state import GitState, current_git_commit, inspect_git_state
 
 
 @dataclass(frozen=True)
@@ -168,6 +168,19 @@ def build_run_plan(
                     index_fresh = True
             else:
                 index_fresh = True  # Can't compare, assume OK.
+
+            # Compare git commit — if HEAD changed since index, the index is stale.
+            if index_fresh:
+                recorded_commit = record.get("git_commit")
+                if recorded_commit and recorded_commit != "unknown":
+                    current_commit = current_git_commit(root)
+                    if current_commit != "unknown" and current_commit != recorded_commit:
+                        warnings.append(RunPlanWarning(
+                            "warn",
+                            f"Index was built for commit {recorded_commit}, "
+                            f"but HEAD is now {current_commit} — run 'vibecode index'.",
+                        ))
+                        index_fresh = False
 
             # If dirty, index may be stale
             if dirty and index_age_seconds is not None and index_age_seconds > 0:

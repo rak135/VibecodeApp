@@ -9,6 +9,41 @@ from pathlib import Path
 from vibecode.paths import strip_to_posix
 
 
+def _sha1() -> str:
+    """Return the current HEAD commit hash (short form), or 'unknown'."""
+    try:
+        result = subprocess.run(
+            ["git", "rev-parse", "--short", "HEAD"],
+            capture_output=True,
+            text=True,
+            timeout=5,
+            check=False,
+        )
+        if result.returncode == 0 and result.stdout.strip():
+            return result.stdout.strip()
+        return "unknown"
+    except (OSError, subprocess.SubprocessError, FileNotFoundError):
+        return "unknown"
+
+
+def current_git_commit(repo_root: Path) -> str:
+    """Return the current HEAD commit hash for *repo_root*, or 'unknown'."""
+    try:
+        result = subprocess.run(
+            ["git", "rev-parse", "--short", "HEAD"],
+            cwd=repo_root,
+            capture_output=True,
+            text=True,
+            timeout=5,
+            check=False,
+        )
+        if result.returncode == 0 and result.stdout.strip():
+            return result.stdout.strip()
+        return "unknown"
+    except (OSError, subprocess.SubprocessError):
+        return "unknown"
+
+
 @dataclass(frozen=True)
 class StatusPath:
     """A path reported by ``git status --short``."""

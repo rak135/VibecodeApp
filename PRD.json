@@ -205,7 +205,7 @@
     {
       "title": "Add stale index detection",
       "description": "Purpose: warn when generated index was built for an older commit or file state.\n\nBehavior:\n- Compare last index git commit/path set to current HEAD/status where available.\n- If repo changed since index, warn or require re-index before `context`, `guard`, or `run`.\n- Do not block docs-only changes unless policy says so.\n- Provide clear command: `vibecode index <repo>`.\n\nAcceptance:\n- Stale index warning appears in context/run preflight.\n- Fresh index reports clean.\n- Tests cover changed file after index.",
-      "completed": false
+      "completed": true
     },
     {
       "title": "Add context-pack quality regression test",
