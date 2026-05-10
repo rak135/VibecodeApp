@@ -28,7 +28,7 @@ from vibecode.check import CheckRun, run_checks, write_check_results
 from vibecode.config import load_config
 from vibecode.context import cmd_context
 from vibecode.diff_summary import DiffSummary, diff_summarise
-from vibecode.guard import GuardResult, evaluate_guard, write_guard_result
+from vibecode.guard import GuardResult, evaluate_project_guard, write_guard_result
 from vibecode.git_state import GitState, current_git_commit, inspect_git_state
 from vibecode.handoff import HandoffResult, validate_handoff_files
 from vibecode.indexer import cmd_index
@@ -290,7 +290,7 @@ def _run_post_checks(
     # --- Post-check 1: Guard ---
     try:
         if git_state and git_state.is_git_repo:
-            guard_result = evaluate_guard(git_state, task=task)
+            guard_result = evaluate_project_guard(git_state, vibecode_dir, task=task)
             try:
                 write_guard_result(guard_result, vibecode_dir, root)
             except Exception:

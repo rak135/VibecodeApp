@@ -16,3 +16,4 @@
 - Guard evaluation now warns when source and test changes are not paired, using test-map suggestions when available and allowing explicit test-only work.
 - `vibecode run` orchestrates external OpenCode only when explicitly invoked, validates selected permission profiles before launch, and evaluates guard/check/handoff against the post-agent working tree.
 - Default permission profiles live in committed `.vibecode/agents/{safe,fast,audit}.json`.
+- Post-run guard evaluation now uses the same project-loaded protected path policy as standalone `vibecode guard`, with regression coverage for custom `.vibecode/checks/protected_paths.yaml` rules.

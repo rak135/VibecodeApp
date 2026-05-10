@@ -930,6 +930,40 @@ class TestCmdRunWithPostChecks:
         )
         assert any(path["path"] == "README.md" for path in data["diff"]["changed_files"])
 
+    def test_run_guard_catches_custom_project_protected_path_modified_by_agent(self):
+        """Post-run guard must load project protected_paths.yaml policy."""
+        _write(self.repo / "policy" / "locked.txt", "do not edit\n")
+        _write(
+            self.repo / ".vibecode" / "checks" / "protected_paths.yaml",
+            "protected_paths:\n"
+            "  - path: \"policy/locked.txt\"\n"
+            "    rule: \"Custom project policy for locked fixture.\"\n",
+        )
+        _commit_all(self.repo)
+        body = (
+            "from pathlib import Path\n"
+            "Path('policy/locked.txt').write_text('modified by agent\\n', encoding='utf-8')"
+        )
+        self._make_fake_opencode(exit_code=0, stdout="Changed custom policy file.\n", body=body)
+
+        rc = main(["run", str(self.repo), "--task", "change app behavior"])
+
+        assert rc == 1
+        summaries = list((self.repo / ".vibecode" / "runs").glob("*/summary.json"))
+        assert len(summaries) >= 1
+        data = json.loads(summaries[0].read_text(encoding="utf-8"))
+        findings = data["guard"]["findings"]
+        assert data["overall_status"] == "failure"
+        assert data["guard"]["passed"] is False
+        assert any(
+            finding["rule_id"] == "protected-path-scope"
+            and finding["path"] == "policy/locked.txt"
+            and finding["rule"] == "Custom project policy for locked fixture."
+            for finding in findings
+        )
+        assert all(finding["path"] != "README.md" for finding in findings)
+        assert any(path["path"] == "policy/locked.txt" for path in data["diff"]["changed_files"])
+
     def test_run_reports_source_without_test_warning_for_agent_change(self):
         """Source-only agent edits should surface as guard warnings."""
         body = "from pathlib import Path\nPath('app.py').write_text(\"print('changed')\\n\", encoding='utf-8')"

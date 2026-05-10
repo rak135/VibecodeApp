@@ -595,6 +595,40 @@ def test_cmd_guard_writes_guard_result_json(tmp_path):
     assert data["passed"] is True
 
 
+def test_cmd_guard_loads_custom_project_protected_paths(tmp_path):
+    """Standalone guard should enforce project protected_paths.yaml policy."""
+    _init_git_repo(tmp_path)
+    vibecode_dir = tmp_path / ".vibecode"
+    checks_dir = vibecode_dir / "checks"
+    checks_dir.mkdir(parents=True)
+    (vibecode_dir / "project.yaml").write_text(
+        "project:\n  id: test\n  name: test\n  root: .\n", encoding="utf-8"
+    )
+    (checks_dir / "protected_paths.yaml").write_text(
+        "protected_paths:\n"
+        "  - path: \"policy/locked.txt\"\n"
+        "    rule: \"Custom project policy for locked fixture.\"\n",
+        encoding="utf-8",
+    )
+    policy_dir = tmp_path / "policy"
+    policy_dir.mkdir()
+    (policy_dir / "locked.txt").write_text("do not edit\n", encoding="utf-8")
+    _git_add_commit(tmp_path)
+    (policy_dir / "locked.txt").write_text("modified\n", encoding="utf-8")
+
+    rc = cmd_guard(_make_args(str(tmp_path)))
+
+    data = json.loads((vibecode_dir / "current" / "guard_result.json").read_text(encoding="utf-8"))
+    assert rc == 1
+    assert data["passed"] is False
+    assert any(
+        finding["rule_id"] == "protected-path-scope"
+        and finding["path"] == "policy/locked.txt"
+        and finding["rule"] == "Custom project policy for locked fixture."
+        for finding in data["findings"]
+    )
+
+
 # ---------------------------------------------------------------------------
 # Helpers
 # ---------------------------------------------------------------------------

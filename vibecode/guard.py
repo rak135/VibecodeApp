@@ -132,12 +132,14 @@ def evaluate_guard(
     *,
     task: str = "",
     test_map: dict | None = None,
+    protected_rules: tuple[ProtectedPathRule, ...] | list[ProtectedPathRule] | None = None,
 ) -> GuardResult:
     """Evaluate all internal guard rules against collected git state."""
 
+    policy_rules = protected_rules or DEFAULT_PROTECTED_PATH_RULES
     policy_result = check_protected_path_changes(
         git_state.changed_paths,
-        DEFAULT_PROTECTED_PATH_RULES,
+        policy_rules,
         task=task,
         untracked_paths=git_state.untracked_paths,
     )
@@ -165,6 +167,30 @@ def evaluate_guard(
                 *source_test_result.findings,
             )
         )
+    )
+
+
+def evaluate_project_guard(
+    git_state: GitState,
+    vibecode_dir: Path,
+    *,
+    task: str = "",
+    test_map: dict | None = None,
+) -> GuardResult:
+    """Evaluate guard rules with the repository's protected path policy."""
+
+    config = load_config(vibecode_dir)
+    project_rules = tuple(config.protected_path_records)
+    protected_rules = (
+        (*DEFAULT_PROTECTED_PATH_RULES, *project_rules)
+        if project_rules
+        else DEFAULT_PROTECTED_PATH_RULES
+    )
+    return evaluate_guard(
+        git_state,
+        task=task,
+        test_map=test_map,
+        protected_rules=protected_rules,
     )
 
 
@@ -680,13 +706,6 @@ def cmd_guard(args) -> int:
         )
         return 1
 
-    # Load config
-    try:
-        config = load_config(vibecode_dir)
-    except Exception as exc:
-        print(f"Error loading project config: {exc}", file=sys.stderr)
-        return 1
-
     # Check git repo
     try:
         git_state = inspect_git_state(repo_root)
@@ -702,25 +721,11 @@ def cmd_guard(args) -> int:
         print(f"Git error: {git_state.error}", file=sys.stderr)
 
     # Evaluate guard rules
-    result = evaluate_guard(
-        git_state,
-        task="",
-        test_map=None,
-    )
-
-    # Also check against project-level protected path rules
-    if config.protected_path_records:
-        project_result = check_protected_path_changes(
-            git_state.changed_paths,
-            config.protected_path_records,
-            task="",
-            untracked_paths=git_state.untracked_paths,
-        )
-        result = GuardResult(
-            findings=_dedupe_findings(
-                (*result.findings, *project_result.findings)
-            )
-        )
+    try:
+        result = evaluate_project_guard(git_state, vibecode_dir, task="", test_map=None)
+    except Exception as exc:
+        print(f"Error loading project config: {exc}", file=sys.stderr)
+        return 1
 
     # Write guard result as JSON (optional; failures here are non-blocking)
     try:
