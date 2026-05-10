@@ -8,6 +8,7 @@ for any local repository, and using the safe OpenCode workflow to run agent-assi
 ## What Vibecode can do
 
 - **`init`** — bootstrap a `.vibecode/` project layer in any repository
+- **`inventory`** — scan files; produce a file inventory with context cards (purpose, symbols, snippet, facts, heuristics) and a risk report; run this before `dashboard` or `serve`
 - **`index`** — scan files; produce a file inventory, symbol map, dependency map, test map, entrypoints list, risk map, and a compact repo-tree
 - **`validate`** — check that all generated artifacts are internally consistent and that human-maintained files are in place
 - **`map`** — print a one-page project summary (file counts, languages, symbols, tests, high-risk files) from the last index run
@@ -18,6 +19,8 @@ for any local repository, and using the safe OpenCode workflow to run agent-assi
 - **`check`** — run required checks from `.vibecode/checks/required_checks.yaml`
 - **`handoff-check`** — validate handoff files (NOW/NEXT/BLOCKERS) and architecture-change recording
 - **`export-agents`** — write `AGENTS.md` with pre-edit and post-edit agent instructions
+- **`serve`** — start an MCP stdio server exposing `get_file_card`, `find_symbol`, and `list_high_risk` for OpenCode
+- **`dashboard`** — open an interactive terminal UI showing context cards, symbols, facts, and heuristics for all indexed files
 - **`project add/use/list/remove/current`** — register and manage named projects in a local registry
 
 ## What Vibecode does not do
@@ -28,12 +31,6 @@ The following behaviors are **explicitly out of scope**:
 - No LLM or AI API calls from Vibecode itself — all inference happens in the external tool
 - No auto-commit or auto-approve — every agent edit is reviewed through guard checks before and after the run
 - No GUI — CLI-first by design
-- No MCP server
-
-> **Note:** OpenCode prompt export (`--platform opencode`) prepares a file you can pass to an external agent manually.
-> The `vibecode run` command can invoke OpenCode directly if it is on PATH, but this is still a **manual, user-initiated action** —
-> Vibecode orchestrates the workflow, the external tool does the editing.
-> Agent runtime integration is a supported workflow but requires OpenCode to be installed.
 
 ---
 
@@ -405,6 +402,102 @@ Future agents should read root `AGENTS.md`, then generate a task-specific
 
 ---
 
+## Daily use with OpenCode (inventory → dashboard → serve)
+
+### Step A — inventory
+
+Generate context cards and the risk report:
+
+```powershell
+python -m vibecode.cli inventory C:\path\to\example-repo
+```
+
+Expected output:
+
+```
+Inventory: scanning C:\path\to\example-repo
+  42 file(s) scanned, 31 Python file(s) with context cards
+  inventory written to .vibecode/index/file_inventory.json
+  risk report written to .vibecode/index/risk_report.json
+```
+
+Re-run `inventory` after adding, removing, or significantly changing Python files.
+
+### Step B — dashboard (visual check)
+
+Inspect context cards interactively:
+
+```powershell
+python -m vibecode.cli dashboard C:\path\to\example-repo
+```
+
+The main view is a table of indexed Python files with their purpose and symbol count.
+The footer shows total files, card count, and high-risk item count.
+
+| Key | Action |
+|---|---|
+| ↑ / ↓ | Select a file |
+| Enter | Open detail view (purpose, symbols, facts, heuristics, snippet) |
+| Escape | Return to main view |
+| Q | Quit |
+
+### Step C — serve (OpenCode MCP integration)
+
+Start the MCP server:
+
+```powershell
+python -m vibecode.cli serve C:\path\to\example-repo
+```
+
+On startup the server prints a configuration snippet to stderr:
+
+```json
+{
+  "mcpServers": {
+    "vibecode": {
+      "command": "vibecode",
+      "args": ["serve", "C:/path/to/example-repo"]
+    }
+  }
+}
+```
+
+Add that snippet to your OpenCode configuration (`~/.config/opencode/config.json` or a
+project-local `opencode.json`). OpenCode will then have access to three MCP tools:
+
+| Tool | Input | Returns |
+|---|---|---|
+| `get_file_card` | `file_path` (string) | Markdown card: purpose, symbols, snippet, facts, heuristics |
+| `find_symbol` | `symbol_name` (string) | Markdown list of file locations and kinds (case-insensitive) |
+| `list_high_risk` | _(none)_ | Markdown report of all high-risk files and high-severity heuristics |
+
+### Interpreting risk reports
+
+`list_high_risk` and the dashboard detail view surface two types of signals:
+
+**Facts** — concrete patterns found by static analysis:
+
+| Kind | Meaning |
+|---|---|
+| `todo` | TODO or FIXME comment — outstanding work item |
+| `unsafe_permission` | `chmod 0o777` or similar permissive call |
+
+**Heuristics** — quality signals that warrant review:
+
+| Kind | Severity | Meaning |
+|---|---|---|
+| `high_param_count` | medium | Function with ≥ 8 parameters — consider refactoring |
+| `suspicious_name` | low | Identifier matching patterns like `tmp`, `hack`, `workaround` |
+
+A file is classified **high-risk** when:
+- the protected-paths policy marks it as protected/sensitive, **or**
+- it contains at least one heuristic with severity `"high"`.
+
+Architecture and check-config files (`.vibecode/architecture/*.md`, `.vibecode/checks/*.yaml`)
+are always high-risk because they define project truth that agents must not silently modify.
+
+---
+
 ## Inspecting output files
 
 All generated files are plain JSON or Markdown. Use standard tools to read them.
@@ -552,15 +645,19 @@ The summary includes overall status, agent exit code, guard results, check resul
    `<!-- vibecode:unfilled -->` marker from each file once it contains project-specific facts.
 2. Edit `.vibecode/checks/required_checks.yaml` to match your actual test and lint commands.
 3. Update `.vibecode/handoff/NOW.md` before each agent session.
-4. Re-run `vibecode index` whenever repository structure changes significantly.
+4. Re-run `vibecode inventory` whenever you add/remove/significantly change Python files.
 5. Re-run `vibecode context` to refresh the context pack before each agent task.
-6. Use the safe OpenCode workflow:
+6. Use the MCP integration for OpenCode:
+   - `vibecode inventory .` to generate context cards and the risk report
+   - `vibecode dashboard .` for a quick visual sanity check
+   - `vibecode serve .` to start the MCP server and paste the config snippet into OpenCode
+7. Use the safe OpenCode workflow for agent-assisted coding:
    - `vibecode context "task" --repo . --platform opencode` to generate context + prompt
    - `vibecode run-plan . --task "task"` to pre-flight the run
    - `vibecode run . --task "task" --profile safe` to execute the agent loop
    - `vibecode guard .`, `vibecode check .`, `vibecode handoff-check .` for post-run audit
    - Review session metadata in `.vibecode/runs/<session_id>/summary.json`
-7. For multi-repo setups, register each project once and switch with `vibecode project use`:
+8. For multi-repo setups, register each project once and switch with `vibecode project use`:
    - `vibecode project add STOCKS C:\DATA\PROJECTS\STOCKS`
    - `vibecode project use STOCKS`
    - `vibecode context "Add rate limiting"` (no path needed)

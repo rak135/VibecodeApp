@@ -182,17 +182,17 @@ def build_mcp_server(inventory_path: Path, risk_report_path: Path):  # type: ign
 
     @mcp.tool()
     def get_file_card(file_path: str) -> str:
-        """Return a human-readable card for a file: purpose, symbols, snippet, facts, heuristics."""
+        """Return a markdown card for a file: purpose, symbols, snippet, facts, and heuristics."""
         return vs.get_file_card(file_path)
 
     @mcp.tool()
     def find_symbol(symbol_name: str) -> str:
-        """Return a JSON array of locations and details for a symbol name."""
+        """Return a markdown list of locations for a symbol name (case-insensitive fallback)."""
         return vs.find_symbol(symbol_name)
 
     @mcp.tool()
     def list_high_risk() -> str:
-        """Return files with high-severity heuristics from the risk report."""
+        """Return a markdown report of high-risk files and high-severity heuristics."""
         return vs.list_high_risk()
 
     return mcp

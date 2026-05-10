@@ -40,7 +40,7 @@
     {
       "title": "Check & fix: run full integration, final polish and documentation",
       "description": "Execute the end‑to‑end workflow: `vibecode inventory` → `vibecode dashboard` (quick visual check) → `vibecode serve` and connect from OpenCode. Use OpenCode to call `get_file_card` on a real project file, `find_symbol` on a known class, and `list_high_risk`. Capture any errors or poor formatting and fix them immediately. Enhance help texts in the CLI (e.g., `vibecode serve --help`). Update README.md with clear instructions for setting up OpenCode, launching the dashboard, and interpreting risk reports. Ensure the entire pipeline feels cohesive. This final check ensures the project is ready for daily use with OpenCode as the primary agent.",
-      "completed": false
+      "completed": true
     }
   ]
 }

@@ -41,7 +41,14 @@ def create_parser() -> argparse.ArgumentParser:
     # inventory
     inventory_parser = subparsers.add_parser(
         "inventory",
-        help="Scan repository and write file_inventory.json with context cards and risk_report.json.",
+        help="Scan repository and write context cards and risk report.",
+        description=(
+            "Scan the repository and write two index files under .vibecode/index/:\n"
+            "  file_inventory.json — every Python file with a context card (purpose,\n"
+            "    symbols, snippet, facts, heuristics) and basic metadata for all files.\n"
+            "  risk_report.json — per-file risk level, reasons, and heuristics.\n\n"
+            "Run this before 'vibecode dashboard' or 'vibecode serve'."
+        ),
     )
     inventory_parser.add_argument(
         "repo_root",
@@ -306,7 +313,24 @@ def create_parser() -> argparse.ArgumentParser:
 
     # serve
     serve_parser = subparsers.add_parser(
-        "serve", help="Start the vibecode MCP server with stdio transport."
+        "serve",
+        help="Start the vibecode MCP server (stdio transport) for use with OpenCode.",
+        description=(
+            "Start a Model Context Protocol (MCP) server over stdio that exposes three tools\n"
+            "for coding agents such as OpenCode:\n\n"
+            "  get_file_card <file_path>   — purpose, symbols, snippet, facts, and heuristics\n"
+            "                                for a single file\n"
+            "  find_symbol <symbol_name>   — locations of a function/class across all files\n"
+            "  list_high_risk              — all files flagged as high-risk or containing\n"
+            "                                high-severity heuristics\n\n"
+            "The server reads .vibecode/index/file_inventory.json and risk_report.json.\n"
+            "Run 'vibecode inventory' first to generate those files.\n\n"
+            "When the server starts, it prints a ready-to-paste JSON snippet to stderr\n"
+            "showing how to add it to your OpenCode MCP configuration.\n\n"
+            "Example OpenCode setup (~/.config/opencode/config.json or opencode.json):\n"
+            '  { "mcpServers": { "vibecode": { "command": "vibecode",\n'
+            '      "args": ["serve", "/path/to/repo"] } } }'
+        ),
     )
     serve_parser.add_argument(
         "repo_root",
@@ -317,7 +341,22 @@ def create_parser() -> argparse.ArgumentParser:
 
     # dashboard
     dashboard_parser = subparsers.add_parser(
-        "dashboard", help="Launch the interactive TUI context-card dashboard."
+        "dashboard",
+        help="Launch the interactive TUI context-card dashboard.",
+        description=(
+            "Launch a terminal-based interactive dashboard showing context cards for all\n"
+            "indexed Python files in the repository.\n\n"
+            "The main view is a table of files with their purpose and symbol count.\n"
+            "Press Enter on any row to open a detail panel showing:\n"
+            "  - Purpose (module docstring)\n"
+            "  - Symbols list (functions and classes with kind and line number)\n"
+            "  - Facts (TODO/FIXME comments, unsafe permission patterns)\n"
+            "  - Heuristics (high-param-count, suspicious-name warnings)\n"
+            "  - Content snippet\n\n"
+            "The footer shows total file count, card count, and number of high-risk items.\n\n"
+            "Key bindings: Enter — open detail view  |  Escape / Q — go back or quit\n\n"
+            "Requires 'vibecode inventory' to have been run first."
+        ),
     )
     dashboard_parser.add_argument(
         "repo_root",

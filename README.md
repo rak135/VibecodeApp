@@ -12,10 +12,11 @@ This repository is intentionally CLI-first. VibecodeApp does not edit code itsel
 2. [Built With](#built-with)
 3. [Getting Started](#getting-started)
 4. [Usage](#usage)
-5. [Status](#status)
-6. [Contributing](#contributing)
-7. [License](#license)
-8. [Acknowledgments](#acknowledgments)
+5. [Daily use with OpenCode](#daily-use-with-opencode)
+6. [Status](#status)
+7. [Contributing](#contributing)
+8. [License](#license)
+9. [Acknowledgments](#acknowledgments)
 
 → **[Full quickstart guide — docs/QUICKSTART.md](docs/QUICKSTART.md)**
 
@@ -30,12 +31,12 @@ VibecodeApp is meant to become the project control layer around agentic coding w
 - validating generated artifacts
 - generating task-scoped context packs and prompt export files
 - enforcing guard/check/handoff requirements around external agent runs
+- exposing an MCP server so OpenCode can query context cards, symbols, and risk data directly
 
 Non-goals:
 
 - no custom coding agent — VibecodeApp does not edit code itself; it prepares context, validates plans, and orchestrates external tools
 - no GUI
-- no MCP server
 - no LLM API calls
 
 See `docs/ARCHITECTURE_MAP_PRD.md` for desired behavior and `docs/ARCHITECTURE_MAP_STATUS.md` for implementation status.
@@ -48,6 +49,8 @@ See `docs/ARCHITECTURE_MAP_PRD.md` for desired behavior and `docs/ARCHITECTURE_M
 - PyYAML
 - pytest
 - setuptools
+- [Textual](https://github.com/Textualize/textual) — terminal UI framework for the dashboard
+- [MCP (Model Context Protocol)](https://modelcontextprotocol.io/) — stdio server used by `vibecode serve`
 
 <p align="right">(<a href="#readme-top">back to top</a>)</p>
 
@@ -207,6 +210,104 @@ Agent-facing files have different lifecycles:
 Generated indexes and runtime/current files are not source of truth. Under `.vibecode/index/`, only `README.md` and `schema.json` are human-maintained; generated outputs such as `file_inventory.json`, `symbol_map.json`, `dependency_map.json`, `test_map.json`, `entrypoints.md`, `risky_files.md`, and `repo_tree.generated.md` must be regenerated, ignored, and not manually edited. Human-maintained project rules live under `.vibecode/project.yaml`, `.vibecode/architecture/`, `.vibecode/checks/`, `.vibecode/handoff/`, `.vibecode/history/`, and `.vibecode/agents/`.
 
 
+
+<p align="right">(<a href="#readme-top">back to top</a>)</p>
+
+## Daily use with OpenCode
+
+The recommended daily-use pipeline connects `vibecode inventory`, `vibecode dashboard`, and `vibecode serve` to give OpenCode live access to your project's context.
+
+### 1 — Generate the index
+
+```powershell
+vibecode inventory C:\path\to\repo
+```
+
+This writes:
+
+| File | Contents |
+|---|---|
+| `.vibecode/index/file_inventory.json` | Every Python file with a context card (purpose, symbols, snippet, facts, heuristics) plus metadata for all files |
+| `.vibecode/index/risk_report.json` | Per-file risk level, reasons, and heuristics |
+
+Re-run `inventory` whenever you add, remove, or significantly change files.
+
+### 2 — Launch the dashboard (optional visual check)
+
+```powershell
+vibecode dashboard C:\path\to\repo
+```
+
+A terminal UI opens showing all indexed files. The footer shows total files, card count, and high-risk item count.
+
+| Key | Action |
+|---|---|
+| ↑ / ↓ | Move between files |
+| Enter | Open detail view (purpose, symbols, facts, heuristics, snippet) |
+| Escape / Q | Go back or quit |
+
+### 3 — Start the MCP server
+
+```powershell
+vibecode serve C:\path\to\repo
+```
+
+On startup the server prints a configuration snippet to stderr:
+
+```json
+{
+  "mcpServers": {
+    "vibecode": {
+      "command": "vibecode",
+      "args": ["serve", "C:/path/to/repo"]
+    }
+  }
+}
+```
+
+Add that snippet to your OpenCode configuration file (`~/.config/opencode/config.json` or a project-local `opencode.json`).
+
+### 4 — Connect OpenCode
+
+With the MCP server running, OpenCode can call three tools:
+
+| Tool | Purpose |
+|---|---|
+| `get_file_card <file_path>` | Purpose, symbols, snippet, facts, and heuristics for one file |
+| `find_symbol <symbol_name>` | Locations of a function or class across all indexed files (case-insensitive) |
+| `list_high_risk` | All files flagged high-risk or with high-severity heuristics |
+
+Example OpenCode session (MCP tool calls):
+
+```
+get_file_card vibecode/mcp_server.py
+find_symbol VibecodeServer
+list_high_risk
+```
+
+### Interpreting risk reports
+
+`list_high_risk` and the dashboard heuristics tab surface two types of signals:
+
+**Facts** — concrete code patterns found by static analysis:
+
+| Kind | Meaning |
+|---|---|
+| `todo` | TODO or FIXME comment — outstanding work |
+| `unsafe_permission` | `chmod 0o777` or similar permissive file-permission call |
+
+**Heuristics** — quality signals that may warrant review:
+
+| Kind | Severity | Meaning |
+|---|---|---|
+| `high_param_count` | medium | Function with ≥ 8 parameters — consider splitting or grouping arguments |
+| `suspicious_name` | low | Identifier matching patterns like `tmp`, `hack`, `fixme`, `workaround` |
+
+Files are classified **high-risk** when:
+- the `.vibecode/checks/protected_paths.yaml` policy marks them as protected/sensitive, **or**
+- they contain at least one heuristic with severity `"high"` (future rule additions).
+
+Architecture docs and check configs (`.vibecode/architecture/*.md`, `.vibecode/checks/*.yaml`) are always high-risk because they define project truth that agents must not silently modify.
 
 <p align="right">(<a href="#readme-top">back to top</a>)</p>
 
