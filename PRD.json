@@ -5,7 +5,7 @@
     {
       "title": "Implement context card generation and fact/heuristic separation",
       "description": "Extend `src/vibecodeapp/` with new modules: `schema.py` (dataclasses ContextCard, RiskItem, Fact, Heuristic), `ast_parser.py` (extract module docstring and function/class symbols via Python's `ast`), and `risk_analyzer.py` (scan files for deterministic facts like TODO/FIXME and unsafe permissions, plus heuristics such as high parameter count or suspicious names). Modify `inventory.py` to accept `generate_cards=True`, call the parser for every Python file, build ContextCard objects, and output them in `.vibecode/file_inventory.json` alongside the plain file list. Modify the risk reporter to store separate `facts` and `heuristics` arrays in `.vibecode/risk_report.json`. Ensure both JSON files are written by the `vibecode inventory` command. Add a config file `.vibecode/config.yml` to set card detail level (basic/full) and whether heuristics are computed, with sensible defaults. This task covers the full implementation; aim to produce testable, importable code without yet running end‑to‑end checks.",
-      "completed": false
+      "completed": true
     },
     {
       "title": "Check & fix: verify context cards and risk report, correct imperfections",

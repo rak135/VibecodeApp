@@ -1,0 +1,11 @@
+# vibecode local configuration
+# This file is human-maintained and controls optional indexer behaviour.
+
+cards:
+  # detail_level: "basic" includes module docstring and symbol names.
+  # "full" adds per-symbol docstrings when available (future extension).
+  detail_level: basic
+
+  # compute_heuristics: when true, the risk analyzer checks for high
+  # parameter counts and suspicious function names.
+  compute_heuristics: true

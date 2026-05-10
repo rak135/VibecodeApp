@@ -27,6 +27,10 @@ from vibecode.indexer.repo_tree import render_repo_tree, write_repo_tree
 from vibecode.indexer.symbol_map import build_symbol_map, write_symbol_map
 from vibecode.indexer.test_map import build_test_map, write_test_map
 from vibecode.indexer.run_record import write_run_record
+from vibecode.indexer.schema import ContextCard, Fact, Heuristic, RiskItem
+from vibecode.indexer.ast_parser import ParseResult, parse_python_file
+from vibecode.indexer.risk_analyzer import analyze_facts, analyze_heuristics
+from vibecode.indexer.risk_reporter import build_risk_report, write_risk_report
 from vibecode.validation import validate_project, write_validation_report
 
 __all__ = [
@@ -53,6 +57,16 @@ __all__ = [
     "render_entrypoints",
     "write_entrypoints",
     "check_index_freshness",
+    "ContextCard",
+    "Fact",
+    "Heuristic",
+    "RiskItem",
+    "ParseResult",
+    "parse_python_file",
+    "analyze_facts",
+    "analyze_heuristics",
+    "build_risk_report",
+    "write_risk_report",
 ]
 
 
@@ -173,7 +187,17 @@ def cmd_index(args) -> int:
     ]
 
     inventory_path = vibecode_dir / "index" / "file_inventory.json"
-    write_inventory(project_id, repo_root, files, inventory_path, risk_index=risk_index)
+    card_cfg = _load_card_config(vibecode_dir)
+    write_inventory(
+        project_id,
+        repo_root,
+        files,
+        inventory_path,
+        risk_index=risk_index,
+        generate_cards=True,
+        card_detail=card_cfg["detail_level"],
+        compute_heuristics=card_cfg["compute_heuristics"],
+    )
     print(f"  {len(files)} file(s) indexed", file=sys.stderr)
     print(f"  inventory written to {inventory_path.relative_to(repo_root).as_posix()}", file=sys.stderr)
 
@@ -181,6 +205,19 @@ def cmd_index(args) -> int:
     write_risky_files(risk_index, risky_files_path)
     print(
         f"  risky files written to {risky_files_path.relative_to(repo_root).as_posix()}",
+        file=sys.stderr,
+    )
+
+    risk_report_path = vibecode_dir / "index" / "risk_report.json"
+    risk_items = _build_risk_items(
+        repo_root,
+        files,
+        risk_index,
+        card_cfg["compute_heuristics"],
+    )
+    write_risk_report(project_id, repo_root, risk_items, risk_report_path)
+    print(
+        f"  risk report written to {risk_report_path.relative_to(repo_root).as_posix()}",
         file=sys.stderr,
     )
 
@@ -289,6 +326,7 @@ def _guard_index_paths(vibecode_dir: Path, repo_root: Path) -> None:
     output_paths = [
         vibecode_dir / "index" / "file_inventory.json",
         vibecode_dir / "index" / "risky_files.md",
+        vibecode_dir / "index" / "risk_report.json",
         vibecode_dir / "index" / "symbol_map.json",
         vibecode_dir / "index" / "dependency_map.json",
         vibecode_dir / "index" / "test_map.json",
@@ -302,6 +340,69 @@ def _guard_index_paths(vibecode_dir: Path, repo_root: Path) -> None:
             raise RuntimeError(
                 f"BUG: index output path overlaps with human-maintained file: {path}"
             )
+
+
+def _load_card_config(vibecode_dir: Path) -> dict:
+    """Load card settings from .vibecode/config.yml.
+
+    Returns a dict with ``detail_level`` (``"basic"`` or ``"full"``) and
+    ``compute_heuristics`` (bool). Falls back to sensible defaults when the
+    file is absent or malformed.
+    """
+    defaults: dict = {"detail_level": "basic", "compute_heuristics": True}
+    config_path = vibecode_dir / "config.yml"
+    if not config_path.exists():
+        return defaults
+    try:
+        import yaml
+        raw = yaml.safe_load(config_path.read_text(encoding="utf-8"))
+    except Exception:
+        return defaults
+    if not isinstance(raw, dict):
+        return defaults
+    cards = raw.get("cards") or {}
+    detail_level = cards.get("detail_level", "basic")
+    if detail_level not in ("basic", "full"):
+        detail_level = "basic"
+    compute_heuristics = bool(cards.get("compute_heuristics", True))
+    return {"detail_level": detail_level, "compute_heuristics": compute_heuristics}
+
+
+def _build_risk_items(
+    repo_root: Path,
+    files: list[IndexedFile],
+    risk_index: dict,
+    compute_heuristics: bool,
+) -> list[RiskItem]:
+    """Build :class:`~vibecode.indexer.schema.RiskItem` objects combining risk engine results with facts/heuristics."""
+    items: list[RiskItem] = []
+    for f in files:
+        rr = risk_index.get(f.path)
+        risk_level = rr.risk_level if rr else "low"
+        reasons = list(rr.reasons) if rr else []
+
+        facts: list[Fact] = []
+        heuristics: list[Heuristic] = []
+        if f.path.endswith(".py"):
+            abs_path = repo_root / f.path
+            try:
+                content = abs_path.read_text(encoding="utf-8")
+            except OSError:
+                content = ""
+            facts = analyze_facts(abs_path, content)
+            if compute_heuristics:
+                from vibecode.indexer.ast_parser import parse_python_file as _parse
+                parsed = _parse(abs_path)
+                heuristics = analyze_heuristics(parsed.functions)
+
+        items.append(RiskItem(
+            path=f.path,
+            risk_level=risk_level,
+            reasons=reasons,
+            facts=facts,
+            heuristics=heuristics,
+        ))
+    return items
 
 
 def _warn_unfilled_architecture_templates(repo_root: Path, run_log: list[str]) -> None:
