@@ -24,7 +24,7 @@ Treat source code, tests, `PRD.json`, and human-maintained docs (`.vibecode/arch
 
 - Do not perform unrelated refactors.
 - Do not modify protected files without an explicit task.
-- Do not update README outside marked generated blocks.
+- Do not edit README unless the task explicitly scopes README/docs; only edit generated blocks if future markers exist.
 - Run required checks before finalizing changes.
 - Report changed files and checks run before marking work complete.
 - Update the handoff document when done.
@@ -33,15 +33,15 @@ Treat source code, tests, `PRD.json`, and human-maintained docs (`.vibecode/arch
 
 - `vibecode init` — initialize `.vibecode/` project layer
 - `vibecode index` — scan and generate architecture maps
-- `vibecode map` — print one-page project summary
 - `vibecode context` — generate task-scoped context pack
+- `vibecode map` — print one-page project summary
 - `vibecode validate` — check artifact consistency (run this first)
-- `vibecode export-agents` — write/update root AGENTS.md
 - `vibecode guard` — check diff against protected/generated paths
 - `vibecode check` — run required checks from `.vibecode/checks/required_checks.yaml`
 - `vibecode handoff-check` — validate handoff file quality
-- `vibecode history` — manage durable history summaries
 - `vibecode run` — explicitly orchestrate an external OpenCode run and then run guard/check/handoff
 - `vibecode run-plan` — assemble an agent run plan without launching it
+- `vibecode history` — manage durable history summaries
 - `vibecode project` — manage the local project registry outside the repo
+- `vibecode export-agents` — write/update root AGENTS.md
 <!-- vibecode:agents:end -->

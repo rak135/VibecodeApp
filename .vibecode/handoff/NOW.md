@@ -18,3 +18,4 @@
 - Default permission profiles live in committed `.vibecode/agents/{safe,fast,audit}.json`.
 - Post-run guard evaluation now uses the same project-loaded protected path policy as standalone `vibecode guard`, with regression coverage for custom `.vibecode/checks/protected_paths.yaml` rules.
 - AGENTS export now preserves the committed managed block content, including `PRD.json`, run metadata, and the current CLI command list.
+- Root `AGENTS.md` now clarifies README is manual project documentation unless README/docs are explicitly scoped, and its generated command list follows top-level CLI help order.

@@ -225,7 +225,7 @@
     {
       "title": "Update AGENTS.md command doctrine and README edit rule",
       "description": "Purpose: clean up smaller AGENTS doctrine drift identified by the audits. Root `AGENTS.md` is the first file future coding agents read, so it must not omit implemented commands or state confusing README edit rules.\n\nScope: Work in root `AGENTS.md` and, if AGENTS is generated, keep `vibecode/context/agents_export.py` tests aligned. This task may be merged with the export-agents idempotency task if done in the same narrow commit, but do not broaden into unrelated docs.\n\nRequired corrections: include `run-plan` and `history` in available commands if the CLI exposes them; clarify that README is manual project documentation and should only be edited when the task explicitly scopes README/docs, unless generated markers are introduced in the future; preserve the rule that generated/runtime files must not be manually edited; preserve instruction to generate task-specific context before implementation.\n\nAcceptance criteria: `AGENTS.md` command list matches `python -m vibecode.cli --help`; README rule is not misleading; `export-agents` still produces the same managed content; no stale text says guard/check/handoff/run are planned if implemented.\n\nVerification commands: `python -m vibecode.cli --help`; `python -m pytest tests/test_vibecode_agents_export.py -p no:cacheprovider`; `python -m pytest -p no:cacheprovider`; grep or ripgrep for stale phrases such as `planned`, `not wired`, `not started` in `AGENTS.md` where they would be false.",
-      "completed": false
+      "completed": true
     },
     {
       "title": "Fix stale history policy wording and placeholder semantics",

@@ -67,6 +67,12 @@ def test_render_agents_block_rules_section():
     assert "handoff" in block
 
 
+def test_render_agents_block_readme_rule_is_manual_docs_scoped():
+    block = render_agents_block()
+    assert "Do not edit README unless the task explicitly scopes README/docs" in block
+    assert "Do not update README outside marked generated blocks" not in block
+
+
 def test_render_agents_block_do_not_edit_paths_include_run_metadata():
     block = render_agents_block()
     assert ".vibecode/runs/*" in block
@@ -77,21 +83,49 @@ def test_render_agents_block_lists_available_commands():
     expected_commands = [
         "init",
         "index",
-        "map",
         "context",
+        "map",
         "validate",
-        "export-agents",
         "guard",
         "check",
         "handoff-check",
-        "history",
         "run",
         "run-plan",
+        "history",
         "project",
+        "export-agents",
     ]
     assert "## Available commands" in block
     for command in expected_commands:
         assert f"`vibecode {command}`" in block
+
+
+def test_render_agents_block_command_order_matches_top_level_help():
+    block = render_agents_block()
+    commands = [
+        "init",
+        "index",
+        "context",
+        "map",
+        "validate",
+        "guard",
+        "check",
+        "handoff-check",
+        "run",
+        "run-plan",
+        "history",
+        "project",
+        "export-agents",
+    ]
+    positions = [block.index(f"`vibecode {command}`") for command in commands]
+    assert positions == sorted(positions)
+
+
+def test_render_agents_block_does_not_describe_implemented_commands_as_pending():
+    block = render_agents_block().lower()
+    assert "planned" not in block
+    assert "not wired" not in block
+    assert "not started" not in block
 
 
 def test_render_agents_block_is_short():
