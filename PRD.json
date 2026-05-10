@@ -275,7 +275,7 @@
     {
       "title": "Resolve dead or reserved history check command",
       "description": "Purpose: clean up confusing dead code found by one audit. `cmd_history_check()` in `history.py` reportedly raises `NotImplementedError` and is not wired to CLI. Dead reserved functions are future-agent traps.\n\nScope: Work in `vibecode/history.py`, `vibecode/cli.py` only if wiring is chosen, and history tests. Do not implement broad history automation.\n\nDecision: either remove the unused `cmd_history_check()` function if it is not part of the intended CLI, or implement a real `vibecode history check` subcommand with tests. Prefer the smaller safe fix: remove or clearly mark internal-only code if no CLI plan exists. If implementing, it must validate `.vibecode/history/*.md` summaries and fail placeholder drafts.\n\nAcceptance criteria: no reachable or discoverable history function raises `NotImplementedError`; tests cover the chosen behavior; CLI help is accurate.\n\nVerification commands: `python -m pytest tests/test_vibecode_history.py -p no:cacheprovider`; `python -m vibecode.cli history --help`; `python -m pytest -p no:cacheprovider`.",
-      "completed": false
+      "completed": true
     },
     {
       "title": "Decide whether permission profiles are advisory or passed to OpenCode",

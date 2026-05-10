@@ -437,3 +437,48 @@ def test_history_new_cli_creates_file(tmp_path, capsys):
     content = files[0].read_text(encoding="utf-8")
     assert "# Add tests" in content
     assert "### Task" in content
+
+
+# ── Guard: no NotImplementedError reachable ───────────────────────────────
+
+def test_cmd_history_check_is_removed():
+    """cmd_history_check was removed — it must not be importable."""
+    from vibecode import history
+
+    assert not hasattr(history, "cmd_history_check"), (
+        "cmd_history_check should have been removed"
+    )
+
+
+def test_history_module_no_not_implemented_errors():
+    """No reachable function in history.py raises NotImplementedError."""
+    import inspect
+    from vibecode import history
+
+    source = inspect.getsource(history)
+    assert "NotImplementedError" not in source, (
+        "history.py should not contain any NotImplementedError"
+    )
+
+
+def test_history_cli_help_is_accurate(capsys):
+    """vibecode history --help shows only wired subcommands and no NotImplementedError."""
+    from vibecode.cli import main
+
+    rc = 0
+    try:
+        rc = main(["history", "--help"])
+    except SystemExit as exc:
+        rc = exc.code
+
+    captured = capsys.readouterr()
+    output = captured.out
+
+    assert rc in (0, None), f"history --help failed with rc={rc}"
+    assert "new" in output.lower(), "history --help should show 'new' subcommand"
+    assert "check" not in output.lower(), (
+        "history --help should NOT show 'check' (it was never wired)"
+    )
+    assert "NotImplemented" not in output, (
+        "history --help should not mention NotImplementedError"
+    )

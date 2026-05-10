@@ -362,7 +362,3 @@ def cmd_history(args) -> int:
     return 1
 
 
-def cmd_history_check(args) -> int:
-    """CLI entry point for ``vibecode history-check`` (planned)."""
-    # Not yet wired into CLI — reserved for future use.
-    raise NotImplementedError
