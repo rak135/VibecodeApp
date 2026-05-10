@@ -1,116 +1,45 @@
-
 {
-  "name": "VibecodeApp Synrepo Features",
-  "description": "Do VibecodeApp přidáme čtyři hlavní schopnosti inspirované synrepo: 1) kontextové karty souborů, 2) oddělení kanonických faktů od heuristik, 3) MCP server pro živé dotazy agentů a 4) interaktivní TUI dashboard. Vše implementujeme iterativně v Pythonu po malých 15minutových krocích.",
+  "name": "VibecodeApp – OpenCode-Enhanced Context Cards, MCP Server, and TUI Dashboard",
+  "description": "Add context cards, separated facts/heuristics, an MCP server for OpenCode and an interactive TUI dashboard. Each task is designed for ~15 minutes of focused work, followed by an explicit check-and-fix step to ensure quality and integration with OpenCode.",
   "tasks": [
     {
-      "title": "Vytvořit datový model kontextové karty",
-      "description": "Do souboru src/vibecodeapp/schema.py přidej dataclass ContextCard s poli: id (uuid), file_path, purpose (první docstring), symbols (list dictů s name, kind, line), facts (list str), heuristics (list str), content_snippet (prvních 200 znaků kódu). Dále vytvoř enum CardSeverity (UNKNOWN, LOW, MEDIUM, HIGH) pro pozdější heuristiku.",
+      "title": "Implement context card generation and fact/heuristic separation",
+      "description": "Extend `src/vibecodeapp/` with new modules: `schema.py` (dataclasses ContextCard, RiskItem, Fact, Heuristic), `ast_parser.py` (extract module docstring and function/class symbols via Python's `ast`), and `risk_analyzer.py` (scan files for deterministic facts like TODO/FIXME and unsafe permissions, plus heuristics such as high parameter count or suspicious names). Modify `inventory.py` to accept `generate_cards=True`, call the parser for every Python file, build ContextCard objects, and output them in `.vibecode/file_inventory.json` alongside the plain file list. Modify the risk reporter to store separate `facts` and `heuristics` arrays in `.vibecode/risk_report.json`. Ensure both JSON files are written by the `vibecode inventory` command. Add a config file `.vibecode/config.yml` to set card detail level (basic/full) and whether heuristics are computed, with sensible defaults. This task covers the full implementation; aim to produce testable, importable code without yet running end‑to‑end checks.",
       "completed": false
     },
     {
-      "title": "Extrahovat docstring a symboly z Python souboru pomocí AST",
-      "description": "V souboru src/vibecodeapp/ast_parser.py implementuj funkci parse_file(file_path: str) -> dict. Pomocí modulu ast projdi strom, získej module docstring a pro každou třídu/funkci ulož název, druh (function/class) a řádek. Vrať dict s klíči 'docstring' a 'symbols'. Ošetři syntaktické chyby vrácením prázdných hodnot.",
+      "title": "Check & fix: verify context cards and risk report, correct imperfections",
+      "description": "Run `vibecode inventory` on the project itself. Check that `.vibecode/file_inventory.json` contains a `context_cards` key with valid cards for all Python files. Each card must have a non-empty `purpose` (the docstring), a list of symbols with `name`, `kind`, and `line`, and the `content_snippet` of the first 200 characters. Verify that `.vibecode/risk_report.json` contains separated `facts` and `heuristics` lists, and that the heuristic items include severity levels. Spot‑check a few files manually. If any field is missing or incorrectly formatted, fix the extraction logic. Adjust the config loader to handle missing files gracefully. Correct any import errors. Document any remaining quirks. This step ensures the foundation for MCP and TUI is rock‑solid.",
       "completed": false
     },
     {
-      "title": "Naimplementovat generování karet do JSON struktury",
-      "description": "V existujícím modulu pro generování inventáře (např. src/vibecodeapp/inventory.py) rozšiř funkci build_file_inventory o nový režim. Když je parametr generate_cards=True, pro každý Python soubor zavolej ast_parser.parse_file, vytvoř ContextCard a ulož ho jako položku do slovníku cards. Výsledek přidej do vráceného dictu pod klíčem 'context_cards' vedle stávajícího 'files'.",
+      "title": "Implement MCP server with OpenCode‑focused tools",
+      "description": "Create `src/vibecodeapp/mcp_server.py` using the `mcp` package. Define a `VibecodeServer` class that reads `file_inventory.json` and `risk_report.json` at startup. Register three tools: `get_file_card(file_path: str)` – returns a human‑readable card with purpose, symbols, snippet, facts and heuristics; `find_symbol(symbol_name: str)` – returns a JSON array of file paths and symbol details; `list_high_risk()` – returns high‑severity heuristics from the risk report. Add a CLI command `vibecode serve` that starts the server with stdio transport and prints a ready‑to‑paste OpenCode MCP configuration snippet to stderr. Handle edge cases (missing inventory, unknown symbol) with clear error messages. This task focuses purely on writing the server code; do not yet test it.",
       "completed": false
     },
     {
-      "title": "Oddělit fakta od heuristik v generátoru rizik",
-      "description": "V modulu pro analýzu rizik (např. src/vibecodeapp/risk.py) změň strukturu výstupu: místo prostého seznamu rizik vracej dict s dvěma poli: 'facts' (detekce TODO/FIXME, oprávnění 0777) a 'heuristics' (např. vysoký počet argumentů funkce, název souboru s 'danger'). Uprav příslušný report tak, aby obě kategorie odděleně zobrazoval.",
+      "title": "Check & fix: test MCP server with Inspector, refine tool behavior",
+      "description": "Use `npx @modelcontextprotocol/inspector` to connect to `vibecode serve`. Test each tool with real project data: call `get_file_card` for an existing file and a non‑existent one (expect error), `find_symbol` for a function that appears in multiple files, and `list_high_risk` after generating a risk report with some high‑severity heuristics. Verify that all responses are well‑structured and informative. If the inspector reveals missing data or crashes, fix the server logic. Adjust the tool output format to be more OpenCode‑friendly (plain text with markdown). Ensure the configuration snippet printed on startup is valid and contains the correct command. This step closes the MCP loop and confirms it works with OpenCode's expected protocol.",
       "completed": false
     },
     {
-      "title": "Přepsat export .vibecode/file_inventory.json aby zahrnoval context_cards",
-      "description": "V CLI handleru pro příkaz vibecode inventory (nebo podobném) zajisti, že se volá build_file_inventory(generate_cards=True) a výsledný JSON se ukládá do .vibecode/file_inventory.json. Otestuj, že v JSON souboru přibyla sekce context_cards.",
+      "title": "Build TUI dashboard with card table, stats footer and detail screen",
+      "description": "Add `textual` as a dependency. Create `src/vibecodeapp/tui_app.py` containing a `VibecodeTUI` app. Implement the main screen with a `DataTable` populated from the loaded context cards (columns: File, Purpose, Symbols). Add a `Footer` widget that shows total file count, card count, and high‑risk item count (read from `risk_report.json`). Bind the Enter key to push a new screen with the full card detail: purpose, a table of symbols, lists of facts and heuristics, and a code snippet block. Style the interface with an external `tui_theme.tcss` file using a dark, CLI‑friendly palette. Wire this into the CLI as `vibecode dashboard`, reusing the same data loader function (to be created later, for now inline loading is acceptable). This task produces a self‑contained navigable dashboard ready for review.",
       "completed": false
     },
     {
-      "title": "Přidat konfigurační soubor .vibecode/config.yml pro úroveň detailů",
-      "description": "Vytvoř dataclass VibecodeConfig s atributem card_detail (volba 'basic'/'full') a include_heuristics (bool). Implementuj načítání z .vibecode/config.yml ve funkci load_config(). Při generování karet pak respektuj tyto hodnoty (basic – jen purpose, full – i symbols a snippet). Tím se připraví podpora pro přizpůsobení.",
+      "title": "Check & fix: run dashboard, verify navigation and data integrity",
+      "description": "Launch `vibecode dashboard` and inspect the table. Check that all Python files appear with correct purpose and a representative symbol list. Press Enter on several rows to confirm the detail screen loads and displays all card fields. Test the back button. Ensure the footer counters match the actual number of cards and high‑risk items. If any card is missing a field that causes the detail screen to crash, fix the data loader to provide safe defaults (e.g., empty lists instead of None). Validate the theme applies correctly. This step guarantees the TUI is a reliable visual companion to the MCP server.",
       "completed": false
     },
     {
-      "title": "Založit MCP serverový modul",
-      "description": "Nainstaluj balíček mcp (pip install mcp). Vytvoř nový soubor src/vibecodeapp/mcp_server.py se základní strukturou: třída VibecodeServer dědící z Server. Ve __init__ načti data z .vibecode/file_inventory.json a ulož je do self.data. Přidej metodu run(), která spustí server na stdio transportu.",
+      "title": "Unify data loading and connect TUI + MCP + CLI",
+      "description": "Create `src/vibecodeapp/data_loader.py` with a single function `load_project_data()` that reads both `file_inventory.json` and `risk_report.json` and returns a `ProjectData` dataclass. Replace the duplicate loading logic in the MCP server and TUI app with calls to this function. Update the `vibecode serve` and `vibecode dashboard` commands to gracefully handle missing data (prompt to run `vibecode inventory`). Add a simple integration test script (`tests/test_integration.py`) that generates inventory, starts the dashboard in headless mode (if possible) and probes the MCP server via a subprocess. This task consolidates the architecture and ensures a single source of truth.",
       "completed": false
     },
     {
-      "title": "Implementovat MCP nástroj get_file_card",
-      "description": "Do VibecodeServer přidej nástroj (dekorátorem @server.tool()) s názvem get_file_card. Parametry: file_path (str). Nástroj vrátí textově formátovanou kartu z self.data['context_cards'], obsahující purpose, symbols a content_snippet. Pokud soubor nenalezen, vrátí chybovou zprávu.",
-      "completed": false
-    },
-    {
-      "title": "Implementovat MCP nástroj find_symbol",
-      "description": "Přidej nástroj find_symbol(symbol_name: str). Prohledá wszystkie karty a vrátí seznam cest, kde se symbol nachází. Výstup nechť je strukturovaný seznam (JSON string) s cestami a druhy symbolu.",
-      "completed": false
-    },
-    {
-      "title": "Implementovat MCP nástroj list_high_risk",
-      "description": "Přidej nástroj list_high_risk(). Načti .vibecode/risk_report.json (pokud existuje), vyfiltruj položky z 'heuristics' se závažností HIGH a vrať jejich seznam. Pokud report neexistuje, informuj uživatele.",
-      "completed": false
-    },
-    {
-      "title": "Přidat CLI příkaz 'vibecode serve'",
-      "description": "V hlavním CLI souboru (src/vibecodeapp/cli.py) přidej nový subpříkaz serve. Ten naimportuje VibecodeServer, vytvoří instanci a zavolá server.run(). Zajisti, aby před spuštěním zkontroloval existenci .vibecode/file_inventory.json, jinak vypíše výzvu k provedení inventury.",
-      "completed": false
-    },
-    {
-      "title": "Otestovat MCP server pomocí MCP Inspector",
-      "description": "Spusť MCP Inspector (npx @modelcontextprotocol/inspector) a nasměruj ho na příkaz vibecode serve. Ručně vyzkoušej všechny tři nástroje: get_file_card pro existující a neexistující soubor, find_symbol pro známou funkci, list_high_risk. Oprav případné chyby. Tento úkol považuj za ruční test – nezapomeň ověřit výstupy.",
-      "completed": false
-    },
-    {
-      "title": "Vygenerovat konfigurační snippet pro Cursor",
-      "description": "Do výstupu příkazu serve přidej po spuštění informaci pro uživatele: textový výstup s JSON konfigurací pro Cursor (mcpServers). Ulož jednu šablonu do konstanty a po startu ji vytiskni na stderr, aby neovlivnila stdio komunikaci MCP.",
-      "completed": false
-    },
-    {
-      "title": "Nainstalovat Textual a připravit TUI shell",
-      "description": "Přidej do projektu závislost textual. Vytvoř soubor src/vibecodeapp/tui_app.py s prázdnou Textual App třídou VibecodeTUI, která jen otevře obrazovku s titulkem 'Vibecode Dashboard' a tlačítkem Quit. Ověř, že jde spustit ručně python -m vibecodeapp.tui_app.",
-      "completed": false
-    },
-    {
-      "title": "Vytvořit widget pro výpis karet v TUI",
-      "description": "V souboru tui_app.py uprav hlavní obrazovku, aby místo prázdné obrazovky obsahovala DataTable s třemi sloupci: 'File', 'Purpose', 'Symbols'. Naplň ji daty z načteného .vibecode/file_inventory.json (context_cards). Implementuj metodu na čtení JSON dat při startu aplikace.",
-      "completed": false
-    },
-    {
-      "title": "Přidat do TUI panel statistik",
-      "description": "Přidej pod tabulku statický Footer nebo samostatný widget, který zobrazuje celkový počet souborů, počet karet a počet vysoce rizikových položek (čte z risk_report.json). Aktualizuj při spuštění.",
-      "completed": false
-    },
-    {
-      "title": "Přidat do TUI možnost zobrazit detail karty",
-      "description": "Po stisku klávesy 'Enter' na položce v tabulce nechť aplikace přepne na novou obrazovku s úplnými detaily ContextCard: celý purpose, symbols (s řádky), facts, heuristics a snippet kódu ve formátovaném bloku. Zajisti tlačítko 'Back' pro návrat.",
-      "completed": false
-    },
-    {
-      "title": "Zapojit TUI jako CLI příkaz 'vibecode dashboard'",
-      "description": "Do CLI přidej subpříkaz dashboard. V jeho handleru importuj a spusť VibecodeTUI aplikaci. Před spuštěním zkontroluj, zda existuje .vibecode/file_inventory.json, jinak uživatele vyzvi k vygenerování inventáře.",
-      "completed": false
-    },
-    {
-      "title": "Refaktorovat a sjednotit styly TUI",
-      "description": "Vytvoř soubor tui_theme.tcss s definicí barev a stylů. Aplikuj jej pomocí CSS_PATH. Nastav vzhled tak, aby odpovídal CLI-first filozofii (tmavé pozadí, minimální barvy). Otestuj, že vše vypadá konzistentně.",
-      "completed": false
-    },
-    {
-      "title": "Zajistit synchronizaci MCP a TUI zdrojů dat",
-      "description": "Vytvoř modul src/vibecodeapp/data_loader.py s funkcí load_project_data(), která vrací dict s 'cards' a 'risks'. Tuto funkci použij jak v MCP serveru, tak v TUI aplikaci. Tím zamezíš duplicitnímu kódu. Nahraď stávající načítání v obou modulech.",
-      "completed": false
-    },
-    {
-      "title": "Otestovat celý workflow – inventura → TUI → MCP",
-      "description": "Proveď integrační test ručně: spusť vibecode inventory, zkontroluj obsah .vibecode/file_inventory.json. Pak spusť vibecode dashboard a projdi všechny obrazovky. Nakonec spusť vibecode serve a přes MCP Inspector ověř funkčnost nástrojů. Zaznamenej jakékoli chyby a oprav je.",
-      "completed": false
-    },
-    {
-      "title": "Doplnit dokumentaci pro příkazy serve a dashboard",
-      "description": "Do README.md přidej sekce 'MCP Server' a 'Interaktivní dashboard'. Vysvětli, jak spustit, jaké nástroje MCP poskytuje a jak integrovat s Cursor/Windsurf. U dashboardu popiš ovládání.",
+      "title": "Check & fix: run full integration, final polish and documentation",
+      "description": "Execute the end‑to‑end workflow: `vibecode inventory` → `vibecode dashboard` (quick visual check) → `vibecode serve` and connect from OpenCode. Use OpenCode to call `get_file_card` on a real project file, `find_symbol` on a known class, and `list_high_risk`. Capture any errors or poor formatting and fix them immediately. Enhance help texts in the CLI (e.g., `vibecode serve --help`). Update README.md with clear instructions for setting up OpenCode, launching the dashboard, and interpreting risk reports. Ensure the entire pipeline feels cohesive. This final check ensures the project is ready for daily use with OpenCode as the primary agent.",
       "completed": false
     }
   ]
