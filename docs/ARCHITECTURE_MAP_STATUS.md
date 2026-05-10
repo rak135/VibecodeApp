@@ -9,7 +9,7 @@ This document is the short implementation-status companion to the Architecture M
 - `.vibecode/architecture/*.md`
 - `.vibecode/checks/required_checks.yaml`
 - `.vibecode/agents/*.json`
-- `docs/ARCHITECTURE_MAP_PRD.md`
+- `docs/ARCHITECTURE_MAP_PRD.md` (historical Architecture Map Core phase; see phase-boundary note at top)
 - `docs/ARCHITECTURE_MAP_STATUS.md`
 
 ## Not Source Of Truth

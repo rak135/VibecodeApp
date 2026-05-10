@@ -3,6 +3,14 @@
 > This document defines the implementation boundary for the Architecture Map Core.
 > It is a reference for contributors and automated loops to prevent scope creep
 > before the architecture map and context engine are working.
+>
+> **Phase-boundary note:** This PRD describes the earlier **Architecture Map Core**
+> phase (init, index, context pack generation, context export). The current
+> control-layer scope has since expanded to include `vibecode run` (OpenCode
+> orchestration), guard/check/handoff post-run audit, and project registry. For
+> current scope, consult `PRD.json`, `.vibecode/handoff/NOW.md`, and
+> `docs/ARCHITECTURE_MAP_STATUS.md`. Non-goals and scope statements below
+> reflect the original phase boundaries and may no longer apply.
 
 ---
 
@@ -21,7 +29,7 @@ This capability implements **only** the Vibecode architecture map and context en
 - Context pack generation — assemble a short, task-scoped context pack from the index
 - OpenCode prompt export — write the context pack to a file that can be passed to an external agent as a prompt
 
-**This capability ends at prompt export.** No code in this capability launches OpenCode, calls an AI model, or executes any external agent.
+**This capability originally ended at prompt export.** The Architecture Map Core does not launch OpenCode, call an AI model, or execute any external agent. The later control-layer phase added `vibecode run` for explicit OpenCode orchestration and `vibecode context --platform opencode` for prompt export. See `PRD.json` and current status docs for the expanded scope.
 
 ---
 
@@ -34,7 +42,7 @@ The following are explicitly out of scope until the architecture map is working:
 | Custom coding agent runtime | Agent work requires a reliable map as a foundation |
 | Graphical user interface (GUI) | Not needed for CLI-first tooling |
 | MCP server | A separate integration layer; depends on the index being stable |
-| OpenCode run adapter | Launching or orchestrating OpenCode is a later phase |
+| OpenCode run adapter | Was a later-phase boundary; now implemented as `vibecode run` (see status docs and `.vibecode/handoff/NOW.md`) |
 | Auto-commit or auto-approve behavior | Dangerous without validated index; deferred deliberately |
 | LLM API calls of any kind | This phase is fully deterministic and offline |
 
