@@ -581,3 +581,153 @@ def test_runs_dir_not_manually_editable(tmp_path):
 
     assert "not manually editable" in content
     assert ".vibecode/runs" in content
+
+
+# ---------------------------------------------------------------------------
+# Integration test — "Improve relevant-file scoring" context pack
+# ---------------------------------------------------------------------------
+
+
+def test_improve_relevant_file_scoring_context_pack(tmp_path):
+    """Context pack for 'Improve relevant-file scoring' must:
+
+    - include scoring.py and its test among relevant files,
+    - exclude generated/runtime paths from relevant files,
+    - deduplicate required checks from YAML and test_map,
+    - contain protected-path and handoff sections,
+    - stay within the default character limit.
+    """
+    _write(
+        tmp_path / ".vibecode" / "project.yaml",
+        "# vibecode project configuration\n"
+        "# schema: vibecode/project/v1\n"
+        "project:\n"
+        "  id: testproject\n"
+        "  name: Test Project\n"
+        "  root: .\n"
+        "indexing:\n"
+        "  include: []\n"
+        "  exclude: []\n"
+        "protected_paths: []\n"
+        "risk_rules: []\n",
+    )
+    _write(
+        tmp_path / ".vibecode" / "architecture" / "INVARIANTS.md",
+        "# Invariants\n\n"
+        "- Human-maintained architecture docs are source-controlled.\n"
+        "- Generated indexes are not source of truth and must be regenerated.\n"
+        "- Runtime/session state must not be committed.\n",
+    )
+    _write(
+        tmp_path / ".vibecode" / "architecture" / "STRUCTURE.md",
+        "# Repository Structure\n\n"
+        "- `vibecode/context/scoring.py` owns relevant-file scoring.\n"
+        "- `vibecode/context/renderer.py` owns context-pack rendering.\n",
+    )
+    _write(
+        tmp_path / ".vibecode" / "checks" / "required_checks.yaml",
+        "checks:\n"
+        "  - name: unit tests\n"
+        "    command: python -m pytest\n"
+        "    required: true\n"
+        "  - name: lint\n"
+        "    command: python -m ruff check\n"
+        "    required: true\n",
+    )
+    # test_map repeats the pytest command — must be deduplicated.
+    _write(
+        tmp_path / ".vibecode" / "index" / "test_map.json",
+        '{"rules": [{"path_pattern": "**", "required_checks": ["python -m pytest"]}]}\n',
+    )
+    _write(
+        tmp_path / ".vibecode" / "checks" / "protected_paths.yaml",
+        "protected_paths:\n"
+        "  - path: \".vibecode/current/*\"\n"
+        "    rule: \"Runtime/session state; do not commit or treat as source truth.\"\n"
+        "  - path: \"vibecode/context/scoring.py\"\n"
+        "    rule: \"Context relevance scoring controls agent context.\"\n"
+        "    required_tests:\n"
+        "      - python -m pytest tests/test_vibecode_relevant_files.py\n"
+        "    explicit_task_scope_required: true\n",
+    )
+    _write(
+        tmp_path / ".vibecode" / "handoff" / "NOW.md",
+        "# Now\n\nWorking on improving relevant-file scoring.\n",
+    )
+    _write(
+        tmp_path / ".vibecode" / "index" / "file_inventory.json",
+        '{"files": [\n'
+        '  {"path": "vibecode/context/scoring.py"},\n'
+        '  {"path": "vibecode/context/renderer.py"},\n'
+        '  {"path": "vibecode/context/__init__.py"},\n'
+        '  {"path": "tests/test_vibecode_relevant_files.py"},\n'
+        '  {"path": "tests/test_vibecode_context_pack.py"},\n'
+        '  {"path": ".vibecode/current/context_pack.md"},\n'
+        '  {"path": ".vibecode/index/relevant_files.generated.json"},\n'
+        '  {"path": ".ralphy/state.json"}\n'
+        ']}\n',
+    )
+    # Stub source files so scoring can find them.
+    _write(tmp_path / "vibecode" / "context" / "scoring.py", "# scoring\n")
+    _write(tmp_path / "vibecode" / "context" / "renderer.py", "# renderer\n")
+    _write(tmp_path / "vibecode" / "context" / "__init__.py", "# init\n")
+    _write(tmp_path / "tests" / "test_vibecode_relevant_files.py", "# test\n")
+    _write(tmp_path / "tests" / "test_vibecode_context_pack.py", "# test\n")
+
+    from vibecode.context.renderer import render_context_pack
+
+    task = "Improve relevant-file scoring"
+    content = render_context_pack(tmp_path, task)
+
+    # 1. Length within limit.
+    assert len(content) <= 32_000, (
+        f"Context pack is {len(content)} chars, exceeds 32 000 limit"
+    )
+
+    # 2. Core sections present.
+    assert "## Relevant files with reasons" in content
+    assert "## Required checks" in content
+    assert "## Protected paths / edit constraints" in content
+    assert "## Handoff required" in content
+
+    # 3. scoring.py and its test appear in relevant files section.
+    relevant_start = content.index("## Relevant files with reasons")
+    relevant_end = content.find("##", relevant_start + 1)
+    relevant_section = content[relevant_start:relevant_end]
+    assert "vibecode/context/scoring.py" in relevant_section, (
+        "scoring.py must appear in relevant files"
+    )
+    assert "tests/test_vibecode_relevant_files.py" in relevant_section, (
+        "test_vibecode_relevant_files.py must appear in relevant files"
+    )
+
+    # 4. Generated/runtime paths are absent from the relevant files section.
+    assert ".vibecode/current/context_pack.md" not in relevant_section
+    assert ".vibecode/index/relevant_files.generated.json" not in relevant_section
+    assert ".ralphy/state.json" not in relevant_section
+
+    # 5. Required checks are deduplicated:
+    #    "python -m pytest" appears in both YAML and test_map but must show only once
+    #    in the required checks section. (It may also appear in the protected-path
+    #    section as part of a different "required tests" string, so scope to the
+    #    required checks section only.)
+    required_start = content.index("## Required checks")
+    required_end = content.find("##", required_start + 1)
+    required_section = content[required_start:required_end]
+    assert required_section.count("python -m pytest") == 1, (
+        "python -m pytest must appear exactly once in the required checks section "
+        "(deduplicated against test_map.json)"
+    )
+    # The lint check from YAML must still appear.
+    assert "python -m ruff check" in required_section
+
+    # 6. Protected path section has content.
+    protected_start = content.index("## Protected paths / edit constraints")
+    protected_end = content.find("##", protected_start + 1)
+    protected_section = content[protected_start:protected_end]
+    assert ".vibecode/current/*" in protected_section
+    assert "vibecode/context/scoring.py" in protected_section
+
+    # 7. Handoff section has content.
+    assert "## Handoff required" in content
+    assert "NOW.md" in content or "handoff" in content.lower()

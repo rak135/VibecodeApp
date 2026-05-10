@@ -210,7 +210,7 @@
     {
       "title": "Add context-pack quality regression test",
       "description": "Purpose: ensure future context packs remain useful and compact.\n\nTest using VibecodeApp repo or fixture:\n- generate context for `Improve relevant-file scoring`\n- assert relevant files include scoring.py and relevant tests\n- assert generated/runtime paths are absent from top relevant files\n- assert required checks are deduplicated\n- assert protected path section exists\n- assert handoff section exists\n- assert context length is within limit\n\nAcceptance:\n- Test catches scoring/context regressions.\n- Test does not require exact full markdown.",
-      "completed": false
+      "completed": true
     },
     {
       "title": "Final control-layer audit report",
