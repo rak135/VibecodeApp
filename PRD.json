@@ -285,7 +285,7 @@
     {
       "title": "Produce final control-layer audit artifact and close PRD task 43",
       "description": "Purpose: close the PRD cleanly after repair tasks. Task 43 expects a final control-layer audit report, but chat output alone is not a durable repo artifact unless intentionally recorded.\n\nScope: Create a concise committed report only after the critical fixes above are done, or explicitly decide that `PRD.json` task 43 should remain false until such report exists. Candidate path: `docs/CONTROL_LAYER_FINAL_AUDIT.md`. Do not dump raw chat logs. Do not create a giant report that will rot immediately.\n\nReport content: implementation stage by subsystem, command list, source-truth vs generated/runtime doctrine, test result summary, known remaining limitations, and next recommended dogfooding/stabilization tasks. It must not claim GUI/MCP/swarm exists. It must not overclaim permission profile enforcement if it is advisory.\n\nAcceptance criteria: report is concise and factual; PRD task 43 can be marked completed only after report exists; `python -m json.tool PRD.json` passes; tests pass.\n\nVerification commands: `python -m json.tool PRD.json`; `python -m pytest -p no:cacheprovider`; grep for false claims about GUI/MCP/swarm/OpenCode permission enforcement.",
-      "completed": false
+      "completed": true
     }
   ]
 }
