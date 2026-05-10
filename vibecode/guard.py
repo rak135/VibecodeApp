@@ -669,7 +669,8 @@ def cmd_guard(args) -> int:
 
     # Evaluate guard rules
     try:
-        result = evaluate_project_guard(git_state, vibecode_dir, task="", test_map=test_map)
+        task = getattr(args, "task", "") or ""
+        result = evaluate_project_guard(git_state, vibecode_dir, task=task, test_map=test_map)
     except Exception as exc:
         print(f"Error loading project config: {exc}", file=sys.stderr)
         return 1

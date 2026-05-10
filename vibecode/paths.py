@@ -87,6 +87,22 @@ def normalise_path(path: str) -> str:
     return strip_to_posix(str(path).strip())
 
 
+def normalise_repo_root_for_compare(path: str | Path) -> str:
+    """Normalise a repo root path for cross-platform equality comparison.
+
+    Returns a forward-slash string suitable for comparing against stored
+    values (which are written via ``Path.as_posix()``).
+
+    On Windows this strips backslashes so ``C:\\foo`` and ``C:/foo`` compare
+    equal.  Path separators are normalised but the string is otherwise kept
+    as-is (no case folding or filesystem access).
+
+    Use this helper everywhere stored root paths are compared to live paths.
+    """
+    return strip_to_posix(str(path).rstrip("/\\"))
+
+
+
 def is_generated_runtime_path(path: str) -> bool:
     """Return True if *path* is under a generated/runtime vibecode directory."""
     if path.startswith(_GENERATED_RUNTIME_PREFIXES):

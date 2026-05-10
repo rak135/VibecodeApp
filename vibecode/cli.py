@@ -104,6 +104,11 @@ def create_parser() -> argparse.ArgumentParser:
         default=False,
         help="Treat warnings as hard failures (non-zero exit).",
     )
+    guard_parser.add_argument(
+        "--task",
+        default="",
+        help="Task description for contextualizing guard findings.",
+    )
 
     # check
     check_parser = subparsers.add_parser(

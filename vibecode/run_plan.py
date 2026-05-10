@@ -22,6 +22,8 @@ from vibecode.adapters.opencode import check_opencode, resolve_opencode_command
 from vibecode.config import load_config
 from vibecode.git_state import GitState, current_git_commit, inspect_git_state
 from vibecode.indexer import check_inventory_health, compute_current_file_set_fingerprint
+from vibecode.paths import normalise_repo_root_for_compare
+from vibecode.write_rules import HUMAN_MAINTAINED_PATHS as _HUMAN_MAINTAINED_PATHS
 
 
 @dataclass(frozen=True)
@@ -112,6 +114,27 @@ def _verify_gitignore_policy(
     return errors
 
 
+def _is_vibecode_setup_path(rel_path: str) -> bool:
+    """Return True if *rel_path* is a Vibecode setup/baseline path (under .vibecode/)."""
+    return rel_path.startswith(".vibecode/") or rel_path == ".gitignore"
+
+
+def _classify_dirty_paths(dirty_paths: tuple[str, ...]) -> tuple[tuple[str, ...], tuple[str, ...]]:
+    """Split *dirty_paths* into (setup_paths, source_paths).
+
+    setup_paths are under .vibecode/ or .gitignore (onboarding baseline).
+    source_paths are everything else (real dirty changes).
+    """
+    setup: list[str] = []
+    source: list[str] = []
+    for p in dirty_paths:
+        if _is_vibecode_setup_path(p):
+            setup.append(p)
+        else:
+            source.append(p)
+    return tuple(setup), tuple(source)
+
+
 @dataclass(frozen=True)
 class RunPlan:
     """Assembled plan for a pending agent run."""
@@ -179,12 +202,22 @@ def build_run_plan(
             dirty_paths = git_state.changed_paths
             if dirty:
                 count = len(dirty_paths)
+                setup_paths, source_paths = _classify_dirty_paths(dirty_paths)
                 if allow_dirty:
                     warnings.append(RunPlanWarning(
                         "warn",
                         f"Git working tree is dirty — {count} changed file(s): "
                         + ", ".join(dirty_paths[:8])
                         + (" ..." if count > 8 else ""),
+                    ))
+                elif not source_paths:
+                    errors.append(RunPlanWarning(
+                        "error",
+                        f"Vibecode onboarding baseline is pending — {count} new setup file(s): "
+                        + ", ".join(dirty_paths[:8])
+                        + (" ..." if count > 8 else "")
+                        + "\n  Review and commit the .vibecode baseline before running an agent."
+                        + "\n  Or pass --allow-dirty to launch on an uncommitted setup baseline.",
                     ))
                 else:
                     errors.append(RunPlanWarning(
@@ -244,7 +277,7 @@ def build_run_plan(
             # Compare root path — if it changed, the index is stale.
             if cfg is not None:
                 recorded_root = record.get("root", "")
-                if recorded_root and recorded_root != str(root):
+                if recorded_root and normalise_repo_root_for_compare(recorded_root) != normalise_repo_root_for_compare(str(root)):
                     warnings.append(RunPlanWarning(
                         "warn",
                         "Index was built for a different root path.",
@@ -311,11 +344,13 @@ def build_run_plan(
     opencode_prompt_path: str | None = None
 
     if index_fresh or index_path.exists():
-        context_pack_path = str(vibecode_dir / "current" / "context_pack.md")
+        candidate_context = vibecode_dir / "current" / "context_pack.md"
+        if candidate_context.exists():
+            context_pack_path = str(candidate_context)
         if platform == "opencode":
-            opencode_prompt_path = str(
-                vibecode_dir / "current" / "opencode_prompt.md"
-            )
+            candidate_prompt = vibecode_dir / "current" / "opencode_prompt.md"
+            if candidate_prompt.exists():
+                opencode_prompt_path = str(candidate_prompt)
 
     # --- 6. Permission profile (advisory — validated, recorded, not passed to OpenCode) ---
     profile_name = profile_name or "safe"
@@ -372,8 +407,12 @@ def build_run_plan(
     commands.append(f"# Permission profile: {profile_name}")
     if context_pack_path:
         commands.append(f"# Context pack: {context_pack_path}")
+    elif index_fresh or index_path.exists():
+        commands.append("# Context pack: will be generated during run")
     if opencode_prompt_path:
         commands.append(f"# OpenCode prompt: {opencode_prompt_path}")
+    elif platform == "opencode" and (index_fresh or index_path.exists()):
+        commands.append("# OpenCode prompt: will be generated during run")
     commands.append(f"# Task: {task}")
     commands.append(f"# Run command would be: vibecode run {root.as_posix()} --platform {platform} --task \"{task}\"")
 
@@ -431,8 +470,12 @@ def render_run_plan(plan: RunPlan) -> str:
         lines.append(f"  Index age:          {plan.index_age_seconds:.0f}s")
 
     lines.append("")
-    lines.append(f"  Context pack path:  {plan.context_pack_path or '(not available)'}")
-    lines.append(f"  OpenCode prompt:    {plan.opencode_prompt_path or '(not available)'}")
+    if plan.index_fresh:
+        lines.append(f"  Context pack path:  {plan.context_pack_path or '(will be generated during run)'}")
+        lines.append(f"  OpenCode prompt:    {plan.opencode_prompt_path or '(will be generated during run)'}")
+    else:
+        lines.append(f"  Context pack path:  {plan.context_pack_path or '(not available — no fresh index)'}")
+        lines.append(f"  OpenCode prompt:    {plan.opencode_prompt_path or '(not available — no fresh index)'}")
 
     if plan.opencode_available is False:
         lines.append("  OpenCode status:    NOT AVAILABLE")

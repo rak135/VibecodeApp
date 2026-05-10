@@ -87,6 +87,7 @@ def validate_project(repo_root: Path) -> dict:
     _validate_protected_paths(config, items)
     _validate_context_smoke(root, items)
     _validate_write_rules(root, items)
+    _validate_gitignore_hiding_source_truth(root, items)
     _validate_handoff(root, items)
 
     return _report(root, items)
@@ -218,9 +219,23 @@ def _validate_context_smoke(root: Path, items: list[ValidationItem]) -> None:
     try:
         from vibecode.context import cmd_context
 
+        context_pack_path = root / ".vibecode" / "current" / "context_pack.md"
+        saved_content: str | None = None
+        if context_pack_path.exists():
+            saved_content = context_pack_path.read_text(encoding="utf-8")
+
         args = SimpleNamespace(repo=str(root), task="validation smoke")
         with redirect_stdout(io.StringIO()), redirect_stderr(io.StringIO()):
             rc = cmd_context(args)
+
+        if saved_content is not None:
+            context_pack_path.parent.mkdir(parents=True, exist_ok=True)
+            context_pack_path.write_text(saved_content, encoding="utf-8")
+        else:
+            try:
+                context_pack_path.unlink(missing_ok=True)
+            except OSError:
+                pass
     except Exception as exc:  # noqa: BLE001
         items.append(_error(f"context pack smoke generation failed: {exc}"))
         return
@@ -258,6 +273,55 @@ def _validate_handoff(root: Path, items: list[ValidationItem]) -> None:
     result = validate_handoff_files(root, diff=diff)
     for issue in result.issues:
         items.append(_warn(issue.message, issue.file))
+
+
+def _validate_gitignore_hiding_source_truth(root: Path, items: list[ValidationItem]) -> None:
+    """Warn when human-maintained .vibecode source-truth files are git-ignored.
+
+    Broad .gitignore patterns can accidentally hide files like
+    .vibecode/project.yaml or .vibecode/architecture/*.md, which are meant
+    to be tracked and committed.  This check uses ``git check-ignore`` to
+    detect files that would be excluded by gitignore rules.
+    """
+    if inspect_git_state is None:
+        return
+    try:
+        state = inspect_git_state(root)
+    except Exception:
+        return
+    if not state.is_git_repo:
+        return
+
+    import subprocess as _sp
+
+    ignored: list[str] = []
+    for rel in sorted(_HUMAN_MAINTAINED_SET):
+        target = root / Path(rel)
+        if not target.exists():
+            continue
+        try:
+            result = _sp.run(
+                ["git", "check-ignore", "--no-index", rel],
+                cwd=root,
+                capture_output=True,
+                text=True,
+                timeout=5,
+                check=False,
+            )
+            if result.returncode == 0:
+                ignored.append(rel)
+        except (OSError, _sp.SubprocessError):
+            continue
+
+    if ignored:
+        items.append(_warn(
+            "human-maintained .vibecode source-truth files are git-ignored: "
+            + ", ".join(ignored[:6])
+            + (" ..." if len(ignored) > 6 else "")
+            + ". Update .gitignore to track these files (they are source truth, not generated).",
+        ))
+    else:
+        items.append(_ok("human-maintained .vibecode files are not hidden by .gitignore"))
 
 
 def _get_changed_paths(root: Path) -> tuple[str, ...]:

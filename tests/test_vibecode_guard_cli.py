@@ -344,3 +344,103 @@ def _git_add_commit(repo: Path) -> None:
         cwd=str(repo),
         capture_output=True,
     )
+
+
+# ---------------------------------------------------------------------------
+# guard --task
+# ---------------------------------------------------------------------------
+
+
+def test_guard_help_shows_task_option():
+    """guard --help should show --task option."""
+    parser = create_parser()
+    # Get the guard subparser
+    subparsers_action = next(a for a in parser._actions if a.dest == "command")
+    guard_parser = subparsers_action.choices["guard"]
+    help_text = guard_parser.format_help()
+    assert "--task" in help_text
+
+
+def test_guard_task_option_accepted_by_cli(tmp_path, capsys):
+    """guard --task should be accepted by CLI without error."""
+    _init_git_repo(tmp_path)
+    vibecode_dir = tmp_path / ".vibecode"
+    vibecode_dir.mkdir()
+    (vibecode_dir / "project.yaml").write_text(
+        "project:\n  id: test\n  name: test\n  root: .\n", encoding="utf-8"
+    )
+    rc = main(["guard", str(tmp_path), "--task", "update documentation"])
+    assert rc == 0
+
+
+def test_guard_task_allows_readme_edit(tmp_path, capsys):
+    """README edit with a docs-scoped task should not produce readme error."""
+    _init_git_repo(tmp_path)
+    vibecode_dir = tmp_path / ".vibecode"
+    vibecode_dir.mkdir()
+    (vibecode_dir / "project.yaml").write_text(
+        "project:\n  id: test\n  name: test\n  root: .\n", encoding="utf-8"
+    )
+    readme = tmp_path / "README.md"
+    readme.write_text("# Old\n", encoding="utf-8")
+    _git_add_commit(tmp_path)
+    readme.write_text("# Updated docs\n", encoding="utf-8")
+
+    rc = main(["guard", str(tmp_path), "--task", "update README documentation"])
+    err = capsys.readouterr().err
+
+    assert rc == 0
+    assert "readme-manual-only" not in err.lower() or "README.md" not in err
+
+
+def test_guard_task_blocks_readme_edit_with_non_docs_task(tmp_path, capsys):
+    """README edit without a docs-scoped task should be blocked."""
+    _init_git_repo(tmp_path)
+    vibecode_dir = tmp_path / ".vibecode"
+    vibecode_dir.mkdir()
+    (vibecode_dir / "project.yaml").write_text(
+        "project:\n  id: test\n  name: test\n  root: .\n", encoding="utf-8"
+    )
+    readme = tmp_path / "README.md"
+    readme.write_text("# Old\n", encoding="utf-8")
+    _git_add_commit(tmp_path)
+    readme.write_text("# Changed\n", encoding="utf-8")
+
+    rc = main(["guard", str(tmp_path), "--task", "change scoring implementation"])
+    err = capsys.readouterr().err
+
+    assert rc == 1
+    assert "readme-manual-only" in err.lower() or "README" in err
+
+
+def test_guard_default_no_task_same_as_empty_task(tmp_path, capsys):
+    """Guard without --task should behave the same as guard --task \"\"."""
+    _init_git_repo(tmp_path)
+    vibecode_dir = tmp_path / ".vibecode"
+    vibecode_dir.mkdir()
+    (vibecode_dir / "project.yaml").write_text(
+        "project:\n  id: test\n  name: test\n  root: .\n", encoding="utf-8"
+    )
+    readme = tmp_path / "README.md"
+    readme.write_text("# Old\n", encoding="utf-8")
+    _git_add_commit(tmp_path)
+    readme.write_text("# Changed\n", encoding="utf-8")
+
+    rc_no_task = main(["guard", str(tmp_path)])
+    rc_empty_task = main(["guard", str(tmp_path), "--task", ""])
+
+    assert rc_no_task == rc_empty_task
+
+
+def test_guard_task_passed_to_evaluate_guard():
+    """evaluate_guard should use the task parameter."""
+    state = GitState(
+        is_git_repo=True,
+        changed_paths=("README.md",),
+        untracked_paths=(),
+    )
+    result_docs = evaluate_guard(state, task="update docs and README")
+    result_code = evaluate_guard(state, task="fix critical bug")
+
+    assert result_docs.passed  # docs task allows README change
+    assert not result_code.passed  # non-docs task blocks README change

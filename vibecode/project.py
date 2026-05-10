@@ -118,35 +118,109 @@ def _project_yaml(project_id: str, project_name: str) -> str:
     )
 
 
-def _required_checks_yaml() -> str:
-    return (
-        "# vibecode required checks\n"
-        "# schema: vibecode/required-checks/v1\n"
-        "\n"
-        "checks:\n"
-        "  - name: unit tests\n"
-        "    command: python -m pytest\n"
-        "    required: true\n"
-        "\n"
-        "  - name: cli help\n"
-        "    command: python -m vibecode.cli --help\n"
-        "    required: true\n"
-        "\n"
-        "  - name: index command help\n"
-        "    command: python -m vibecode.cli index --help\n"
-        "    required: true\n"
-        "\n"
-        "  - name: context command help\n"
-        "    command: python -m vibecode.cli context --help\n"
-        "    required: true\n"
-    )
+def _required_checks_yaml(repo_root: Path | None = None) -> str:
+    """Generate required_checks.yaml with checks appropriate for the target repo."""
+    if repo_root is not None:
+        checks = _detect_default_checks(repo_root)
+    else:
+        checks = _detect_default_checks(None)
+
+    lines = [
+        "# vibecode required checks",
+        "# schema: vibecode/required-checks/v1",
+        "",
+        "# Generated during `vibecode init`. Replace with your real checks.",
+        "# Each check must have: name, command, and required (true/false).",
+        "",
+        "checks:",
+    ]
+    for check in checks:
+        name = check['name']
+        command = check['command']
+        required = str(check.get('required', True)).lower()
+        if ":" in name or "#" in name or name.startswith("'"):
+            name = f"\"{name}\""
+        if ":" in command or "#" in command:
+            command = f"\"{command}\""
+        lines.append(f"  - name: {name}")
+        lines.append(f"    command: {command}")
+        lines.append(f"    required: {required}")
+        lines.append("")
+    return "\n".join(lines) + "\n"
 
 
-def _file_templates(project_id: str, project_name: str) -> dict[str, str]:  # noqa: ARG001
+def _detect_default_checks(repo_root: Path | None) -> list[dict]:
+    """Detect appropriate default required checks for the target repository.
+
+    Returns a list of check dicts with keys: name, command, required.
+    """
+    if repo_root is None:
+        return _vibecode_app_default_checks()
+
+    root = repo_root.resolve()
+
+    # Is this the VibecodeApp repo itself?
+    if (root / "vibecode" / "__init__.py").exists() or (root / "vibecode" / "cli.py").exists():
+        return _vibecode_app_default_checks()
+
+    checks: list[dict] = []
+
+    # Python / pytest detection
+    has_python = any(root.glob("*.py")) or any(root.glob("**/*.py"))
+    has_pyproject = (root / "pyproject.toml").exists()
+    has_pytest = False
+    if has_pyproject:
+        try:
+            content = (root / "pyproject.toml").read_text(encoding="utf-8")
+            has_pytest = "pytest" in content or "[tool.pytest" in content
+        except OSError:
+            pass
+    if has_python and (has_pyproject or has_pytest or (root / "tests").is_dir()):
+        checks.append({"name": "unit tests", "command": "python -m pytest", "required": True})
+
+    # Node.js / npm detection
+    has_package_json = (root / "package.json").exists()
+    if has_package_json:
+        try:
+            pkg = json.loads((root / "package.json").read_text(encoding="utf-8"))
+            if isinstance(pkg, dict):
+                scripts = pkg.get("scripts", {})
+                if isinstance(scripts, dict) and "test" in scripts:
+                    checks.append({"name": "npm test", "command": "npm test", "required": True})
+                elif "lint" in scripts:
+                    checks.append({"name": "lint", "command": "npm run lint", "required": True})
+        except (OSError, ValueError):
+            pass
+
+    # If we found checks, return them
+    if checks:
+        return checks
+
+    # Fallback: placeholder that tells user to fill in
+    return [
+        {
+            "name": "TODO: replace with your tests",
+            "command": "echo 'TODO: add real test command'",
+            "required": True,
+        },
+    ]
+
+
+def _vibecode_app_default_checks() -> list[dict]:
+    """Return VibecodeApp-specific default checks (for self-dogfood)."""
+    return [
+        {"name": "unit tests", "command": "python -m pytest", "required": True},
+        {"name": "cli help", "command": "python -m vibecode.cli --help", "required": True},
+        {"name": "index command help", "command": "python -m vibecode.cli index --help", "required": True},
+        {"name": "context command help", "command": "python -m vibecode.cli context --help", "required": True},
+    ]
+
+
+def _file_templates(project_id: str, project_name: str, repo_root: Path | None = None) -> dict[str, str]:  # noqa: ARG001
     marker = TEMPLATE_UNFILLED_MARKER
     return {
         ".vibecode/project.yaml": _project_yaml(project_id, project_name),
-        ".vibecode/checks/required_checks.yaml": _required_checks_yaml(),
+        ".vibecode/checks/required_checks.yaml": _required_checks_yaml(repo_root),
         ".vibecode/checks/protected_paths.yaml": render_protected_paths_yaml(),
         ".vibecode/architecture/OVERVIEW.md": (
             f"# {project_name} Architecture Overview\n\n"
@@ -238,7 +312,7 @@ def cmd_init(args) -> int:
     for rel_dir in _GENERATED_DIRS:
         (repo_root / Path(rel_dir)).mkdir(parents=True, exist_ok=True)
 
-    templates = _file_templates(project_id, project_name)
+    templates = _file_templates(project_id, project_name, repo_root)
     skipped: list[str] = []
 
     for rel_path, content in templates.items():

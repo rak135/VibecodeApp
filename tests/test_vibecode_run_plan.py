@@ -11,6 +11,7 @@ from unittest.mock import MagicMock, patch
 import pytest
 
 from vibecode.cli import main
+from vibecode.paths import normalise_repo_root_for_compare
 from vibecode.run_plan import (
     RunPlan,
     RunPlanWarning,
@@ -221,10 +222,9 @@ class TestBuildRunPlanCleanRepo:
         assert plan.dirty_paths == ()
         assert plan.index_fresh is True
         assert plan.preflight_errors == ()
-        assert plan.context_pack_path is not None
-        assert "context_pack.md" in plan.context_pack_path
-        assert plan.opencode_prompt_path is not None
-        assert "opencode_prompt.md" in plan.opencode_prompt_path
+        # context_pack_path and opencode_prompt_path are None when files don't exist yet
+        assert plan.context_pack_path is None
+        assert plan.opencode_prompt_path is None
         # permission_profile is None because the file hasn't been written yet
         assert plan.permission_profile is None
 
@@ -635,6 +635,10 @@ class TestBuildRunPlanContextPackPath:
         _minimal_vibecode(tmp_path)
         _commit_all(tmp_path)
 
+        # Write context pack explicitly so the paths resolve.
+        _write(tmp_path / ".vibecode" / "current" / "context_pack.md", "# context")
+        _write(tmp_path / ".vibecode" / "current" / "opencode_prompt.md", "# prompt")
+
         plan = build_run_plan(tmp_path, task="test", platform="opencode")
 
         assert plan.context_pack_path is not None
@@ -665,6 +669,36 @@ class TestBuildRunPlanContextPackPath:
         plan = build_run_plan(tmp_path, task="test", platform="something_else")
 
         assert plan.opencode_prompt_path is None
+
+    def test_missing_prompt_reported_as_pending(self, tmp_path):
+        """When context pack files don't exist, plan should indicate pending generation."""
+        _init_repo(tmp_path)
+        _minimal_vibecode(tmp_path)
+        _commit_all(tmp_path)
+
+        plan = build_run_plan(tmp_path, task="test", platform="opencode")
+
+        assert plan.context_pack_path is None
+        assert plan.opencode_prompt_path is None
+        text = render_run_plan(plan)
+        assert "will be generated during run" in text
+
+    def test_prompt_files_reported_when_exist(self, tmp_path):
+        """When context pack files exist, plan should report actual paths."""
+        _init_repo(tmp_path)
+        _minimal_vibecode(tmp_path)
+        _write(tmp_path / ".vibecode" / "current" / "context_pack.md", "# context")
+        _write(tmp_path / ".vibecode" / "current" / "opencode_prompt.md", "# prompt")
+        _commit_all(tmp_path)
+
+        plan = build_run_plan(tmp_path, task="test", platform="opencode")
+
+        assert plan.context_pack_path is not None
+        assert plan.opencode_prompt_path is not None
+        text = render_run_plan(plan)
+        assert "context_pack.md" in text
+        assert "opencode_prompt.md" in text
+        assert "will be generated during run" not in text
 
 
 # ---------------------------------------------------------------------------
@@ -1063,3 +1097,199 @@ class TestBuildRunPlanGitignorePolicy:
             if "git-ignored" in e.message or "tracked by git" in e.message
         ]
         assert len(gitignore_errors) == 0
+
+
+# ---------------------------------------------------------------------------
+# build_run_plan — onboarding baseline detection
+# ---------------------------------------------------------------------------
+
+
+class TestBuildRunPlanOnboardingBaseline:
+    """Tests for first-time external repo setup with .vibecode baseline files."""
+
+    def test_vibecode_only_dirty_reports_onboarding_baseline(self, tmp_path: Path):
+        """When only .vibecode files are dirty, report onboarding baseline."""
+        _init_repo(tmp_path)
+        _write(tmp_path / "app.py", "x = 1\n")
+        _commit_all(tmp_path)
+        # Create .vibecode setup files without committing (simulating post-init onboarding)
+        _write(
+            tmp_path / ".vibecode" / "project.yaml",
+            "project:\n  id: test\n  name: Test\n  root: .\n"
+            "indexing:\n  include: []\n  exclude: []\n  protected_paths: []\n"
+            "  risk_rules: []\n",
+        )
+        _write(tmp_path / ".vibecode" / "handoff" / "NOW.md", "# Now\n\nWorking.\n")
+        _write(tmp_path / ".vibecode" / "architecture" / "INVARIANTS.md", "- Use TypeScript\n")
+
+        plan = build_run_plan(tmp_path, task="test", platform="opencode")
+
+        assert plan.dirty is True
+        assert len(plan.dirty_paths) >= 3
+        errors = [e for e in plan.preflight_errors]
+        assert any("onboarding baseline" in e.message.lower() for e in errors)
+        assert any("--allow-dirty" in e.message for e in errors)
+
+    def test_vibecode_and_source_dirty_reports_normal_dirty(self, tmp_path: Path):
+        """When both .vibecode and source files are dirty, report normal dirty."""
+        _init_repo(tmp_path)
+        _write(tmp_path / "app.py", "x = 1\n")
+        _commit_all(tmp_path)
+        _write(
+            tmp_path / ".vibecode" / "project.yaml",
+            "project:\n  id: test\n  name: Test\n  root: .\n",
+        )
+        _write(tmp_path / "app.py", "x = 2\n")
+
+        plan = build_run_plan(tmp_path, task="test", platform="opencode")
+
+        assert plan.dirty is True
+        errors = [e for e in plan.preflight_errors]
+        assert any("onboarding" not in e.message.lower() for e in errors)
+        assert not any("onboarding baseline" in e.message.lower() for e in errors)
+
+    def test_committed_baseline_proceeds_normally(self, tmp_path: Path):
+        """After committing .vibecode baseline, repo is clean."""
+        _init_repo(tmp_path)
+        _write(tmp_path / "app.py", "x = 1\n")
+        _minimal_vibecode(tmp_path)
+        _commit_all(tmp_path)
+
+        plan = build_run_plan(tmp_path, task="test", platform="opencode")
+
+        assert plan.dirty is False
+        assert plan.dirty_paths == ()
+
+    def test_onboarding_with_allow_dirty_is_warning(self, tmp_path: Path):
+        """allow_dirty=True turns onboarding baseline from error to warning."""
+        _init_repo(tmp_path)
+        _write(tmp_path / "app.py", "x = 1\n")
+        _commit_all(tmp_path)
+        _write(
+            tmp_path / ".vibecode" / "project.yaml",
+            "project:\n  id: test\n  name: Test\n  root: .\n",
+        )
+        _write(tmp_path / ".vibecode" / "handoff" / "NOW.md", "# Now\n\nWorking.\n")
+
+        plan = build_run_plan(tmp_path, task="test", platform="opencode", allow_dirty=True)
+
+        assert plan.dirty is True
+        dirty_errors = [e for e in plan.preflight_errors if "dirty" in e.message.lower() or "onboarding" in e.message.lower()]
+        assert len(dirty_errors) == 0
+        dirty_warnings = [w for w in plan.preflight_warnings if "dirty" in w.message.lower() or "onboarding" in w.message.lower()]
+        assert len(dirty_warnings) >= 1
+
+    def test_gitignore_only_in_onboarding_is_setup(self, tmp_path: Path):
+        """When only .gitignore is dirty alongside .vibecode files, it's still setup."""
+        _init_repo(tmp_path)
+        _write(tmp_path / "app.py", "x = 1\n")
+        _commit_all(tmp_path)
+        _write(tmp_path / ".vibecode" / "project.yaml", "project:\n  id: test\n  name: Test\n  root: .\n")
+        _write(tmp_path / ".gitignore", ".vibecode/current/\n")
+
+        plan = build_run_plan(tmp_path, task="test", platform="opencode")
+
+        assert plan.dirty is True
+        errors = [e for e in plan.preflight_errors]
+        assert any("onboarding baseline" in e.message.lower() for e in errors)
+
+
+# ---------------------------------------------------------------------------
+# Root path normalisation for comparison
+# ---------------------------------------------------------------------------
+
+
+class TestRootPathNormalisation:
+    """Tests for normalise_repo_root_for_compare and run-plan root comparison."""
+
+    def test_slash_backslash_compare_equal(self):
+        """Forward-slash and backslash variants of the same path compare equal."""
+        a = normalise_repo_root_for_compare(r"C:\DATA\PROJECTS\my-repo")
+        b = normalise_repo_root_for_compare("C:/DATA/PROJECTS/my-repo")
+        assert a == b
+
+    def test_different_roots_compare_different(self):
+        """Different root paths compare different."""
+        a = normalise_repo_root_for_compare(r"C:\DATA\PROJECTS\repo-a")
+        b = normalise_repo_root_for_compare(r"C:\DATA\PROJECTS\repo-b")
+        assert a != b
+
+    def test_posix_paths_unchanged(self):
+        """POSIX paths pass through unchanged."""
+        a = normalise_repo_root_for_compare("/home/user/repo")
+        b = "/home/user/repo"
+        assert a == b
+
+    def test_trailing_slash_stripped(self):
+        """Trailing slashes are stripped."""
+        a = normalise_repo_root_for_compare("C:/path/to/repo/")
+        b = normalise_repo_root_for_compare("C:/path/to/repo")
+        assert a == b
+
+    def test_run_plan_no_false_root_warning_on_slash_variant(self, tmp_path: Path):
+        """run-plan must not warn 'different root' when stored path uses forward slashes."""
+        _init_repo(tmp_path)
+        _write(tmp_path / "app.py", "x = 1\n")
+        _commit_all(tmp_path)
+        _write(
+            tmp_path / ".vibecode" / "project.yaml",
+            "project:\n  id: test\n  name: Test\n  root: .\n"
+            "indexing:\n  include: []\n  exclude: []\n  protected_paths: []\n"
+            "  risk_rules: []\n",
+        )
+        # Simulate stored root with forward slashes (as write_run_record produces)
+        stored_root = tmp_path.resolve().as_posix()
+        _write(
+            tmp_path / ".vibecode" / "current" / "last_index.json",
+            json.dumps({
+                "$schema": "vibecode/index-run/v1",
+                "project_id": "test",
+                "root": stored_root,
+                "started_at": "2026-01-15T10:00:00+00:00",
+                "counts": {},
+            }),
+        )
+        _write_file_inventory(tmp_path)
+        _commit_all(tmp_path)
+
+        plan = build_run_plan(tmp_path, task="test", platform="opencode")
+
+        assert plan.index_fresh is True
+        different_root_warnings = [
+            w for w in plan.preflight_warnings
+            if "different root" in w.message.lower()
+        ]
+        assert len(different_root_warnings) == 0
+
+    def test_run_plan_still_warns_genuinely_different_root(self, tmp_path: Path):
+        """run-plan must still warn when root paths are genuinely different."""
+        _init_repo(tmp_path)
+        _write(tmp_path / "app.py", "x = 1\n")
+        _commit_all(tmp_path)
+        _write(
+            tmp_path / ".vibecode" / "project.yaml",
+            "project:\n  id: test\n  name: Test\n  root: .\n"
+            "indexing:\n  include: []\n  exclude: []\n  protected_paths: []\n"
+            "  risk_rules: []\n",
+        )
+        # Store a genuinely different root
+        _write(
+            tmp_path / ".vibecode" / "current" / "last_index.json",
+            json.dumps({
+                "$schema": "vibecode/index-run/v1",
+                "project_id": "test",
+                "root": "/completely/different/path",
+                "started_at": "2026-01-15T10:00:00+00:00",
+                "counts": {},
+            }),
+        )
+        _write_file_inventory(tmp_path)
+        _commit_all(tmp_path)
+
+        plan = build_run_plan(tmp_path, task="test", platform="opencode")
+
+        different_root_warnings = [
+            w for w in plan.preflight_warnings
+            if "different root" in w.message.lower()
+        ]
+        assert len(different_root_warnings) >= 1

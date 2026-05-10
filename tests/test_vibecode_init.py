@@ -54,8 +54,8 @@ def test_init_project_yaml_contains_required_fields(tmp_path):
     checks = (tmp_path / ".vibecode" / "checks" / "required_checks.yaml").read_text(
         encoding="utf-8"
     )
-    assert "command: python -m pytest" in checks
-    assert "command: python -m vibecode.cli --help" in checks
+    assert "checks:" in checks
+    assert "required:" in checks
 
 
 def test_init_protected_paths_yaml_contains_default_policy(tmp_path):
@@ -200,3 +200,40 @@ def test_init_second_run_leaves_generated_dirs_intact(tmp_path):
 
 def test_init_returns_zero_on_success(tmp_path):
     assert main(["init", str(tmp_path), "--id", "x", "--name", "X"]) == 0
+
+
+def test_init_external_repo_no_vibecode_specific_checks(tmp_path):
+    """Init on an external non-VibecodeApp repo must not include vibecode.cli checks."""
+    main(["init", str(tmp_path), "--id", "extproj", "--name", "External Project"])
+    checks_content = (tmp_path / ".vibecode" / "checks" / "required_checks.yaml").read_text(
+        encoding="utf-8"
+    )
+    assert "python -m vibecode.cli" not in checks_content
+    assert "vibecode.cli --help" not in checks_content
+    assert "vibecode.cli index" not in checks_content
+    assert "vibecode.cli context" not in checks_content
+
+
+def test_init_python_repo_gets_pytest_check(tmp_path):
+    """Init on a Python repo should produce a pytest check."""
+    (tmp_path / "app.py").write_text("print('hello')\n", encoding="utf-8")
+    (tmp_path / "pyproject.toml").write_text(
+        "[tool.pytest.ini_options]\nminversion = \"6.0\"\n", encoding="utf-8"
+    )
+    main(["init", str(tmp_path), "--id", "pyproj", "--name", "Python Project"])
+    checks = (tmp_path / ".vibecode" / "checks" / "required_checks.yaml").read_text(
+        encoding="utf-8"
+    )
+    assert "python -m pytest" in checks
+    assert "python -m vibecode.cli" not in checks
+
+
+def test_init_unknown_repo_gets_placeholder(tmp_path):
+    """Init on a repo with no detectable tech stack should get a clear placeholder."""
+    main(["init", str(tmp_path), "--id", "unk", "--name", "Unknown"])
+    checks = (tmp_path / ".vibecode" / "checks" / "required_checks.yaml").read_text(
+        encoding="utf-8"
+    )
+    assert "TODO" in checks
+    assert "replace" in checks.lower()
+    assert "python -m vibecode.cli" not in checks

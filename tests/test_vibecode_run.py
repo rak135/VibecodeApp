@@ -742,3 +742,96 @@ class TestProfileInMetadata:
                 e.level == "error" and "profile" in e.message.lower()
                 for e in plan.preflight_errors
             )
+
+
+# ---------------------------------------------------------------------------
+# Run refuses dirty onboarding baseline without --allow-dirty
+# ---------------------------------------------------------------------------
+
+
+class TestRunRefusesDirtyOnboarding:
+    def test_dirty_onboarding_baseline_refused(self, tmp_path: Path, capsys, monkeypatch):
+        """Run must refuse a dirty onboarding baseline without --allow-dirty."""
+        _init_repo(tmp_path)
+        _write(tmp_path / "app.py", "x = 1\n")
+        _commit_all(tmp_path)
+
+        # Create .vibecode setup files (onboarding baseline, not committed)
+        _write(
+            tmp_path / ".vibecode" / "project.yaml",
+            "project:\n  id: test\n  name: Test\n  root: .\n"
+            "indexing:\n  include: ['*.py']\n  exclude: []\n  protected_paths: []\n"
+            "  risk_rules: []\n",
+        )
+        _write(tmp_path / ".vibecode" / "handoff" / "NOW.md", "# Now\n\nWorking.\n")
+        _write(tmp_path / ".vibecode" / "handoff" / "NEXT.md", "# Next\n\nDo stuff.\n")
+        _write(tmp_path / ".vibecode" / "handoff" / "BLOCKERS.md", "# Blockers\n\nNo blockers.\n")
+        # Create required profiles so preflight doesn't bail before git check
+        from vibecode.permissions import PROFILES
+        for name, data in PROFILES.items():
+            _write(
+                tmp_path / ".vibecode" / "agents" / f"{name}.json",
+                json.dumps(data, indent=2) + "\n",
+            )
+
+        marker = tmp_path / "launched.txt"
+        fake_dir = (tmp_path / ".." / "fake_bin_onb").resolve()
+        fake_dir.mkdir(parents=True, exist_ok=True)
+        script = fake_dir / "opencode.py"
+        script.write_text(
+            "import sys\n"
+            f"argv = sys.argv[1:] if len(sys.argv) > 1 else []\n"
+            'if "--version" in argv:\n'
+            '    sys.stdout.write("fake-opencode 1.0.0\\n")\n'
+            "    sys.exit(0)\n"
+            f"from pathlib import Path\nPath({str(marker)!r}).write_text('yes')\n",
+            encoding="utf-8",
+        )
+        wrapper = fake_dir / "opencode.cmd"
+        wrapper.write_text(
+            "@echo off\n" + f'"{sys.executable}" "%~dp0opencode.py" %*\n',
+            encoding="utf-8",
+        )
+        monkeypatch.setenv("OPENCODE_COMMAND", str(wrapper))
+
+        rc = main(["run", str(tmp_path), "--task", "test", "--no-index"])
+
+        assert rc == 1
+        assert not marker.exists()
+        err = capsys.readouterr().err
+        assert "dirty" in err.lower()
+
+    def test_dirty_onboarding_with_allow_dirty_proceeds(self, tmp_path: Path, capsys, monkeypatch):
+        """Run with --allow-dirty should proceed on a dirty onboarding baseline."""
+        _init_repo(tmp_path)
+        _write(tmp_path / "app.py", "x = 1\n")
+        _commit_all(tmp_path)
+
+        _minimal_vibecode(tmp_path)
+        # Don't commit vibecode baseline — it's dirty
+
+        marker = tmp_path / "launched.txt"
+        fake_dir = (tmp_path / ".." / "fake_bin_onb2").resolve()
+        fake_dir.mkdir(parents=True, exist_ok=True)
+        script = fake_dir / "opencode.py"
+        script.write_text(
+            "import sys\n"
+            f"argv = sys.argv[1:] if len(sys.argv) > 1 else []\n"
+            'if "--version" in argv:\n'
+            '    sys.stdout.write("fake-opencode 1.0.0\\n")\n'
+            "    sys.exit(0)\n"
+            f"from pathlib import Path\nPath({str(marker)!r}).write_text('yes')\n"
+            "sys.stdout.write('OK\\n')\n",
+            encoding="utf-8",
+        )
+        wrapper = fake_dir / "opencode.cmd"
+        wrapper.write_text(
+            "@echo off\n" + f'"{sys.executable}" "%~dp0opencode.py" %*\n',
+            encoding="utf-8",
+        )
+        monkeypatch.setenv("OPENCODE_COMMAND", str(wrapper))
+
+        rc = main(["run", str(tmp_path), "--task", "test", "--allow-dirty", "--no-index"])
+
+        assert rc == 0
+        assert marker.exists()
