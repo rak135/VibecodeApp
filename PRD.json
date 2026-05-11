@@ -144,7 +144,7 @@
     {
       "title": "P3.3 Apply run controller review fixes",
       "description": "Read docs/audit/OBSERVABLE_RUN_MONITOR_P3_RUN_CONTROLLER_REVIEW.md.\n\nApply only actionable fixes from the review.\nIf no fixes are needed, write:\ndocs/audit/OBSERVABLE_RUN_MONITOR_P3_RUN_CONTROLLER_FIX.md\n\nRun compile and affected tests.",
-      "completed": false,
+      "completed": true,
       "engine": "opencode",
       "model": "deepseek/deepseek-v4-pro",
       "engine_args": [

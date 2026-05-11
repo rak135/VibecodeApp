@@ -8,7 +8,6 @@ from __future__ import annotations
 
 import json
 import os
-import stat
 import subprocess
 import sys
 from datetime import datetime, timezone
@@ -269,7 +268,6 @@ class TestRunControllerEventSequence:
         )
         controller.execute()
 
-        types = [e.type for e in sink.events]
         git_idx = next(
             i for i, e in enumerate(sink.events)
             if e.type == EVENT_GIT_PREFLIGHT and e.data and e.data.get("phase") == "completed"
@@ -360,11 +358,17 @@ class TestRunControllerSummaryWritten:
         summary, exit_code = controller.execute()
 
         assert exit_code == 0
-        summary_path = repo / ".vibecode" / "runs" / "test-summary-001" / "summary.json"
+        session_dir = repo / ".vibecode" / "runs" / "test-summary-001"
+        summary_path = session_dir / "summary.json"
         assert summary_path.exists()
         data = json.loads(summary_path.read_text())
         assert data["session_id"] == "test-summary-001"
         assert data["overall_status"] == "success"
+
+        events_path = session_dir / "events.jsonl"
+        assert events_path.exists()
+        events_lines = events_path.read_text(encoding="utf-8").strip().splitlines()
+        assert len(events_lines) > 0
 
     def test_summary_event_has_correct_path(self, repo: Path, fake_bin: Path):
         _make_fake_opencode(fake_bin)
@@ -576,10 +580,16 @@ class TestLegacyCLIPath:
         runs_dir = repo / ".vibecode" / "runs"
         run_dirs = list(runs_dir.iterdir())
         assert len(run_dirs) >= 1
-        summary_file = run_dirs[-1] / "summary.json"
+        session_dir = run_dirs[-1]
+        summary_file = session_dir / "summary.json"
         assert summary_file.exists()
         data = json.loads(summary_file.read_text())
         assert data["task"] == "cli-summary-test"
+
+        events_file = session_dir / "events.jsonl"
+        assert events_file.exists()
+        events_lines = events_file.read_text(encoding="utf-8").strip().splitlines()
+        assert len(events_lines) > 0
 
 
 # ---------------------------------------------------------------------------

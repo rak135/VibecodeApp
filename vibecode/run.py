@@ -57,6 +57,7 @@ from vibecode.diff_summary import DiffSummary, diff_summarise
 from vibecode.events import (
     EventLevel,
     EventSink,
+    MultiEventSink,
     NullEventSink,
     create_event,
     EVENT_AGENT_PROCESS,
@@ -451,6 +452,11 @@ class RunController:
         root = self.root
         vibecode_dir = root / ".vibecode"
         session = RunSession(root, self.session_id)
+        jsonl_sink = session.create_event_sink()
+        sinks: list[EventSink] = [jsonl_sink]
+        if not isinstance(self.sink, NullEventSink):
+            sinks.append(self.sink)
+        self.sink = MultiEventSink(sinks)
 
         self._emit(
             EVENT_RUN_LIFECYCLE, EventLevel.INFO, "Run started",
@@ -652,7 +658,8 @@ class RunController:
                 command=None, exit_code=-1, stdout="", stderr="OpenCode command not found.",
             )
             self._emit(EVENT_AGENT_PROCESS, EventLevel.ERROR, "Agent command not found",
-                       data={"phase": "started", "error": "command_not_found"})
+                       data={"phase": "preflight_failed", "error": "command_not_found",
+                             "status": "error"})
             self._emit(EVENT_RUN_LIFECYCLE, EventLevel.ERROR,
                        "Run aborted: agent command not found",
                        data={"phase": "finished", "status": "error"})
@@ -669,7 +676,8 @@ class RunController:
             )
             self._emit(EVENT_AGENT_PROCESS, EventLevel.ERROR,
                        f"Agent check failed: {status.message}",
-                       data={"phase": "started", "error": "check_failed"})
+                       data={"phase": "preflight_failed", "error": "check_failed",
+                             "status": "error"})
             self._emit(EVENT_RUN_LIFECYCLE, EventLevel.ERROR,
                        "Run aborted: agent check failed",
                        data={"phase": "finished", "status": "error"})
@@ -772,6 +780,7 @@ class RunController:
 
         # Guard
         guard_result: GuardResult | None = None
+        guard_error: str | None = None
         self._emit(EVENT_GUARD, EventLevel.INFO, "Guard started", data={"phase": "started"})
         try:
             if agent_git_state and agent_git_state.is_git_repo:
@@ -786,38 +795,66 @@ class RunController:
             else:
                 print("Warning: skipped guard (not a git repository).", file=sys.stderr)
         except Exception as exc:
+            guard_error = str(exc)
             print(f"Warning: guard check failed with error: {exc}", file=sys.stderr)
 
-        guard_passed = guard_result.passed if guard_result else True
-        self._emit(
-            EVENT_GUARD,
-            EventLevel.INFO if guard_passed else EventLevel.WARNING,
-            "Guard completed",
-            data={"phase": "completed", "passed": guard_passed,
-                  "findings": len(guard_result.findings) if guard_result else 0},
-        )
+        if guard_result is None and guard_error:
+            self._emit(
+                EVENT_GUARD, EventLevel.ERROR, f"Guard failed: {guard_error}",
+                data={"phase": "completed", "passed": False, "status": "error",
+                      "error": guard_error},
+            )
+        elif guard_result is None:
+            self._emit(
+                EVENT_GUARD, EventLevel.INFO, "Guard skipped (not a git repository)",
+                data={"phase": "completed", "passed": True, "findings": 0},
+            )
+        else:
+            guard_passed = guard_result.passed
+            self._emit(
+                EVENT_GUARD,
+                EventLevel.INFO if guard_passed else EventLevel.WARNING,
+                "Guard completed",
+                data={"phase": "completed", "passed": guard_passed,
+                      "findings": len(guard_result.findings)},
+            )
 
         # Required checks
         check_result: CheckRun | None = None
+        check_error: str | None = None
         self._emit(EVENT_CHECK, EventLevel.INFO, "Checks started", data={"phase": "started"})
         try:
             check_result = run_checks(root)
             write_check_results(check_result, vibecode_dir)
         except Exception as exc:
+            check_error = str(exc)
             print(f"Warning: required checks failed with error: {exc}", file=sys.stderr)
 
-        checks_passed = not check_result.has_required_failures if check_result else True
-        self._emit(
-            EVENT_CHECK,
-            EventLevel.INFO if checks_passed else EventLevel.WARNING,
-            "Checks completed",
-            data={"phase": "completed", "passed": checks_passed,
-                  "total": check_result.total if check_result else 0,
-                  "failed": check_result.failed if check_result else 0},
-        )
+        if check_result is None and check_error:
+            self._emit(
+                EVENT_CHECK, EventLevel.ERROR, f"Checks failed: {check_error}",
+                data={"phase": "completed", "passed": False, "status": "error",
+                      "error": check_error},
+            )
+        elif check_result is None:
+            self._emit(
+                EVENT_CHECK, EventLevel.INFO, "Checks completed",
+                data={"phase": "completed", "passed": True, "total": 0, "failed": 0},
+            )
+        else:
+            checks_passed = not check_result.has_required_failures
+            self._emit(
+                EVENT_CHECK,
+                EventLevel.INFO if checks_passed else EventLevel.WARNING,
+                "Checks completed",
+                data={"phase": "completed", "passed": checks_passed,
+                      "total": check_result.total,
+                      "failed": check_result.failed},
+            )
 
         # Handoff
         handoff_result: HandoffResult | None = None
+        handoff_error: str | None = None
         self._emit(EVENT_HANDOFF, EventLevel.INFO, "Handoff started", data={"phase": "started"})
         try:
             if agent_git_state and agent_git_state.is_git_repo:
@@ -826,16 +863,29 @@ class RunController:
             else:
                 print("Warning: skipped handoff-check (not a git repository).", file=sys.stderr)
         except Exception as exc:
+            handoff_error = str(exc)
             print(f"Warning: handoff-check failed with error: {exc}", file=sys.stderr)
 
-        handoff_passed = handoff_result.passed if handoff_result else True
-        self._emit(
-            EVENT_HANDOFF,
-            EventLevel.INFO if handoff_passed else EventLevel.WARNING,
-            "Handoff completed",
-            data={"phase": "completed", "passed": handoff_passed,
-                  "issues": len(handoff_result.issues) if handoff_result else 0},
-        )
+        if handoff_result is None and handoff_error:
+            self._emit(
+                EVENT_HANDOFF, EventLevel.ERROR, f"Handoff failed: {handoff_error}",
+                data={"phase": "completed", "passed": False, "status": "error",
+                      "error": handoff_error},
+            )
+        elif handoff_result is None:
+            self._emit(
+                EVENT_HANDOFF, EventLevel.INFO, "Handoff skipped (not a git repository)",
+                data={"phase": "completed", "passed": True, "issues": 0},
+            )
+        else:
+            handoff_passed = handoff_result.passed
+            self._emit(
+                EVENT_HANDOFF,
+                EventLevel.INFO if handoff_passed else EventLevel.WARNING,
+                "Handoff completed",
+                data={"phase": "completed", "passed": handoff_passed,
+                      "issues": len(handoff_result.issues)},
+            )
 
         # Persist per-session reports
         session.ensure_dir()
