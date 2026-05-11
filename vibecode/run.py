@@ -108,13 +108,18 @@ class RunSummary:
     handoff: HandoffResult | None = None
     diff: DiffSummary | None = None
     error: str | None = None
+    # Guard enforcement mode: "advisory" (default) or "strict".
+    # In advisory mode, guard findings are reported but never cause run failure.
+    # In strict mode, guard errors cause overall_status "failure".
+    guard_mode: str = "advisory"
 
     @property
     def overall_status(self) -> str:
-        """Overall run status: 'success', 'failure', 'incomplete', or 'error'."""
+        """Overall run status: 'success', 'needs_review', 'failure', 'incomplete', or 'error'."""
         if self.agent_status == "error" or self.error:
             return "error"
-        if self.guard and not self.guard.passed:
+        # In strict mode, guard errors block the run (hard-fail).
+        if self.guard_mode == "strict" and self.guard and not self.guard.passed:
             return "failure"
         if self.checks and self.checks.has_required_failures:
             return "failure"
@@ -122,6 +127,10 @@ class RunSummary:
             return "incomplete"
         if self.agent_status != "success":
             return "failure"
+        # In advisory mode (default), guard errors surface as 'needs_review' only —
+        # they are fully reported with preserved severity but do not block the run.
+        if self.guard and not self.guard.passed:
+            return "needs_review"
         return "success"
 
     def as_dict(self) -> dict:
@@ -139,6 +148,7 @@ class RunSummary:
             "command": self.command,
             "exit_code": self.exit_code,
             "agent_status": self.agent_status,
+            "guard_mode": self.guard_mode,
             "overall_status": self.overall_status,
             "stdout": self.stdout,
             "stderr": self.stderr,
@@ -394,6 +404,11 @@ class RunController:
         Allow running on a dirty git working tree (warn only).
     no_index:
         Skip automatic index generation / refresh.
+    guard_mode:
+        Guard enforcement mode. ``"advisory"`` (default): guard findings are
+        reported with full severity but do not block the run — the overall
+        status becomes ``"needs_review"`` instead of ``"failure"``.
+        ``"strict"``: guard errors cause ``"failure"`` and a non-zero exit.
     sink:
         Event sink; defaults to :class:`~vibecode.events.NullEventSink` when
         ``None``.
@@ -409,6 +424,7 @@ class RunController:
         profile_name: str,
         allow_dirty: bool,
         no_index: bool,
+        guard_mode: str = "advisory",
         sink: "EventSink | None" = None,
         session_id: str | None = None,
     ) -> None:
@@ -418,6 +434,7 @@ class RunController:
         self.profile_name = profile_name
         self.allow_dirty = allow_dirty
         self.no_index = no_index
+        self.guard_mode = guard_mode
         self.sink: EventSink = sink if sink is not None else NullEventSink()
         self.session_id = session_id or datetime.now(tz=timezone.utc).strftime("%Y%m%dT%H%M%S%fZ")
 
@@ -931,6 +948,7 @@ class RunController:
             checks=check_result,
             handoff=handoff_result,
             diff=diff_summary,
+            guard_mode=self.guard_mode,
         )
 
         _write_run_metadata(
@@ -957,6 +975,11 @@ class RunController:
             errors = tuple(f for f in guard_result.findings if f.severity == "error")
             warnings = tuple(f for f in guard_result.findings if f.severity == "warning")
             print(f"  Guard: {len(errors)} error(s), {len(warnings)} warning(s)", file=sys.stderr)
+            if self.guard_mode == "advisory":
+                print(
+                    "  Note: guard mode is advisory — findings logged but run not blocked.",
+                    file=sys.stderr,
+                )
         elif guard_result:
             print("  Guard: passed", file=sys.stderr)
 
@@ -980,7 +1003,7 @@ class RunController:
 
         # ---- RunFinished ----
         finish_level = (
-            EventLevel.INFO if overall == "success"
+            EventLevel.INFO if overall in ("success", "needs_review")
             else EventLevel.ERROR if overall == "error"
             else EventLevel.WARNING
         )
@@ -999,6 +1022,7 @@ def cmd_run(args) -> int:
     profile_name = profile or "safe"
     allow_dirty = getattr(args, "allow_dirty", False)
     no_index = getattr(args, "no_index", False)
+    guard_mode = getattr(args, "guard_mode", "advisory")
 
     if not repo_arg:
         print("Error: repo root is required.", file=sys.stderr)
@@ -1012,6 +1036,7 @@ def cmd_run(args) -> int:
         profile_name=profile_name,
         allow_dirty=allow_dirty,
         no_index=no_index,
+        guard_mode=guard_mode,
     )
     _, exit_code = controller.execute()
     return exit_code

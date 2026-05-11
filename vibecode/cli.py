@@ -194,6 +194,18 @@ def create_parser() -> argparse.ArgumentParser:
         default=False,
         help="Skip automatic index generation/refresh.",
     )
+    run_parser.add_argument(
+        "--guard-mode",
+        default="advisory",
+        choices=["advisory", "strict"],
+        dest="guard_mode",
+        help=(
+            "Guard enforcement mode (default: advisory). "
+            "advisory: guard findings are logged with full severity as 'needs_review' "
+            "but do not block the run. "
+            "strict: guard errors cause run failure and a non-zero exit code."
+        ),
+    )
 
     # run-plan -- keeps "." default (no registry fallback)
     run_plan_parser = subparsers.add_parser(

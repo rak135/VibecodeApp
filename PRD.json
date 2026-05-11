@@ -190,7 +190,7 @@
     {
       "title": "P5.1 Make guard behavior advisory by default",
       "description": "Update run-level guard handling so guard findings are warning/reporting truth by default, not hard enforcement.\n\nProduct rule:\nGuard must say what failed, where drift happened, and why it matters. But default run behavior must not hard-block solely because guard found issues.\n\nRequired behavior:\n- Introduce an explicit guard mode concept if useful:\n  - advisory/default\n  - strict/blocking optional\n- In advisory mode:\n  - guard findings are preserved,\n  - severity is preserved,\n  - run summary says something like needs_review or completed_with_warnings when appropriate,\n  - OpenCode exit code truth is not hidden,\n  - guard warnings do not automatically convert the whole run into failure.\n- In strict mode, if implemented:\n  - preserve existing hard-fail behavior or a clearly documented blocking behavior.\n- CLI help/docs must make clear that advisory is default.\n- Existing tests that expect guard failure to equal run failure must be updated only if they represent old default semantics.\n- Add tests proving advisory guard does not hard-block.\n\nBe careful:\nDo not water down the findings themselves. Severity can still be error. The difference is default enforcement policy, not truth.\n\nRun compile and affected tests.",
-      "completed": false,
+      "completed": true,
       "engine": "copilot",
       "model": "claude-sonnet-4.6",
       "engine_args": [

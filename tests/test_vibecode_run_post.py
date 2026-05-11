@@ -269,7 +269,7 @@ class TestRunSummaryOverallStatus:
         )
         assert summary.overall_status == "failure"
 
-    def test_guard_with_error_causes_failure(self):
+    def test_guard_with_error_causes_needs_review_in_advisory_mode(self):
         guard = GuardResult(
             findings=(
                 GuardFinding(
@@ -297,6 +297,39 @@ class TestRunSummaryOverallStatus:
             stderr="",
             agent_status="success",
             guard=guard,
+            guard_mode="advisory",
+        )
+        assert summary.overall_status == "needs_review"
+
+    def test_guard_with_error_causes_failure_in_strict_mode(self):
+        guard = GuardResult(
+            findings=(
+                GuardFinding(
+                    rule_id="test-rule",
+                    path="foo.py",
+                    severity="error",
+                    message="Hard violation",
+                ),
+            )
+        )
+        plan = self._make_plan()
+        summary = RunSummary(
+            session_id="s1",
+            started_at="2026-01-01T00:00:00+00:00",
+            finished_at="2026-01-01T00:00:01+00:00",
+            platform="opencode",
+            profile="safe",
+            repo_root="/tmp",
+            task="test",
+            dirty=False,
+            index_fresh=True,
+            command="opencode",
+            exit_code=0,
+            stdout="",
+            stderr="",
+            agent_status="success",
+            guard=guard,
+            guard_mode="strict",
         )
         assert summary.overall_status == "failure"
 
@@ -450,8 +483,8 @@ class TestRunSummaryOverallStatus:
         )
         assert summary.overall_status == "error"
 
-    def test_guard_failure_overrides_agent_success(self):
-        """Guard failure should cause failure even if agent succeeded."""
+    def test_guard_failure_overrides_agent_success_advisory(self):
+        """In advisory mode, guard error yields 'needs_review', not 'failure'."""
         guard = GuardResult(
             findings=(
                 GuardFinding(
@@ -488,6 +521,48 @@ class TestRunSummaryOverallStatus:
             guard=guard,
             checks=check_run,
             handoff=handoff,
+            guard_mode="advisory",
+        )
+        assert summary.overall_status == "needs_review"
+
+    def test_guard_failure_overrides_agent_success_strict(self):
+        """In strict mode, guard error yields 'failure'."""
+        guard = GuardResult(
+            findings=(
+                GuardFinding(
+                    rule_id="protected-path-generated",
+                    path=".vibecode/current/context_pack.md",
+                    severity="error",
+                    message="Generated file changed.",
+                ),
+            )
+        )
+        check_run = CheckRun(root=Path("/tmp"))
+        check_run.results = [
+            CheckResult("ok", "pytest", True, 0, 1.0, "1 passed", ""),
+        ]
+        handoff = HandoffResult(root=Path("/tmp"))
+
+        plan = self._make_plan()
+        summary = RunSummary(
+            session_id="s1",
+            started_at="2026-01-01T00:00:00+00:00",
+            finished_at="2026-01-01T00:00:01+00:00",
+            platform="opencode",
+            profile="safe",
+            repo_root="/tmp",
+            task="test",
+            dirty=False,
+            index_fresh=True,
+            command="opencode",
+            exit_code=0,
+            stdout="",
+            stderr="",
+            agent_status="success",
+            guard=guard,
+            checks=check_run,
+            handoff=handoff,
+            guard_mode="strict",
         )
         assert summary.overall_status == "failure"
 
@@ -932,7 +1007,8 @@ class TestCmdRunWithPostChecks:
         assert data["diff"]["changed_files"] == []
 
     def test_run_guard_catches_readme_modified_by_agent(self):
-        """Post-run guard must evaluate the actual post-agent working tree."""
+        """Post-run guard must evaluate the actual post-agent working tree.
+        In advisory mode (default), guard errors yield needs_review with rc=0."""
         _write(self.repo / "README.md", "# Test\n")
         _commit_all(self.repo)
         body = "from pathlib import Path\nPath('README.md').write_text('# Modified by agent\\n', encoding='utf-8')"
@@ -940,11 +1016,11 @@ class TestCmdRunWithPostChecks:
 
         rc = main(["run", str(self.repo), "--task", "change app behavior"])
 
-        assert rc == 1
+        assert rc == 0
         summaries = list((self.repo / ".vibecode" / "runs").glob("*/summary.json"))
         assert len(summaries) >= 1
         data = json.loads(summaries[0].read_text(encoding="utf-8"))
-        assert data["overall_status"] == "failure"
+        assert data["overall_status"] == "needs_review"
         assert data["guard"]["passed"] is False
         assert any(
             finding["rule_id"] == "readme-manual-only"
@@ -952,8 +1028,25 @@ class TestCmdRunWithPostChecks:
         )
         assert any(path["path"] == "README.md" for path in data["diff"]["changed_files"])
 
+    def test_run_guard_catches_readme_modified_by_agent_strict(self):
+        """In strict mode, guard errors cause rc=1 and status 'failure'."""
+        _write(self.repo / "README.md", "# Test\n")
+        _commit_all(self.repo)
+        body = "from pathlib import Path\nPath('README.md').write_text('# Modified by agent\\n', encoding='utf-8')"
+        self._make_fake_opencode(exit_code=0, stdout="Changed README.\n", body=body)
+
+        rc = main(["run", str(self.repo), "--task", "change app behavior", "--guard-mode", "strict"])
+
+        assert rc == 1
+        summaries = list((self.repo / ".vibecode" / "runs").glob("*/summary.json"))
+        assert len(summaries) >= 1
+        data = json.loads(summaries[0].read_text(encoding="utf-8"))
+        assert data["overall_status"] == "failure"
+        assert data["guard"]["passed"] is False
+
     def test_run_guard_catches_custom_project_protected_path_modified_by_agent(self):
-        """Post-run guard must load project protected_paths.yaml policy."""
+        """Post-run guard must load project protected_paths.yaml policy.
+        In advisory mode (default), guard errors yield needs_review with rc=0."""
         _write(self.repo / "policy" / "locked.txt", "do not edit\n")
         _write(
             self.repo / ".vibecode" / "checks" / "protected_paths.yaml",
@@ -970,12 +1063,12 @@ class TestCmdRunWithPostChecks:
 
         rc = main(["run", str(self.repo), "--task", "change app behavior"])
 
-        assert rc == 1
+        assert rc == 0
         summaries = list((self.repo / ".vibecode" / "runs").glob("*/summary.json"))
         assert len(summaries) >= 1
         data = json.loads(summaries[0].read_text(encoding="utf-8"))
         findings = data["guard"]["findings"]
-        assert data["overall_status"] == "failure"
+        assert data["overall_status"] == "needs_review"
         assert data["guard"]["passed"] is False
         assert any(
             finding["rule_id"] == "protected-path-scope"
@@ -985,6 +1078,31 @@ class TestCmdRunWithPostChecks:
         )
         assert all(finding["path"] != "README.md" for finding in findings)
         assert any(path["path"] == "policy/locked.txt" for path in data["diff"]["changed_files"])
+
+    def test_run_guard_catches_custom_project_protected_path_modified_by_agent_strict(self):
+        """In strict mode, protected-path guard error causes failure."""
+        _write(self.repo / "policy" / "locked.txt", "do not edit\n")
+        _write(
+            self.repo / ".vibecode" / "checks" / "protected_paths.yaml",
+            "protected_paths:\n"
+            "  - path: \"policy/locked.txt\"\n"
+            "    rule: \"Custom project policy for locked fixture.\"\n",
+        )
+        _commit_all(self.repo)
+        body = (
+            "from pathlib import Path\n"
+            "Path('policy/locked.txt').write_text('modified by agent\\n', encoding='utf-8')"
+        )
+        self._make_fake_opencode(exit_code=0, stdout="Changed custom policy file.\n", body=body)
+
+        rc = main(["run", str(self.repo), "--task", "change app behavior", "--guard-mode", "strict"])
+
+        assert rc == 1
+        summaries = list((self.repo / ".vibecode" / "runs").glob("*/summary.json"))
+        assert len(summaries) >= 1
+        data = json.loads(summaries[0].read_text(encoding="utf-8"))
+        assert data["overall_status"] == "failure"
+        assert data["guard"]["passed"] is False
 
     def test_run_reports_source_without_test_warning_for_agent_change(self):
         """Source-only agent edits should surface as guard warnings."""
@@ -1006,7 +1124,7 @@ class TestCmdRunWithPostChecks:
         assert any(path["path"] == "app.py" for path in data["diff"]["changed_files"])
 
     def test_run_summary_reports_guard_failure(self):
-        """When guard detects an error, overall status should be 'failure'."""
+        """When guard detects an error in advisory mode, overall status is 'needs_review'."""
         # Create a generated runtime file and commit it, then have the fake
         # agent modify it after the pre-agent git baseline is captured.
         current_dir = self.repo / ".vibecode" / "current"
@@ -1021,6 +1139,29 @@ class TestCmdRunWithPostChecks:
         self._make_fake_opencode(exit_code=0, stdout="OK\n", body=body)
 
         rc = main(["run", str(self.repo), "--task", "test task"])
+
+        assert rc == 0
+        runs_dir = self.repo / ".vibecode" / "runs"
+        summaries = list(runs_dir.glob("*/summary.json"))
+        assert len(summaries) >= 1
+        data = json.loads(summaries[0].read_text(encoding="utf-8"))
+        assert data["overall_status"] == "needs_review"
+        assert data["guard"]["passed"] is False
+
+    def test_run_summary_reports_guard_failure_strict(self):
+        """When guard detects an error in strict mode, overall status is 'failure' with rc=1."""
+        current_dir = self.repo / ".vibecode" / "current"
+        _write(current_dir / "test_generated.md", "# generated\n")
+        _git(self.repo, "add", "-f", ".vibecode/current/test_generated.md")
+        _git(self.repo, "commit", "-m", "track generated file")
+        body = (
+            "from pathlib import Path\n"
+            "Path('.vibecode/current/test_generated.md').write_text('# modified\\n', encoding='utf-8')"
+        )
+
+        self._make_fake_opencode(exit_code=0, stdout="OK\n", body=body)
+
+        rc = main(["run", str(self.repo), "--task", "test task", "--guard-mode", "strict"])
 
         assert rc == 1
         runs_dir = self.repo / ".vibecode" / "runs"
@@ -1170,6 +1311,7 @@ class TestRunSummaryStatusPriority:
         assert s.overall_status == "error"
 
     def test_guard_failure_overrides_agent_success(self):
+        """In advisory mode (default), guard error yields 'needs_review', not 'failure'."""
         guard = GuardResult(
             findings=(
                 GuardFinding(
@@ -1181,6 +1323,21 @@ class TestRunSummaryStatusPriority:
             )
         )
         s = self._base_summary(guard=guard)
+        assert s.overall_status == "needs_review"
+
+    def test_guard_failure_causes_failure_in_strict_mode(self):
+        """In strict mode, guard error yields 'failure'."""
+        guard = GuardResult(
+            findings=(
+                GuardFinding(
+                    rule_id="test",
+                    path="x.py",
+                    severity="error",
+                    message="fail",
+                ),
+            )
+        )
+        s = self._base_summary(guard=guard, guard_mode="strict")
         assert s.overall_status == "failure"
 
     def test_check_failure_overrides_agent_success(self):
@@ -1206,3 +1363,122 @@ class TestRunSummaryStatusPriority:
         handoff = HandoffResult(root=Path("/tmp"))
         s = self._base_summary(guard=guard, checks=check_run, handoff=handoff)
         assert s.overall_status == "success"
+
+
+# ---------------------------------------------------------------------------
+# Advisory guard mode — explicit tests
+# ---------------------------------------------------------------------------
+
+
+class TestAdvisoryGuardMode:
+    """Verify advisory/strict guard mode behaviour on RunSummary."""
+
+    def _make_summary(self, guard_mode="advisory", guard=None, agent_status="success", **kwargs):
+        return RunSummary(
+            session_id="s1",
+            started_at="2026-01-01T00:00:00+00:00",
+            finished_at="2026-01-01T00:00:01+00:00",
+            platform="opencode",
+            profile="safe",
+            repo_root="/tmp",
+            task="test",
+            dirty=False,
+            index_fresh=True,
+            command="opencode",
+            exit_code=0,
+            stdout="",
+            stderr="",
+            agent_status=agent_status,
+            guard=guard,
+            guard_mode=guard_mode,
+            **kwargs,
+        )
+
+    def _error_guard(self):
+        return GuardResult(
+            findings=(
+                GuardFinding(
+                    rule_id="r1",
+                    path="a.py",
+                    severity="error",
+                    message="violation",
+                ),
+            )
+        )
+
+    def test_advisory_is_default(self):
+        s = RunSummary(
+            session_id="s1",
+            started_at="2026-01-01T00:00:00+00:00",
+            finished_at="2026-01-01T00:00:01+00:00",
+            platform="opencode",
+            profile="safe",
+            repo_root="/tmp",
+            task="test",
+            dirty=False,
+            index_fresh=True,
+            command="opencode",
+            exit_code=0,
+            stdout="",
+            stderr="",
+            agent_status="success",
+        )
+        assert s.guard_mode == "advisory"
+
+    def test_advisory_guard_error_yields_needs_review(self):
+        s = self._make_summary(guard=self._error_guard(), guard_mode="advisory")
+        assert s.overall_status == "needs_review"
+
+    def test_advisory_exit_code_zero(self):
+        from vibecode.run import _exit_code_for_status
+        assert _exit_code_for_status("needs_review") == 0
+
+    def test_strict_guard_error_yields_failure(self):
+        s = self._make_summary(guard=self._error_guard(), guard_mode="strict")
+        assert s.overall_status == "failure"
+
+    def test_strict_exit_code_one(self):
+        from vibecode.run import _exit_code_for_status
+        assert _exit_code_for_status("failure") == 1
+
+    def test_guard_mode_in_as_dict(self):
+        s = self._make_summary(guard_mode="advisory")
+        d = s.as_dict()
+        assert d["guard_mode"] == "advisory"
+
+        s2 = self._make_summary(guard_mode="strict")
+        assert s2.as_dict()["guard_mode"] == "strict"
+
+    def test_advisory_guard_findings_fully_preserved(self):
+        """Findings and their severity are unchanged in advisory mode."""
+        guard = self._error_guard()
+        s = self._make_summary(guard=guard, guard_mode="advisory")
+        assert s.guard is not None
+        assert len(s.guard.findings) == 1
+        assert s.guard.findings[0].severity == "error"
+        assert s.guard.findings[0].rule_id == "r1"
+        assert not s.guard.passed
+
+    def test_advisory_warning_only_is_success(self):
+        """Warning-only guard still succeeds in both modes."""
+        guard = GuardResult(
+            findings=(
+                GuardFinding(
+                    rule_id="w1",
+                    path="b.py",
+                    severity="warning",
+                    message="soft warning",
+                ),
+            )
+        )
+        s = self._make_summary(guard=guard, guard_mode="advisory")
+        assert s.overall_status == "success"
+        s2 = self._make_summary(guard=guard, guard_mode="strict")
+        assert s2.overall_status == "success"
+
+    def test_strict_checks_failure_still_blocks_in_advisory_mode(self):
+        """Required check failures block the run regardless of guard_mode."""
+        check_run = CheckRun(root=Path("/tmp"))
+        check_run.results = [CheckResult("c1", "cmd", True, 1, 0.1, "", "")]
+        s = self._make_summary(guard=self._error_guard(), guard_mode="advisory", checks=check_run)
+        assert s.overall_status == "failure"
