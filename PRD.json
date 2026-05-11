@@ -273,7 +273,7 @@
     {
       "title": "P7.2 Review prompt/context snapshot truth",
       "description": "Review prompt/context snapshot behavior.\n\nWrite review output to:\ndocs/audit/OBSERVABLE_RUN_MONITOR_P7_PROMPT_CONTEXT_REVIEW.md\n\nCheck:\n- The exact prompt/context used by the run is preserved.\n- Events point to snapshot files, not only .vibecode/current.\n- No giant prompt content is spammed into every event.\n- Existing context generation behavior is preserved.\n- Tests prove per-run snapshot behavior.\n\nDo not modify implementation files. Only write the review document.",
-      "completed": false,
+      "completed": true,
       "engine": "codex",
       "model": "gpt-5.5",
       "engine_args": [
