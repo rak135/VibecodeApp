@@ -57,7 +57,7 @@
     {
       "title": "P1.2 Review structured event spine",
       "description": "Review the event spine implementation.\n\nWrite review output to:\ndocs/audit/OBSERVABLE_RUN_MONITOR_P1_EVENT_SPINE_REVIEW.md\n\nCheck:\n- events.py is not coupled to high-level runtime modules.\n- Event schema includes enough fields for replay and future GUI/TUI rendering.\n- JSONL writing is append-safe and creates parent directories when needed.\n- Tests actually prove serialization and sink behavior.\n- No direct product behavior changed accidentally.\n- No broad refactors were introduced.\n\nDo not modify implementation files. Only write the review document.",
-      "completed": false,
+      "completed": true,
       "engine": "codex",
       "model": "gpt-5.5",
       "engine_args": [
