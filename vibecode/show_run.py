@@ -40,7 +40,7 @@ def list_runs(runs_dir: Path) -> list[dict[str, Any]]:
         if not entry.is_dir():
             continue
         info: dict[str, Any] = {"session_id": entry.name, "run_dir": entry}
-        summary = load_run_summary(entry)
+        summary, _load_error = load_run_summary(entry)
         if summary:
             for key in (
                 "task",
@@ -59,39 +59,45 @@ def list_runs(runs_dir: Path) -> list[dict[str, Any]]:
     return result
 
 
-def load_run_summary(run_dir: Path) -> dict[str, Any] | None:
+def load_run_summary(run_dir: Path) -> tuple[dict[str, Any] | None, str | None]:
     """Load ``summary.json`` from *run_dir*.
 
-    Returns ``None`` when the file is absent or contains invalid JSON.
+    Returns ``(data, error)`` where *error* describes why loading failed
+    (``"missing"``, ``"corrupt"``, ``"unreadable"``) or ``None`` on success.
+    Callers that only need data can unpack ``data, _ = load_run_summary(...)``.
     """
     path = run_dir / "summary.json"
     if not path.exists():
         path = run_dir / "metadata.json"
     if not path.exists():
-        return None
+        return None, "missing"
     try:
-        return json.loads(path.read_text(encoding="utf-8"))
-    except (OSError, json.JSONDecodeError):
-        return None
+        return json.loads(path.read_text(encoding="utf-8")), None
+    except json.JSONDecodeError:
+        return None, f"{path.name} is corrupt"
+    except OSError:
+        return None, f"{path.name} could not be read"
 
 
-def load_run_events(events_path: Path) -> tuple[list[VibecodeEvent], list[str]]:
-    """Parse ``events.jsonl``, returning ``(events, errors)``.
+def load_run_events(events_path: Path) -> tuple[list[VibecodeEvent], list[str], bool]:
+    """Parse ``events.jsonl``, returning ``(events, errors, file_exists)``.
 
     Corrupt lines are skipped and their error messages collected.  The
     function never raises — callers can decide how to surface errors.
+    *file_exists* is ``False`` when ``events.jsonl`` is missing, ``True``
+    when the file was found (even if parsing yielded zero valid events).
     """
     events: list[VibecodeEvent] = []
     errors: list[str] = []
 
     if not events_path.exists():
-        return events, errors
+        return events, errors, False
 
     try:
         text = events_path.read_text(encoding="utf-8", errors="replace")
     except OSError as exc:
         errors.append(f"Cannot read events.jsonl: {exc}")
-        return events, errors
+        return events, errors, True
 
     for lineno, line in enumerate(text.splitlines(), start=1):
         line = line.strip()
@@ -102,7 +108,7 @@ def load_run_events(events_path: Path) -> tuple[list[VibecodeEvent], list[str]]:
         except (KeyError, ValueError, json.JSONDecodeError) as exc:
             errors.append(f"Line {lineno}: {exc}")
 
-    return events, errors
+    return events, errors, True
 
 
 # ---------------------------------------------------------------------------
@@ -183,15 +189,26 @@ def format_run_show(
     # Guard counts
     guard = summary.get("guard")
     if isinstance(guard, dict):
-        passed = guard.get("passed", "—")
+        passed_g = guard.get("passed", "—")
         counts = guard.get("counts_by_severity", {})
-        errors = counts.get("error", 0)
-        warnings = counts.get("warning", 0)
+        errors_c = counts.get("error", 0)
+        warnings_c = counts.get("warning", 0)
         infos = counts.get("info", 0)
         lines.append(
-            f"Guard        : {'passed' if passed else 'failed'}"
-            f"  errors={errors} warnings={warnings} info={infos}"
+            f"Guard        : {'passed' if passed_g else 'failed'}"
+            f"  errors={errors_c} warnings={warnings_c} info={infos}"
         )
+        if not passed_g:
+            findings = guard.get("findings", [])
+            if findings:
+                lines.append("")
+                lines.append("Guard findings:")
+                for f in findings[:10]:
+                    title = f.get("title") or f.get("message", "")
+                    path = f.get("path", "?")
+                    severity = f.get("severity", "?")
+                    lines.append(f"  [{severity}] {title}")
+                    lines.append(f"    path: {path}")
     else:
         lines.append("Guard        : (not recorded)")
 
@@ -202,16 +219,37 @@ def format_run_show(
         passed_c = checks.get("passed", 0)
         failed_c = checks.get("failed", 0)
         lines.append(f"Checks       : {passed_c}/{total} passed, {failed_c} failed")
+        checks_list = checks.get("checks", [])
+        failed_checks = [c for c in checks_list if c.get("status") == "fail"]
+        if failed_checks:
+            lines.append("")
+            lines.append("Failed checks:")
+            for c in failed_checks:
+                lines.append(f"  {c.get('name', '?')} (exit {c.get('exit_code', '?')})")
     else:
         lines.append("Checks       : (not recorded)")
 
     # Handoff
     handoff = summary.get("handoff")
     if isinstance(handoff, dict):
-        passed_h = handoff.get("passed", "—")
+        status_h = handoff.get("status", "—")
+        passed_h = status_h == "ok"
         lines.append(f"Handoff      : {'passed' if passed_h else 'failed'}")
+        if not passed_h:
+            issues = handoff.get("issues", handoff.get("issues", []))
+            if issues:
+                lines.append("")
+                lines.append("Handoff issues:")
+                for i in issues:
+                    lines.append(f"  {i.get('file', '?')}: {i.get('message', '?')}")
     else:
         lines.append("Handoff      : (not recorded)")
+
+    # Top-level error
+    error = summary.get("error")
+    if isinstance(error, str) and error.strip():
+        lines.append("")
+        lines.append(f"Error: {error}")
 
     # Artifact paths
     artifacts = _artifact_paths(run_dir)
@@ -305,9 +343,8 @@ def _cmd_runs_show(args: Any) -> int:
             )
         return 1
 
-    summary = load_run_summary(run_dir)
+    summary, load_error = load_run_summary(run_dir)
     if summary is None:
-        # Fallback: show what artifacts exist
         artifacts = _artifact_paths(run_dir)
         if not artifacts:
             print(
@@ -316,7 +353,10 @@ def _cmd_runs_show(args: Any) -> int:
             )
             return 1
         print(f"Run: {session_id}")
-        print("No summary.json found. Available artifacts:")
+        if load_error and load_error != "missing":
+            print(f"{load_error}. Available artifacts:")
+        else:
+            print("No summary.json found. Available artifacts:")
         for label, path in artifacts:
             print(f"  {label:<22}: {path}")
         summary = {"session_id": session_id}
@@ -326,8 +366,11 @@ def _cmd_runs_show(args: Any) -> int:
     event_errors: list[str] | None = None
 
     if show_events:
-        events, event_errors = load_run_events(run_dir / "events.jsonl")
-        if event_errors and not events:
+        events, event_errors, events_file_exists = load_run_events(run_dir / "events.jsonl")
+        if not events_file_exists:
+            print("events.jsonl not found.", file=sys.stderr)
+            events = None
+        elif event_errors and not events:
             print(
                 f"Warning: events.jsonl could not be parsed ({len(event_errors)} error(s)).",
                 file=sys.stderr,

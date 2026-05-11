@@ -6,8 +6,6 @@ import json
 from datetime import datetime, timezone
 from pathlib import Path
 
-import pytest
-
 from vibecode.cli import main
 from vibecode.events import (
     EventLevel,
@@ -65,7 +63,7 @@ def _make_summary(session_id: str, **overrides) -> dict:
             "counts_by_category": {},
         },
         "checks": {"total": 2, "passed": 2, "failed": 0, "has_required_failures": False},
-        "handoff": {"passed": True, "issues": []},
+        "handoff": {"status": "ok", "issues": []},
     }
     base.update(overrides)
     return base
@@ -95,9 +93,10 @@ class TestLoadRunSummary:
         summary = _make_summary("sess1")
         _write_summary(run_dir, summary)
 
-        result = load_run_summary(run_dir)
+        result, error = load_run_summary(run_dir)
 
         assert result is not None
+        assert error is None
         assert result["session_id"] == "sess1"
         assert result["task"] == "implement feature X"
 
@@ -106,32 +105,35 @@ class TestLoadRunSummary:
         meta = {"session_id": "sess2", "task": "meta task"}
         _write(run_dir / "metadata.json", json.dumps(meta))
 
-        result = load_run_summary(run_dir)
+        result, error = load_run_summary(run_dir)
 
         assert result is not None
+        assert error is None
         assert result["task"] == "meta task"
 
     def test_returns_none_when_no_file(self, tmp_path: Path):
         run_dir = _make_run_dir(tmp_path, "empty")
 
-        result = load_run_summary(run_dir)
+        result, error = load_run_summary(run_dir)
 
         assert result is None
+        assert error == "missing"
 
     def test_returns_none_for_corrupt_json(self, tmp_path: Path):
         run_dir = _make_run_dir(tmp_path, "corrupt")
         _write(run_dir / "summary.json", "{not valid json")
 
-        result = load_run_summary(run_dir)
+        result, error = load_run_summary(run_dir)
 
         assert result is None
+        assert error == "summary.json is corrupt"
 
     def test_prefers_summary_json_over_metadata(self, tmp_path: Path):
         run_dir = _make_run_dir(tmp_path, "both")
         _write_summary(run_dir, _make_summary("both", task="from summary"))
         _write(run_dir / "metadata.json", json.dumps({"task": "from metadata"}))
 
-        result = load_run_summary(run_dir)
+        result, _ = load_run_summary(run_dir)
 
         assert result["task"] == "from summary"
 
@@ -148,20 +150,22 @@ class TestLoadRunEvents:
         ev2 = _make_event("evts", "Run finished")
         _write_events_jsonl(run_dir, [ev1, ev2])
 
-        events, errors = load_run_events(run_dir / "events.jsonl")
+        events, errors, exists = load_run_events(run_dir / "events.jsonl")
 
         assert len(events) == 2
         assert errors == []
+        assert exists is True
         assert events[0].message == "Run started"
         assert events[1].message == "Run finished"
 
     def test_returns_empty_when_file_missing(self, tmp_path: Path):
         run_dir = _make_run_dir(tmp_path, "noevts")
 
-        events, errors = load_run_events(run_dir / "events.jsonl")
+        events, errors, exists = load_run_events(run_dir / "events.jsonl")
 
         assert events == []
         assert errors == []
+        assert exists is False
 
     def test_skips_corrupt_lines_gracefully(self, tmp_path: Path):
         run_dir = _make_run_dir(tmp_path, "corrupt_lines")
@@ -169,10 +173,11 @@ class TestLoadRunEvents:
         content = ev.as_json() + "\n{bad json\n" + ev.as_json() + "\n"
         _write(run_dir / "events.jsonl", content)
 
-        events, errors = load_run_events(run_dir / "events.jsonl")
+        events, errors, exists = load_run_events(run_dir / "events.jsonl")
 
         assert len(events) == 2
         assert len(errors) == 1
+        assert exists is True
         assert "2" in errors[0]  # line number
 
     def test_skips_blank_lines(self, tmp_path: Path):
@@ -180,10 +185,11 @@ class TestLoadRunEvents:
         ev = _make_event("blanks", "Only event")
         _write(run_dir / "events.jsonl", "\n" + ev.as_json() + "\n\n")
 
-        events, errors = load_run_events(run_dir / "events.jsonl")
+        events, errors, exists = load_run_events(run_dir / "events.jsonl")
 
         assert len(events) == 1
         assert errors == []
+        assert exists is True
 
     def test_event_fields_preserved(self, tmp_path: Path):
         run_dir = _make_run_dir(tmp_path, "fields")
@@ -191,8 +197,9 @@ class TestLoadRunEvents:
         ev = create_event("fields", "run.mcp", EventLevel.WARNING, "Tool failed", timestamp=ts)
         _write_events_jsonl(run_dir, [ev])
 
-        events, _ = load_run_events(run_dir / "events.jsonl")
+        events, _, exists = load_run_events(run_dir / "events.jsonl")
 
+        assert exists is True
         assert events[0].level == EventLevel.WARNING
         assert events[0].type == "run.mcp"
         assert events[0].timestamp == ts
@@ -500,10 +507,10 @@ class TestRunsShowCLI:
         # no events.jsonl written
 
         rc = main(["runs", "show", sid, "--repo", str(tmp_path), "--events"])
-        out = capsys.readouterr().out
+        captured = capsys.readouterr()
 
         assert rc == 0
-        assert "Events (0)" in out
+        assert "events.jsonl not found" in captured.err
 
     def test_show_run_no_summary_shows_artifacts(self, tmp_path: Path, capsys):
         sid = "20260101T160000Z"
@@ -535,3 +542,178 @@ class TestRunsShowCLI:
         assert rc == 1
         assert "my-bad-session-id" in err
         assert "not found" in err
+
+    def test_show_corrupt_summary_reports_corrupt(self, tmp_path: Path, capsys):
+        """CLI reports corrupt summary.json as corrupt, not missing."""
+        sid = "20260101T180000Z"
+        run_dir = tmp_path / ".vibecode" / "runs" / sid
+        run_dir.mkdir(parents=True, exist_ok=True)
+        _write(run_dir / "summary.json", "{not valid json")
+        _write(run_dir / "agent_stdout.log", "some output\n")
+
+        rc = main(["runs", "show", sid, "--repo", str(tmp_path)])
+        out = capsys.readouterr().out
+
+        assert rc == 0
+        assert "corrupt" in out
+        assert "agent stdout" in out
+
+    def test_show_corrupt_metadata_reports_corrupt(self, tmp_path: Path, capsys):
+        """CLI reports corrupt metadata.json as corrupt."""
+        sid = "20260101T190000Z"
+        run_dir = tmp_path / ".vibecode" / "runs" / sid
+        run_dir.mkdir(parents=True, exist_ok=True)
+        _write(run_dir / "metadata.json", "{not valid")
+        _write(run_dir / "agent_stdout.log", "out\n")
+
+        rc = main(["runs", "show", sid, "--repo", str(tmp_path)])
+        out = capsys.readouterr().out
+
+        assert rc == 0
+        assert "corrupt" in out
+
+
+# ---------------------------------------------------------------------------
+# Show output: findings sections
+# ---------------------------------------------------------------------------
+
+
+class TestFormatRunShowFindings:
+    def test_guard_findings_shown_when_not_passed(self, tmp_path: Path):
+        run_dir = _make_run_dir(tmp_path, "gf")
+        summary = _make_summary(
+            "gf",
+            guard={
+                "passed": False,
+                "findings": [
+                    {
+                        "rule_id": "test-1",
+                        "path": "src/foo.py",
+                        "severity": "error",
+                        "title": "Protected file edited",
+                        "message": "src/foo.py is protected",
+                    },
+                    {
+                        "rule_id": "test-2",
+                        "path": "tests/bar.py",
+                        "severity": "warning",
+                        "title": "Test missing",
+                        "message": "No test for src/bar.py",
+                    },
+                ],
+                "counts_by_severity": {"error": 1, "warning": 1, "info": 0},
+            },
+        )
+
+        output = format_run_show(summary, run_dir)
+
+        assert "Guard findings:" in output
+        assert "Protected file edited" in output
+        assert "src/foo.py" in output
+        assert "Test missing" in output
+        assert "tests/bar.py" in output
+
+    def test_no_guard_findings_when_passed(self, tmp_path: Path):
+        run_dir = _make_run_dir(tmp_path, "gf_ok")
+        summary = _make_summary("gf_ok")
+
+        output = format_run_show(summary, run_dir)
+
+        assert "Guard findings:" not in output
+
+    def test_failed_checks_shown(self, tmp_path: Path):
+        run_dir = _make_run_dir(tmp_path, "fc")
+        summary = _make_summary(
+            "fc",
+            checks={
+                "total": 3,
+                "passed": 1,
+                "failed": 2,
+                "has_required_failures": True,
+                "checks": [
+                    {"name": "unit tests", "command": "pytest", "exit_code": 1, "status": "fail"},
+                    {"name": "lint", "command": "ruff", "exit_code": 1, "status": "fail"},
+                    {"name": "format", "command": "black", "exit_code": 0, "status": "pass"},
+                ],
+            },
+        )
+
+        output = format_run_show(summary, run_dir)
+
+        assert "Failed checks:" in output
+        assert "unit tests" in output
+        assert "exit 1" in output
+        assert "lint" in output
+
+    def test_no_failed_checks_when_all_pass(self, tmp_path: Path):
+        run_dir = _make_run_dir(tmp_path, "fc_ok")
+        summary = _make_summary(
+            "fc_ok",
+            checks={
+                "total": 2,
+                "passed": 2,
+                "failed": 0,
+                "has_required_failures": False,
+                "checks": [
+                    {"name": "unit tests", "command": "pytest", "exit_code": 0, "status": "pass"},
+                ],
+            },
+        )
+
+        output = format_run_show(summary, run_dir)
+
+        assert "Failed checks:" not in output
+
+    def test_handoff_issues_shown(self, tmp_path: Path):
+        run_dir = _make_run_dir(tmp_path, "hi")
+        summary = _make_summary(
+            "hi",
+            handoff={
+                "status": "error",
+                "issues": [
+                    {"file": "NOW.md", "message": "Missing required section"},
+                    {"file": "NEXT.md", "message": "File is empty"},
+                ],
+            },
+        )
+
+        output = format_run_show(summary, run_dir)
+
+        assert "Handoff issues:" in output
+        assert "NOW.md" in output
+        assert "Missing required section" in output
+        assert "NEXT.md" in output
+        assert "File is empty" in output
+
+    def test_no_handoff_issues_when_ok(self, tmp_path: Path):
+        run_dir = _make_run_dir(tmp_path, "hi_ok")
+        summary = _make_summary("hi_ok")
+
+        output = format_run_show(summary, run_dir)
+
+        assert "Handoff issues:" not in output
+
+    def test_top_level_error_shown(self, tmp_path: Path):
+        run_dir = _make_run_dir(tmp_path, "err")
+        summary = _make_summary("err", error="Something went wrong during execution")
+
+        output = format_run_show(summary, run_dir)
+
+        assert "Error:" in output
+        assert "Something went wrong during execution" in output
+
+    def test_no_error_when_not_present(self, tmp_path: Path):
+        run_dir = _make_run_dir(tmp_path, "noerr")
+        summary = _make_summary("noerr")
+
+        output = format_run_show(summary, run_dir)
+
+        assert "Error:" not in output
+
+    def test_show_handoff_passed_based_on_status(self, tmp_path: Path):
+        run_dir = _make_run_dir(tmp_path, "hs")
+        summary = _make_summary("hs", handoff={"status": "ok", "issues": []})
+
+        output = format_run_show(summary, run_dir)
+
+        assert "Handoff      : passed" in output
