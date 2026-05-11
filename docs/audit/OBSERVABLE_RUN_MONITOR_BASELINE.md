@@ -289,7 +289,38 @@ if self.guard and not self.guard.passed:
 
 ---
 
-## 11. Known Risk Areas and Likely Files to Touch
+## 11. Stale or Contradictory Docs
+
+This section identifies documentation that does not match current code truth. The baseline uses current implementation behavior, not outdated claims or future PRD intent.
+
+### `docs/CONTROL_LAYER_FINAL_AUDIT.md` — "No GUI, MCP implementation, swarm, or server"
+
+**Stale claim** (lines 29, 79): the CLI is described as "CLI-only" with "no GUI, MCP implementation, swarm, or server."
+
+**Current code truth**:
+- `vibecode/cli.py:533` dispatches `serve` → `vibecode/mcp_server.py:201` (`cmd_serve`) — a full MCP server over stdio.
+- `vibecode/cli.py:539` dispatches `dashboard` → `vibecode/tui_app.py:147` (`VibecodeTUI`) — a Textual-based GUI dashboard.
+- Both are implemented, tested, and wired into the CLI parser.
+
+The `CONTROL_LAYER_FINAL_AUDIT.md` was written before the `serve` and `dashboard` commands were added and has not been updated.
+
+### `docs/audit/PRD_STRUCTURE_AND_ROUTING_REVIEW.md` — guard advisory vs blocking tension
+
+**PRD future intent** (line 33): Task P5.1 is "Make guard behavior advisory by default."
+
+**PRD product semantics** (line 64): "The PRD preserves the product rule that guards are advisory by default."
+
+**Current code truth**: Guard errors are **blocking**, not advisory.
+- `vibecode/guard.py:85` — `GuardResult.passed` is `False` when any error-severity finding exists.
+- `vibecode/run.py:95-107` — a failed guard result maps `RunSummary.overall_status` to `"failure"`.
+- `vibecode/run.py:694-700` — `"failure"` status yields process exit code 1.
+- `vibecode/guard.py:711-716` — standalone `vibecode guard` exits 1 for errors, and `--strict` treats warnings as failures.
+
+This is a **future PRD intent vs current implementation** gap. Until P5.1 is implemented, the audit treats current blocking behavior as the truth. The baseline (section 7) correctly describes the current blocking behavior.
+
+---
+
+## 12. Known Risk Areas and Likely Files to Touch
 
 ### High-risk files (protected or architecturally sensitive)
 
@@ -307,7 +338,6 @@ if self.guard and not self.guard.passed:
 | `vibecode/context/__init__.py` | **LOW** | `cmd_context` — already called by `cmd_run`; no changes needed for a monitor unless it needs to capture context pack content directly. |
 | `vibecode/adapters/opencode.py` | **LOW** | OpenCode adapter — `resolve_opencode_command` and `check_opencode` are command-line readiness checks. A monitor would reuse them as-is. |
 | `vibecode/diff_summary.py` | **LOW** | Diff summary — `diff_summarise` compares pre/post git states. Already called in `cmd_run`. |
-| `vibecode/permissions.py` | **LOW** | Permission profiles — advisory metadata. `PROFILES` dict and `profile_path` are stable. |
 
 ### Key integration points for a monitor
 

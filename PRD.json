@@ -35,7 +35,7 @@
     {
       "title": "P0.3 Fix baseline audit issues if review found any",
       "description": "Read docs/audit/OBSERVABLE_RUN_MONITOR_BASELINE_REVIEW.md.\n\nIf the review contains actionable issues, update docs/audit/OBSERVABLE_RUN_MONITOR_BASELINE.md so it becomes accurate.\nIf the review found no issues, write a short no-op note to:\ndocs/audit/OBSERVABLE_RUN_MONITOR_BASELINE_FIX.md\n\nDo not change runtime behavior in this task.\nRun compile/tests only if source files were touched.",
-      "completed": false,
+      "completed": true,
       "engine": "opencode",
       "model": "deepseek/deepseek-v4-pro",
       "engine_args": [
