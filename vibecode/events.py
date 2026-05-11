@@ -46,6 +46,8 @@ EVENT_GIT_PREFLIGHT = "run.git_preflight"
 EVENT_INDEX_CHECK = "run.index_check"
 #: Guard evaluation event.
 EVENT_GUARD = "run.guard"
+#: Guard finding emitted event (one per finding).
+EVENT_GUARD_FINDING = "run.guard_finding"
 #: Required checks event.
 EVENT_CHECK = "run.check"
 #: Handoff validation event.

@@ -225,7 +225,7 @@
     {
       "title": "P6.1 Improve guard findings into human-readable drift reports",
       "description": "Improve guard/report output so the operator can understand exactly what happened.\n\nGoal:\nGuard reporting must be useful in the Vibecode monitor panel. It cannot be a vague fail/pass blob.\n\nFor each finding, expose or derive:\n- severity,\n- rule_id,\n- category/domain,\n- file path or affected area,\n- concise title,\n- what happened,\n- why it matters,\n- suggested fix,\n- evidence/context,\n- related check/test if known.\n\nRequired outputs:\n- machine-readable guard_report.json in the run session folder,\n- human-readable guard_report.md in the run session folder,\n- GuardFindingEmitted events for individual findings or grouped findings,\n- GuardCompleted event with counts by severity/category.\n\nUI/report style:\n- Group findings by severity and category.\n- Keep messages concise but actionable.\n- Include exact paths.\n- Do not bury the operator in raw JSON unless they ask for detail.\n\nTests:\n- report generated when findings exist,\n- report generated or skipped clearly when no findings exist,\n- grouped counts are correct,\n- event data includes key fields.\n\nRun compile and affected tests.",
-      "completed": false,
+      "completed": true,
       "engine": "copilot",
       "model": "claude-sonnet-4.6",
       "engine_args": [

@@ -47,9 +47,35 @@ README_ALLOWED_GENERATED_BLOCK_MARKERS: tuple[tuple[str, str], ...] = (
 # is_generated_runtime_path, is_source_path, is_test_path, is_documentation_path.
 
 
+_RULE_CATEGORY: dict[str, str] = {
+    "generated-runtime-files": "generated-files",
+    "protected-path-generated": "generated-files",
+    "readme-manual-only": "documentation",
+    "architecture-truth-record": "architecture",
+    "source-test-change-balance": "testing",
+    "protected-path-scope": "protected-paths",
+    "protected-path-requirements": "protected-paths",
+}
+
+
 @dataclass(frozen=True)
 class GuardFinding:
-    """One hard guard finding for a changed path."""
+    """One guard finding for a changed path.
+
+    Fields
+    ------
+    rule_id:        Machine-readable rule identifier.
+    path:           Affected file path (POSIX-normalised).
+    severity:       ``"error"`` or ``"warning"``.
+    message:        What happened — a human-readable summary.
+    rule:           The rule text that was violated.
+    recommended_fix: Concrete suggested remediation.
+    required_tests: Related test paths that should be run.
+    category:       Domain/category (e.g. "generated-files", "testing").
+    title:          Concise one-line finding title.
+    why_it_matters: Why this finding is important.
+    evidence:       Supporting context or evidence string.
+    """
 
     rule_id: str
     path: str
@@ -58,14 +84,29 @@ class GuardFinding:
     rule: str = ""
     recommended_fix: str = ""
     required_tests: tuple[str, ...] = ()
+    category: str = ""
+    title: str = ""
+    why_it_matters: str = ""
+    evidence: str = ""
+
+    @property
+    def resolved_category(self) -> str:
+        """Return category, deriving it from rule_id if not set."""
+        return self.category or _RULE_CATEGORY.get(self.rule_id, "general")
 
     def as_dict(self) -> dict:
         data = {
             "rule_id": self.rule_id,
             "path": self.path,
             "severity": self.severity,
+            "category": self.resolved_category,
+            "title": self.title or self.message,
             "message": self.message,
         }
+        if self.why_it_matters:
+            data["why_it_matters"] = self.why_it_matters
+        if self.evidence:
+            data["evidence"] = self.evidence
         if self.rule:
             data["rule"] = self.rule
         if self.recommended_fix:
@@ -85,6 +126,21 @@ class GuardResult:
     def passed(self) -> bool:
         return all(finding.severity != "error" for finding in self.findings)
 
+    def counts_by_severity(self) -> dict[str, int]:
+        """Return a mapping of severity → count."""
+        counts: dict[str, int] = {}
+        for f in self.findings:
+            counts[f.severity] = counts.get(f.severity, 0) + 1
+        return counts
+
+    def counts_by_category(self) -> dict[str, int]:
+        """Return a mapping of category → count."""
+        counts: dict[str, int] = {}
+        for f in self.findings:
+            cat = f.resolved_category
+            counts[cat] = counts.get(cat, 0) + 1
+        return counts
+
     def as_dict(self, root: Path | None = None) -> dict:
         data: dict = {
             "$schema": "vibecode/guard-result/v1",
@@ -92,6 +148,8 @@ class GuardResult:
             "passed": self.passed,
             "errors": sum(1 for f in self.findings if f.severity == "error"),
             "warnings": sum(1 for f in self.findings if f.severity == "warning"),
+            "counts_by_severity": self.counts_by_severity(),
+            "counts_by_category": self.counts_by_category(),
             "findings": [f.as_dict() for f in self.findings],
         }
         if root is not None:
@@ -193,6 +251,97 @@ def write_guard_result(
     return path
 
 
+def write_guard_report_md(
+    result: GuardResult,
+    dest: Path,
+    *,
+    session_id: str = "",
+    root: Path | None = None,
+) -> Path:
+    """Write a human-readable Markdown guard report to *dest*.
+
+    Findings are grouped by severity (errors first, then warnings) and then
+    by category within each severity group.  If there are no findings, a
+    minimal "passed" report is written so the operator knows the check ran.
+    """
+    lines: list[str] = []
+    now = datetime.now(tz=timezone.utc).isoformat()
+    root_str = root.as_posix() if root else ""
+
+    lines.append("# Guard Report\n")
+    if session_id:
+        lines.append(f"**Session**: `{session_id}`  ")
+    lines.append(f"**Generated**: {now}  ")
+    if root_str:
+        lines.append(f"**Repository**: `{root_str}`  ")
+    lines.append("")
+
+    errors = [f for f in result.findings if f.severity == "error"]
+    warnings = [f for f in result.findings if f.severity == "warning"]
+
+    if result.passed:
+        lines.append("## ✅ Result: PASSED\n")
+    else:
+        lines.append("## ❌ Result: FAILED\n")
+
+    lines.append("## Summary\n")
+    lines.append(f"- **Errors**: {len(errors)}")
+    lines.append(f"- **Warnings**: {len(warnings)}")
+    lines.append(f"- **Total findings**: {len(result.findings)}")
+
+    if result.counts_by_category():
+        lines.append("")
+        lines.append("**Counts by category:**")
+        for cat, count in sorted(result.counts_by_category().items()):
+            lines.append(f"- `{cat}`: {count}")
+
+    if not result.findings:
+        lines.append("")
+        lines.append("No findings. Guard check passed cleanly.")
+        dest.parent.mkdir(parents=True, exist_ok=True)
+        dest.write_text("\n".join(lines) + "\n", encoding="utf-8")
+        return dest
+
+    for severity_label, group in (("Errors", errors), ("Warnings", warnings)):
+        if not group:
+            continue
+        lines.append("")
+        icon = "🔴" if severity_label == "Errors" else "🟡"
+        lines.append(f"## {icon} {severity_label} ({len(group)})\n")
+
+        by_category: dict[str, list[GuardFinding]] = {}
+        for finding in group:
+            cat = finding.resolved_category
+            by_category.setdefault(cat, []).append(finding)
+
+        for category, findings in sorted(by_category.items()):
+            lines.append(f"### Category: `{category}`\n")
+            for finding in findings:
+                title = finding.title or finding.message
+                lines.append(f"#### `{finding.rule_id}` — {title}\n")
+                lines.append(f"**Path**: `{finding.path}`  ")
+                lines.append(f"**Severity**: {finding.severity}  ")
+                lines.append(f"**Category**: `{finding.resolved_category}`\n")
+                if finding.message and finding.message != title:
+                    lines.append(f"**What happened**: {finding.message}\n")
+                if finding.why_it_matters:
+                    lines.append(f"**Why it matters**: {finding.why_it_matters}\n")
+                if finding.recommended_fix:
+                    lines.append(f"**Suggested fix**: {finding.recommended_fix}\n")
+                if finding.evidence and finding.evidence != finding.path:
+                    lines.append(f"**Evidence**: `{finding.evidence}`\n")
+                if finding.rule:
+                    lines.append(f"**Rule**: {finding.rule}\n")
+                if finding.required_tests:
+                    tests_fmt = ", ".join(f"`{t}`" for t in finding.required_tests)
+                    lines.append(f"**Related tests**: {tests_fmt}\n")
+                lines.append("---\n")
+
+    dest.parent.mkdir(parents=True, exist_ok=True)
+    dest.write_text("\n".join(lines) + "\n", encoding="utf-8")
+    return dest
+
+
 def check_source_test_change_balance(
     changed_paths: tuple[str, ...] | list[str],
     *,
@@ -222,10 +371,17 @@ def check_source_test_change_balance(
                     rule_id=SOURCE_TEST_BALANCE_RULE_ID,
                     path=_summarise_paths(test_paths),
                     severity="warning",
+                    title="Tests changed without corresponding source changes",
+                    category="testing",
                     message=(
                         "Tests changed without source changes. If this is test-only "
                         "work, make that explicit in the task."
                     ),
+                    why_it_matters=(
+                        "Orphaned test changes may indicate missing implementation or "
+                        "accidental test additions that can mislead CI."
+                    ),
+                    evidence=_summarise_paths(test_paths),
                     rule=SOURCE_TEST_BALANCE_MESSAGE,
                     recommended_fix=(
                         "Include the related source change, or note that this is a "
@@ -263,10 +419,17 @@ def check_source_test_change_balance(
                 rule_id=SOURCE_TEST_BALANCE_RULE_ID,
                 path=_summarise_paths(tuple(unmatched_sources)),
                 severity="warning",
+                title="Source changed without corresponding test changes",
+                category="testing",
                 message=(
                     "Source changed without corresponding test changes: "
                     f"{_format_path_list(tuple(unmatched_sources)[:3])}."
                 ),
+                why_it_matters=(
+                    "Untested source changes increase regression risk and make "
+                    "future refactoring harder to validate."
+                ),
+                evidence=_summarise_paths(tuple(unmatched_sources)),
                 rule=SOURCE_TEST_BALANCE_MESSAGE,
                 recommended_fix=fix,
                 required_tests=tuple(suggested),
@@ -336,7 +499,14 @@ def check_generated_runtime_changes(
                 rule_id=GENERATED_RUNTIME_RULE_ID,
                 path=path,
                 severity="error",
+                title="Generated/runtime file manually edited",
+                category="generated-files",
                 message=f"{GENERATED_RUNTIME_MESSAGE} Offending path: {path}",
+                why_it_matters=(
+                    "Manual edits to generated files are overwritten on the next "
+                    "regeneration and may introduce silent inconsistencies."
+                ),
+                evidence=path,
                 rule=GENERATED_RUNTIME_MESSAGE,
                 recommended_fix=(
                     "Regenerate this artifact with the owning command and do not "
@@ -371,11 +541,18 @@ def check_readme_changes(
                 rule_id=README_RULE_ID,
                 path=path,
                 severity="error",
+                title="README.md changed outside a docs task",
+                category="documentation",
                 message=(
                     "README.md changed outside an explicit README/docs task "
                     f"or allowed generated block markers. {README_MANUAL_ONLY_MESSAGE} "
                     f"Offending path: {path}."
                 ),
+                why_it_matters=(
+                    "README.md is the primary public-facing document. Unscoped "
+                    "changes risk inconsistent or unreviewed documentation updates."
+                ),
+                evidence=path,
                 rule=(
                     "Root README changes are allowed only for README/docs tasks "
                     "or inside future generated blocks."
@@ -414,9 +591,17 @@ def check_architecture_truth_recorded(
                 rule_id=ARCHITECTURE_TRUTH_RECORD_RULE_ID,
                 path=path,
                 severity="error",
+                title="Architecture truth changed without handoff record",
+                category="architecture",
                 message=(
                     f"{ARCHITECTURE_TRUTH_RECORD_MESSAGE} Offending path: {path}"
                 ),
+                why_it_matters=(
+                    "Architecture docs are the canonical source of truth. "
+                    "Changes without a handoff record leave the team unaware of "
+                    "structural decisions and make onboarding harder."
+                ),
+                evidence=path,
                 rule=(
                     "Changes to .vibecode/architecture/*.md must be recorded in "
                     ".vibecode/handoff/NOW.md or .vibecode/history/*.md."
@@ -437,7 +622,14 @@ def _generated_policy_finding(path: str, rule: ProtectedPathRule) -> GuardFindin
         rule_id="protected-path-generated",
         path=path,
         severity="error",
+        title="Protected generated path manually edited",
+        category="generated-files",
         message=f"Generated/runtime protected path changed: {path}",
+        why_it_matters=(
+            "This path is both protected and generated. Manual edits will be "
+            "silently overwritten and may corrupt tooling state."
+        ),
+        evidence=path,
         rule=rule.rule,
         recommended_fix=(
             "Regenerate this artifact with the owning Vibecode command; do not "
@@ -455,7 +647,14 @@ def _scope_required_finding(path: str, rule: ProtectedPathRule) -> GuardFinding:
         rule_id="protected-path-scope",
         path=path,
         severity="error",
+        title="Protected path changed without explicit task scope",
+        category="protected-paths",
         message=f"Protected path changed without explicit task scope: {path}",
+        why_it_matters=(
+            "Protected paths require explicit scoping to prevent accidental or "
+            "unreviewed changes to critical files."
+        ),
+        evidence=path,
         rule=rule.rule,
         recommended_fix=fix,
         required_tests=rule.required_tests,
@@ -478,7 +677,14 @@ def _protected_path_note(
         rule_id="protected-path-requirements",
         path=path,
         severity="warning",
+        title="Protected path requirements apply",
+        category="protected-paths",
         message=f"Protected path requirements apply: {path}",
+        why_it_matters=(
+            "Skipping required tests or handoff notes for protected paths leaves "
+            "critical changes unverified and undocumented."
+        ),
+        evidence=path,
         rule=rule.rule,
         recommended_fix=" ".join(fixes),
         required_tests=rule.required_tests,

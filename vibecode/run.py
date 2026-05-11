@@ -64,13 +64,14 @@ from vibecode.events import (
     EVENT_CONTEXT,
     EVENT_GIT_PREFLIGHT,
     EVENT_GUARD,
+    EVENT_GUARD_FINDING,
     EVENT_HANDOFF,
     EVENT_INDEX_CHECK,
     EVENT_PROMPT,
     EVENT_RUN_LIFECYCLE,
     EVENT_SUMMARY,
 )
-from vibecode.guard import GuardResult, _load_test_map, evaluate_project_guard, write_guard_result
+from vibecode.guard import GuardResult, _load_test_map, evaluate_project_guard, write_guard_result, write_guard_report_md
 from vibecode.git_state import GitState, current_git_commit, inspect_git_state
 from vibecode.handoff import HandoffResult, validate_handoff_files
 from vibecode.indexer import check_inventory_health, cmd_index, compute_current_file_set_fingerprint
@@ -828,13 +829,40 @@ class RunController:
                 data={"phase": "completed", "passed": True, "findings": 0},
             )
         else:
+            # Emit one event per finding for the monitor panel.
+            for finding in guard_result.findings:
+                self._emit(
+                    EVENT_GUARD_FINDING,
+                    EventLevel.ERROR if finding.severity == "error" else EventLevel.WARNING,
+                    finding.title or finding.message,
+                    data={
+                        "rule_id": finding.rule_id,
+                        "severity": finding.severity,
+                        "category": finding.resolved_category,
+                        "path": finding.path,
+                        "title": finding.title or finding.message,
+                        "message": finding.message,
+                        "why_it_matters": finding.why_it_matters,
+                        "recommended_fix": finding.recommended_fix,
+                        "evidence": finding.evidence,
+                        "required_tests": list(finding.required_tests),
+                    },
+                )
+
             guard_passed = guard_result.passed
             self._emit(
                 EVENT_GUARD,
                 EventLevel.INFO if guard_passed else EventLevel.WARNING,
                 "Guard completed",
-                data={"phase": "completed", "passed": guard_passed,
-                      "findings": len(guard_result.findings)},
+                data={
+                    "phase": "completed",
+                    "passed": guard_passed,
+                    "findings": len(guard_result.findings),
+                    "errors": sum(1 for f in guard_result.findings if f.severity == "error"),
+                    "warnings": sum(1 for f in guard_result.findings if f.severity == "warning"),
+                    "counts_by_severity": guard_result.counts_by_severity(),
+                    "counts_by_category": guard_result.counts_by_category(),
+                },
             )
 
         # Required checks
@@ -912,6 +940,15 @@ class RunController:
                 json.dumps(guard_result.as_dict(root=root), indent=2, ensure_ascii=False) + "\n",
                 encoding="utf-8",
             )
+            try:
+                write_guard_report_md(
+                    guard_result,
+                    session.guard_report_md,
+                    session_id=self.session_id,
+                    root=root,
+                )
+            except Exception:
+                pass
         if check_result:
             session.checks_report_json.write_text(
                 json.dumps(check_result.as_dict(), indent=2, ensure_ascii=False) + "\n",

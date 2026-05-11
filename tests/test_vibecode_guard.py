@@ -430,6 +430,8 @@ def test_guard_finding_as_dict_minimal():
         "rule_id": "test-rule",
         "path": "foo.py",
         "severity": "error",
+        "category": "general",
+        "title": "something broke",
         "message": "something broke",
     }
 
@@ -449,6 +451,8 @@ def test_guard_finding_as_dict_with_optional_fields():
         "rule_id": "test-rule",
         "path": "foo.py",
         "severity": "warning",
+        "category": "general",
+        "title": "something odd",
         "message": "something odd",
         "rule": "Test rule description.",
         "recommended_fix": "Fix it.",
