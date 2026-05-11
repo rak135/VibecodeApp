@@ -155,7 +155,7 @@
     {
       "title": "P4.1 Add streaming agent process output",
       "description": "Change external agent execution from purely batch-style capture to streaming-capable execution.\n\nGoal:\nWhen OpenCode runs, VibecodeApp should be able to stream agent stdout/stderr events live while still preserving final logs and exit code.\n\nRequired behavior:\n- Add a streaming process runner abstraction if none exists.\n- Use subprocess.Popen or equivalent to read stdout/stderr incrementally.\n- Emit AgentStdout events for stdout lines/chunks.\n- Emit AgentStderr events for stderr lines/chunks.\n- Write full stdout to .vibecode/runs/<session_id>/agent_stdout.log.\n- Write full stderr to .vibecode/runs/<session_id>/agent_stderr.log.\n- Preserve final exit code.\n- Preserve existing batch behavior for non-monitor CLI if needed, but prefer one implementation path.\n- Handle Windows safely.\n- Avoid deadlock when both stdout and stderr produce output.\n- Do not attempt full interactive PTY/ConPTY support in this task. This is streaming output MVP, not an embedded terminal.\n\nTests:\n- fake process that prints stdout and exits 0,\n- fake process that prints stderr and exits nonzero,\n- mixed stdout/stderr if practical,\n- verify events and log files.\n\nRun compile and affected tests.",
-      "completed": false,
+      "completed": true,
       "engine": "copilot",
       "model": "claude-sonnet-4.6",
       "engine_args": [

@@ -42,7 +42,6 @@ from __future__ import annotations
 
 import json
 import os
-import subprocess
 import sys
 from dataclasses import dataclass
 from datetime import datetime, timezone
@@ -76,6 +75,7 @@ from vibecode.git_state import GitState, current_git_commit, inspect_git_state
 from vibecode.handoff import HandoffResult, validate_handoff_files
 from vibecode.indexer import check_inventory_health, cmd_index, compute_current_file_set_fingerprint
 from vibecode.permissions import PROFILES, profile_path
+from vibecode.process_runner import run_streaming
 from vibecode.run_plan import build_run_plan, _classify_dirty_paths
 from vibecode.session_log import RunSession
 
@@ -728,35 +728,34 @@ class RunController:
             # by the user via OPENCODE_COMMAND (or the default 'opencode').
             # Windows .cmd/.bat wrappers and compound commands require shell
             # execution.  See the module-level trust-model documentation.
-            result = subprocess.run(
+            # run_streaming uses Popen + two reader threads so that stdout and
+            # stderr are drained concurrently (deadlock-safe on Windows) and
+            # live EVENT_AGENT_PROCESS events are emitted for each line.
+            proc_result = run_streaming(
                 command,
-                input=prompt_content,
-                capture_output=True,
-                text=True,
-                timeout=300,
-                cwd=str(root),
-                shell=True,
+                stdin_content=prompt_content,
+                session_id=self.session_id,
+                cwd=root,
+                sink=self.sink,
+                stdout_log=session.agent_stdout_log,
+                stderr_log=session.agent_stderr_log,
+                timeout=300.0,
             )
-            exit_code = result.returncode
-            stdout = result.stdout
-            stderr = result.stderr
-        except subprocess.TimeoutExpired:
-            exit_code = -1
-            stdout = ""
-            stderr = "Command timed out after 300 seconds."
+            exit_code = proc_result.exit_code
+            stdout = proc_result.stdout
+            stderr = proc_result.stderr
         except OSError as exc:
             exit_code = -1
             stdout = ""
             stderr = f"Failed to execute {command}: {exc}"
+            session.ensure_dir()
+            session.agent_stdout_log.write_text("", encoding="utf-8")
+            session.agent_stderr_log.write_text(stderr, encoding="utf-8")
 
         agent_status = "success" if exit_code == 0 else "failure"
         agent_level = EventLevel.INFO if exit_code == 0 else EventLevel.ERROR
         self._emit(EVENT_AGENT_PROCESS, agent_level, f"Agent finished (exit_code={exit_code})",
                    data={"phase": "finished", "exit_code": exit_code, "status": agent_status})
-
-        session.ensure_dir()
-        session.agent_stdout_log.write_text(stdout, encoding="utf-8")
-        session.agent_stderr_log.write_text(stderr, encoding="utf-8")
 
         if stdout:
             print(stdout, end="")
