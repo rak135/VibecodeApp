@@ -308,7 +308,7 @@
     {
       "title": "P8.2 Review MCP observability",
       "description": "Review MCP observability.\n\nWrite review output to:\ndocs/audit/OBSERVABLE_RUN_MONITOR_P8_MCP_OBSERVABILITY_REVIEW.md\n\nCheck:\n- Tool calls and returns are visible.\n- Sensitive or huge result payloads are not dumped into the monitor.\n- MCP session correlation is honest; if correlation is best-effort, document it.\n- Non-MCP CLI usage still works if MCP optional dependencies are absent.\n- Tests cover success and failure logging.\n\nDo not modify implementation files. Only write the review document.",
-      "completed": false,
+      "completed": true,
       "engine": "codex",
       "model": "gpt-5.5",
       "engine_args": [
