@@ -60,6 +60,7 @@ from vibecode.handoff import HandoffResult, validate_handoff_files
 from vibecode.indexer import check_inventory_health, cmd_index, compute_current_file_set_fingerprint
 from vibecode.permissions import PROFILES, profile_path
 from vibecode.run_plan import build_run_plan, _classify_dirty_paths
+from vibecode.session_log import RunSession
 
 
 def _get_opencode_command(config: Any | None, env: dict[str, str]) -> str | None:
@@ -139,7 +140,7 @@ class RunSummary:
 
 
 def _write_run_metadata(
-    vibecode_dir: Path,
+    session_dir: Path,
     session_id: str,
     plan: Any,
     command: str | None,
@@ -148,9 +149,8 @@ def _write_run_metadata(
     stderr: str,
     error: str | None = None,
 ) -> Path:
-    """Write a JSON run record under .vibecode/runs/<session_id>.json."""
-    runs_dir = vibecode_dir / "runs"
-    runs_dir.mkdir(parents=True, exist_ok=True)
+    """Write a JSON run record under .vibecode/runs/<session_id>/metadata.json."""
+    session_dir.mkdir(parents=True, exist_ok=True)
 
     record = {
         "$schema": "vibecode/run/v1",
@@ -177,7 +177,7 @@ def _write_run_metadata(
     if error:
         record["error"] = error
 
-    out_path = runs_dir / f"{session_id}.json"
+    out_path = session_dir / "metadata.json"
     out_path.write_text(json.dumps(record, indent=2, ensure_ascii=False) + "\n", encoding="utf-8")
     return out_path
 
@@ -370,6 +370,7 @@ def cmd_run(args) -> int:
     root: Path = repo_arg
     vibecode_dir = root / ".vibecode"
     session_id = datetime.now(tz=timezone.utc).strftime("%Y%m%dT%H%M%S%fZ")
+    session = RunSession(root, session_id)
 
     if not (vibecode_dir / "project.yaml").exists():
         print("Error: no .vibecode/project.yaml found. Run 'vibecode init' first.", file=sys.stderr)
@@ -497,6 +498,9 @@ def cmd_run(args) -> int:
         print("Error: context pack was not written.", file=sys.stderr)
         return 1
 
+    session.snapshot_prompt()
+    session.snapshot_context_pack()
+
     # ------------------------------------------------------------------
     # 4. Resolve the platform command
     # ------------------------------------------------------------------
@@ -515,7 +519,7 @@ def cmd_run(args) -> int:
         )
         # Write metadata even on command-not-found so callers can inspect it.
         _write_run_metadata(
-            vibecode_dir, session_id,
+            session.run_dir, session_id,
             build_run_plan(root, task=task, platform=platform, profile_name=profile_name, allow_dirty=allow_dirty),
             command=None, exit_code=-1, stdout="", stderr="OpenCode command not found.",
         )
@@ -526,7 +530,7 @@ def cmd_run(args) -> int:
     if not status:
         print(f"Error: OpenCode check failed — {status.message}", file=sys.stderr)
         _write_run_metadata(
-            vibecode_dir, session_id,
+            session.run_dir, session_id,
             build_run_plan(root, task=task, platform=platform, profile_name=profile_name, allow_dirty=allow_dirty),
             command=command, exit_code=-1, stdout="", stderr=status.message,
         )
@@ -543,7 +547,7 @@ def cmd_run(args) -> int:
         for e in run_plan.preflight_errors:
             print(f"Error: [{e.level}] {e.message}", file=sys.stderr)
         _write_run_metadata(
-            vibecode_dir, session_id, run_plan,
+            session.run_dir, session_id, run_plan,
             command=command, exit_code=-1, stdout="", stderr="Preflight errors detected.",
             error="Preflight errors: " + "; ".join(e.message for e in run_plan.preflight_errors),
         )
@@ -589,6 +593,10 @@ def cmd_run(args) -> int:
 
     agent_status = "success" if exit_code == 0 else "failure"
 
+    session.ensure_dir()
+    session.agent_stdout_log.write_text(stdout, encoding="utf-8")
+    session.agent_stderr_log.write_text(stderr, encoding="utf-8")
+
     # ------------------------------------------------------------------
     # 6. Show agent results
     # ------------------------------------------------------------------
@@ -616,6 +624,23 @@ def cmd_run(args) -> int:
     guard_result, check_result, handoff_result = _run_post_checks(
         root, vibecode_dir, agent_git_state, session_id, task=task,
     )
+
+    session.ensure_dir()
+    if guard_result:
+        session.guard_report_json.write_text(
+            json.dumps(guard_result.as_dict(root=root), indent=2, ensure_ascii=False) + "\n",
+            encoding="utf-8",
+        )
+    if check_result:
+        session.checks_report_json.write_text(
+            json.dumps(check_result.as_dict(), indent=2, ensure_ascii=False) + "\n",
+            encoding="utf-8",
+        )
+    if handoff_result:
+        session.handoff_report_json.write_text(
+            json.dumps(handoff_result.as_dict(), indent=2, ensure_ascii=False) + "\n",
+            encoding="utf-8",
+        )
 
     # -------------------------------------------------------------------------
     # 7b. Diff summary — compare agent baseline and post-run git state
@@ -648,9 +673,9 @@ def cmd_run(args) -> int:
         diff=diff_summary,
     )
 
-    # Write legacy metadata (backward-compatible) and new nested summary.
+    # Write session metadata and nested summary.
     _write_run_metadata(
-        vibecode_dir, session_id, run_plan,
+        session.run_dir, session_id, run_plan,
         command=command, exit_code=exit_code,
         stdout=stdout, stderr=stderr,
     )

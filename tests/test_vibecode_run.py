@@ -226,7 +226,7 @@ class TestWriteRunMetadata:
             commands=(),
         )
         path = _write_run_metadata(
-            vibecode_dir, "test-session", plan,
+            vibecode_dir / "runs" / "test-session", "test-session", plan,
             command="fake-opencode", exit_code=0, stdout="OK", stderr="",
         )
         assert path.exists()
@@ -253,7 +253,7 @@ class TestWriteRunMetadata:
             commands=(),
         )
         path = _write_run_metadata(
-            vibecode_dir, "sess2", plan,
+            vibecode_dir / "runs" / "sess2", "sess2", plan,
             command=None, exit_code=-1, stdout="", stderr="",
             error="OpenCode command not found.",
         )
@@ -296,11 +296,11 @@ class TestCmdRunEndToEnd:
         rc = main(["run", str(self.repo), "--task", "test task", "--no-index"])
 
         assert rc == 0
-        # Verify metadata was written.
+        # Verify metadata was written to session directory.
         runs_dir = self.repo / ".vibecode" / "runs"
-        sessions = list(runs_dir.glob("*.json"))
-        assert len(sessions) == 1
-        data = json.loads(sessions[0].read_text(encoding="utf-8"))
+        meta_files = list(runs_dir.glob("*/metadata.json"))
+        assert len(meta_files) == 1
+        data = json.loads(meta_files[0].read_text(encoding="utf-8"))
         assert data["exit_code"] == 0
         assert data["task"] == "test task"
         assert data["platform"] == "opencode"
@@ -313,9 +313,9 @@ class TestCmdRunEndToEnd:
 
         assert rc == 1
         runs_dir = self.repo / ".vibecode" / "runs"
-        sessions = list(runs_dir.glob("*.json"))
-        assert len(sessions) == 1
-        data = json.loads(sessions[0].read_text(encoding="utf-8"))
+        meta_files = list(runs_dir.glob("*/metadata.json"))
+        assert len(meta_files) == 1
+        data = json.loads(meta_files[0].read_text(encoding="utf-8"))
         assert data["exit_code"] == 1
         assert "something broke" in data["stderr"]
 
@@ -369,14 +369,41 @@ class TestCmdRunEndToEnd:
         assert "OpenCode" in err
         assert "not found" in err.lower() or "INSTALL" in err
 
-        # Metadata should still record the failure.
+        # Metadata should still record the failure under session directory.
         runs_dir = self.repo / ".vibecode" / "runs"
-        sessions = list(runs_dir.glob("*.json"))
-        assert len(sessions) >= 1
-        data = json.loads(sessions[0].read_text(encoding="utf-8"))
+        meta_files = list(runs_dir.glob("*/metadata.json"))
+        assert len(meta_files) >= 1
+        data = json.loads(meta_files[0].read_text(encoding="utf-8"))
         assert data["exit_code"] != 0
         # When command is not found, command field should be None.
         assert data["command"] is None or data.get("error") is not None
+
+    def test_run_snapshots_prompt_and_context_pack(self):
+        """After a successful run, both current/ and run session snapshots exist."""
+        self._make_fake_opencode(exit_code=0, stdout="All done.\n")
+
+        main(["run", str(self.repo), "--task", "snapshot test", "--no-index"])
+
+        # Current behavior preserved.
+        current_dir = self.repo / ".vibecode" / "current"
+        assert current_dir / "context_pack.md" in current_dir.glob("context_pack.md")
+        assert current_dir / "opencode_prompt.md" in current_dir.glob("opencode_prompt.md")
+
+        # Session snapshots exist.
+        runs_dir = self.repo / ".vibecode" / "runs"
+        sessions = list(runs_dir.glob("*/"))
+        assert len(sessions) >= 1
+        session_dir = sessions[0]
+        context_snapshot = session_dir / "context_pack.md"
+        prompt_snapshot = session_dir / "opencode_prompt.md"
+        assert context_snapshot.exists(), f"Missing context_pack.md snapshot in {session_dir}"
+        assert prompt_snapshot.exists(), f"Missing opencode_prompt.md snapshot in {session_dir}"
+
+        # Snapshots match the current files.
+        current_context = (current_dir / "context_pack.md").read_text(encoding="utf-8")
+        assert context_snapshot.read_text(encoding="utf-8") == current_context
+        current_prompt = (current_dir / "opencode_prompt.md").read_text(encoding="utf-8")
+        assert prompt_snapshot.read_text(encoding="utf-8") == current_prompt
 
 
 # ---------------------------------------------------------------------------

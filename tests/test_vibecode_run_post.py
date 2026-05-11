@@ -916,10 +916,10 @@ class TestCmdRunWithPostChecks:
         rc = main(["run", str(self.repo), "--task", "test task"])
 
         assert rc == 0
-        # Verify run metadata exists
+        # Verify run metadata exists under session directory.
         runs_dir = self.repo / ".vibecode" / "runs"
-        sessions = list(runs_dir.glob("*.json"))
-        assert len(sessions) >= 1
+        meta_files = list(runs_dir.glob("*/metadata.json"))
+        assert len(meta_files) >= 1
 
         # Verify summary exists
         summaries = list(runs_dir.glob("*/summary.json"))

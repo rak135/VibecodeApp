@@ -109,7 +109,7 @@
     {
       "title": "P2.3 Apply session artifact review fixes",
       "description": "Read docs/audit/OBSERVABLE_RUN_MONITOR_P2_SESSION_ARTIFACTS_REVIEW.md.\n\nApply only grounded fixes. If no fixes are needed, write:\ndocs/audit/OBSERVABLE_RUN_MONITOR_P2_SESSION_ARTIFACTS_FIX.md\n\nRun compile and affected tests.",
-      "completed": false,
+      "completed": true,
       "engine": "opencode",
       "model": "deepseek/deepseek-v4-pro",
       "engine_args": [

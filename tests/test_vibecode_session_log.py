@@ -7,7 +7,7 @@ from pathlib import Path
 
 import pytest
 
-from vibecode.events import EventLevel, JsonlEventSink, VibecodeEvent, create_event
+from vibecode.events import EventLevel, JsonlEventSink, create_event
 from vibecode.session_log import RunSession
 
 
