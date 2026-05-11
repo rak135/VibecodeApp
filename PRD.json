@@ -365,7 +365,7 @@
     {
       "title": "P10.1 Add run replay/show command",
       "description": "Add a small command to inspect a previous observable run from its artifacts.\n\nGoal:\nBecause events are saved to events.jsonl, the operator should be able to review a run after it finishes.\n\nPreferred command examples:\n- vibecode show-run <session_id>\n- vibecode runs list\nor use the existing CLI conventions if different.\n\nRequired behavior:\n- List recent run session ids if implementing list.\n- Show summary for a selected run:\n  - task,\n  - platform/model,\n  - start/end,\n  - agent exit code,\n  - guard counts,\n  - checks status,\n  - artifact paths.\n- Optionally replay event messages in chronological order.\n- Do not require rerunning the agent.\n- Handle missing/corrupt events.jsonl gracefully.\n\nTests:\n- parse events.jsonl,\n- show summary from artifacts,\n- missing run id error is clear.\n\nRun compile and affected tests.",
-      "completed": false,
+      "completed": true,
       "engine": "copilot",
       "model": "claude-sonnet-4.6",
       "engine_args": [

@@ -452,6 +452,47 @@ def create_parser() -> argparse.ArgumentParser:
         help="Overwrite AGENTS.md even if it is not Vibecode-managed.",
     )
 
+    # runs
+    runs_parser = subparsers.add_parser(
+        "runs",
+        help="Inspect previous observable run sessions.",
+        description=(
+            "Inspect run sessions recorded under .vibecode/runs/.\n\n"
+            "Sub-commands:\n"
+            "  list [--repo REPO]                    — list recent run session IDs\n"
+            "  show <session_id> [--repo REPO]        — show summary for a run\n"
+            "                   [--events]            — also replay events in order\n\n"
+            "Each run directory contains: summary.json, events.jsonl, guard_report.*,\n"
+            "checks_report.json, handoff_report.*, agent_stdout.log, agent_stderr.log."
+        ),
+    )
+    runs_sub = runs_parser.add_subparsers(dest="runs_subcommand", metavar="SUBCOMMAND")
+
+    # runs list
+    runs_list_parser = runs_sub.add_parser("list", help="List recent run session IDs.")
+    runs_list_parser.add_argument(
+        "--repo",
+        default=None,
+        help="Repository root directory (default: active project from registry).",
+    )
+
+    # runs show
+    runs_show_parser = runs_sub.add_parser(
+        "show", help="Show summary for a specific run session."
+    )
+    runs_show_parser.add_argument("session_id", help="Run session ID to inspect.")
+    runs_show_parser.add_argument(
+        "--repo",
+        default=None,
+        help="Repository root directory (default: active project from registry).",
+    )
+    runs_show_parser.add_argument(
+        "--events",
+        action="store_true",
+        default=False,
+        help="Replay events from events.jsonl in chronological order.",
+    )
+
     return parser
 
 
@@ -632,6 +673,10 @@ def _dispatch(args, parser) -> int:
         _require_root_exists(args.repo_root)
         from vibecode.context.agents_export import cmd_export_agents
         return cmd_export_agents(args)
+
+    if args.command == "runs":
+        from vibecode.show_run import cmd_runs
+        return cmd_runs(args)
 
     if args.command == "project":
         from vibecode.project_cli import cmd_project
