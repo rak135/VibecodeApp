@@ -179,7 +179,7 @@
     {
       "title": "P4.3 Apply streaming agent review fixes",
       "description": "Read docs/audit/OBSERVABLE_RUN_MONITOR_P4_STREAMING_AGENT_REVIEW.md.\n\nApply only actionable fixes.\nIf no fixes are needed, write:\ndocs/audit/OBSERVABLE_RUN_MONITOR_P4_STREAMING_AGENT_FIX.md\n\nRun compile and affected tests.",
-      "completed": false,
+      "completed": true,
       "engine": "opencode",
       "model": "deepseek/deepseek-v4-pro",
       "engine_args": [

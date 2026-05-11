@@ -12,8 +12,6 @@ from __future__ import annotations
 import sys
 from pathlib import Path
 
-import pytest
-
 from vibecode.events import EVENT_AGENT_PROCESS, InMemoryEventSink
 from vibecode.process_runner import ProcessResult, run_streaming
 
