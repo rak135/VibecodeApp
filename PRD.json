@@ -168,7 +168,7 @@
     {
       "title": "P4.2 Review streaming agent output",
       "description": "Review the streaming process implementation.\n\nWrite review output to:\ndocs/audit/OBSERVABLE_RUN_MONITOR_P4_STREAMING_AGENT_REVIEW.md\n\nCheck:\n- No stdout/stderr deadlock risk.\n- Windows compatibility was considered.\n- Exit code truth is preserved.\n- Output is both emitted as events and saved as logs.\n- Tests do not depend on real OpenCode.\n- The implementation does not pretend to support full interactive terminal if it only supports stream capture.\n\nDo not modify implementation files. Only write the review document.",
-      "completed": false,
+      "completed": true,
       "engine": "codex",
       "model": "gpt-5.5",
       "engine_args": [
