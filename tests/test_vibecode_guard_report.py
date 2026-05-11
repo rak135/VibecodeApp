@@ -6,8 +6,6 @@ from __future__ import annotations
 import json
 from pathlib import Path
 
-import pytest
-
 from vibecode.events import (
     EVENT_GUARD,
     EVENT_GUARD_FINDING,
@@ -598,3 +596,99 @@ class TestRunSessionGuardReports:
         assert session.guard_report_md.exists()
         text = session.guard_report_md.read_text(encoding="utf-8")
         assert "PASSED" in text
+
+
+# ---------------------------------------------------------------------------
+# G — Guard evaluation error synthetic result
+# ---------------------------------------------------------------------------
+
+
+class TestGuardEvaluationErrorResult:
+    """When evaluate_project_guard raises, a synthetic error result is created
+    so session guard reports are still written."""
+
+    @staticmethod
+    def _synthetic_result(error_message: str) -> GuardResult:
+        return GuardResult(findings=(
+            GuardFinding(
+                rule_id="guard-evaluation-error",
+                path=".",
+                severity="error",
+                message=f"Guard evaluation failed: {error_message}",
+                category="guard",
+                title="Guard evaluation error",
+                why_it_matters=(
+                    "The guard check could not complete. "
+                    "Repository changes may not have been validated."
+                ),
+                evidence=error_message,
+                recommended_fix=(
+                    "Check the error message, fix the underlying issue, "
+                    "and re-run guard."
+                ),
+            ),
+        ))
+
+    def test_json_report_written_for_evaluation_error(self, tmp_path: Path):
+        error_msg = "division by zero"
+        result = self._synthetic_result(error_msg)
+        vibecode_dir = tmp_path / ".vibecode"
+
+        path = write_guard_result(result, vibecode_dir, tmp_path)
+        data = json.loads(path.read_text(encoding="utf-8"))
+
+        assert data["passed"] is False
+        assert data["errors"] == 1
+        assert data["warnings"] == 0
+        assert data["counts_by_severity"]["error"] == 1
+        assert data["counts_by_category"]["guard"] == 1
+
+        finding = data["findings"][0]
+        assert finding["rule_id"] == "guard-evaluation-error"
+        assert finding["severity"] == "error"
+        assert finding["category"] == "guard"
+        assert finding["title"] == "Guard evaluation error"
+        assert "division by zero" in finding["message"]
+        assert finding["evidence"] == "division by zero"
+
+    def test_md_report_written_for_evaluation_error(self, tmp_path: Path):
+        error_msg = "division by zero"
+        result = self._synthetic_result(error_msg)
+        dest = tmp_path / "guard_report.md"
+
+        write_guard_report_md(result, dest, session_id="sess-err-1", root=tmp_path)
+
+        assert dest.exists()
+        text = dest.read_text(encoding="utf-8")
+        assert "# Guard Report" in text
+        assert "sess-err-1" in text
+        assert "FAILED" in text
+        assert "guard-evaluation-error" in text
+        assert "Guard evaluation error" in text
+        assert "division by zero" in text
+        assert "guard" in text
+
+    def test_synthetic_result_finding_fields(self):
+        error_msg = "mock error"
+        result = self._synthetic_result(error_msg)
+
+        finding = result.findings[0]
+        assert finding.rule_id == "guard-evaluation-error"
+        assert finding.path == "."
+        assert finding.severity == "error"
+        assert finding.category == "guard"
+        assert finding.resolved_category == "guard"
+        assert finding.title == "Guard evaluation error"
+        assert error_msg in finding.message
+        assert finding.evidence == error_msg
+        assert finding.recommended_fix
+        assert "re-run guard" in finding.recommended_fix
+
+    def test_synthetic_result_is_not_passed(self):
+        result = self._synthetic_result("error")
+        assert not result.passed
+
+    def test_synthetic_result_counts(self):
+        result = self._synthetic_result("error")
+        assert result.counts_by_severity() == {"error": 1}
+        assert result.counts_by_category() == {"guard": 1}

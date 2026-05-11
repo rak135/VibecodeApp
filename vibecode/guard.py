@@ -13,12 +13,10 @@ from vibecode.config import DEFAULT_PROTECTED_PATH_RULES, ProtectedPathRule, loa
 from vibecode.git_state import GitState, inspect_git_state
 from vibecode.paths import (
     is_architecture_truth_path,
-    is_documentation_path,
     is_generated_runtime_path,
     is_source_path,
     is_test_path,
     normalise_path,
-    strip_to_posix,
 )
 
 

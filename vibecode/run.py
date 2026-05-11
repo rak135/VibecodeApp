@@ -71,7 +71,7 @@ from vibecode.events import (
     EVENT_RUN_LIFECYCLE,
     EVENT_SUMMARY,
 )
-from vibecode.guard import GuardResult, _load_test_map, evaluate_project_guard, write_guard_result, write_guard_report_md
+from vibecode.guard import GuardFinding, GuardResult, _load_test_map, evaluate_project_guard, write_guard_result, write_guard_report_md
 from vibecode.git_state import GitState, current_git_commit, inspect_git_state
 from vibecode.handoff import HandoffResult, validate_handoff_files
 from vibecode.indexer import check_inventory_health, cmd_index, compute_current_file_set_fingerprint
@@ -823,7 +823,31 @@ class RunController:
                 data={"phase": "completed", "passed": False, "status": "error",
                       "error": guard_error},
             )
-        elif guard_result is None:
+            guard_result = GuardResult(findings=(
+                GuardFinding(
+                    rule_id="guard-evaluation-error",
+                    path=".",
+                    severity="error",
+                    message=f"Guard evaluation failed: {guard_error}",
+                    category="guard",
+                    title="Guard evaluation error",
+                    why_it_matters=(
+                        "The guard check could not complete. "
+                        "Repository changes may not have been validated."
+                    ),
+                    evidence=guard_error,
+                    recommended_fix=(
+                        "Check the error message, fix the underlying issue, "
+                        "and re-run guard."
+                    ),
+                ),
+            ))
+            try:
+                write_guard_result(guard_result, vibecode_dir, root)
+            except Exception:
+                pass
+
+        if guard_result is None:
             self._emit(
                 EVENT_GUARD, EventLevel.INFO, "Guard skipped (not a git repository)",
                 data={"phase": "completed", "passed": True, "findings": 0},
