@@ -27,7 +27,10 @@ from vibecode.events import (
     VibecodeEvent,
     EVENT_AGENT_PROCESS,
     EVENT_CHECK,
+    EVENT_CONTEXT,
     EVENT_GUARD,
+    EVENT_GUARD_FINDING,
+    EVENT_PROMPT,
     EVENT_RUN_LIFECYCLE,
 )
 
@@ -60,6 +63,49 @@ def format_vibecode_line(event: VibecodeEvent) -> str:
     Returns a plain string suitable for ``RichLog.write()``.
     """
     ts = event.timestamp.strftime("%H:%M:%S")
+    data = event.data or {}
+
+    if event.type == EVENT_CONTEXT:
+        snapshot = data.get("snapshot_path")
+        fallback = data.get("path")
+        artifact = snapshot or fallback
+        if artifact:
+            return f"[{ts}] {event.level.name:7s} {event.type}: {event.message}  ({artifact})"
+        return f"[{ts}] {event.level.name:7s} {event.type}: {event.message}"
+
+    if event.type == EVENT_PROMPT:
+        snapshot = data.get("snapshot_path")
+        fallback = data.get("path")
+        artifact = snapshot or fallback
+        platform = data.get("platform", "")
+        profile = data.get("profile", "")
+        extra = "  ".join(
+            p for p in [f"({artifact})" if artifact else "", platform, profile] if p
+        )
+        if extra:
+            return f"[{ts}] {event.level.name:7s} {event.type}: {event.message}  {extra}"
+        return f"[{ts}] {event.level.name:7s} {event.type}: {event.message}"
+
+    if event.type == EVENT_GUARD_FINDING:
+        severity = data.get("severity", "warning")
+        category = data.get("category", "")
+        path_ = data.get("path", "")
+        title = data.get("title", event.message)
+        fix = data.get("recommended_fix", "")
+        tests = data.get("required_tests", [])
+        parts = [severity.upper()]
+        if category:
+            parts.append(category)
+        if path_:
+            parts.append(path_)
+        parts.append(title)
+        if fix:
+            parts.append(f"fix: {fix[:80]}")
+        if tests:
+            parts.append(f"tests: {', '.join(tests[:3])}")
+        detail = " | ".join(parts)
+        return f"[{ts}] {event.level.name:7s} {event.type}: {detail}"
+
     return f"[{ts}] {event.level.name:7s} {event.type}: {event.message}"
 
 
@@ -132,6 +178,8 @@ class MonitorApp(App):
         self._guard_status = "—"
         self._check_status = "—"
         self._run_path = "—"
+        self._guard_errors = 0
+        self._guard_warnings = 0
 
     # ------------------------------------------------------------------
     # Compose
@@ -211,11 +259,28 @@ class MonitorApp(App):
             if data.get("phase") == "started":
                 self._agent_status = "running"
                 self._refresh_status()
+        elif event.type == EVENT_GUARD_FINDING:
+            data = event.data or {}
+            sev = data.get("severity", "warning")
+            if sev == "error":
+                self._guard_errors += 1
+            else:
+                self._guard_warnings += 1
         elif event.type == EVENT_GUARD:
             data = event.data or {}
             if data.get("phase") == "completed":
                 passed = data.get("passed", True)
-                self._guard_status = "✓ passed" if passed else "✗ findings"
+                if passed:
+                    self._guard_status = "✓ passed"
+                else:
+                    errs = data.get("errors", self._guard_errors)
+                    warns = data.get("warnings", self._guard_warnings)
+                    parts = []
+                    if errs:
+                        parts.append(f"{errs} errors")
+                    if warns:
+                        parts.append(f"{warns} warnings")
+                    self._guard_status = f"✗ {', '.join(parts)}" if parts else "✗ findings"
                 self._refresh_status()
         elif event.type == EVENT_CHECK:
             data = event.data or {}
@@ -227,7 +292,17 @@ class MonitorApp(App):
     def _on_run_finished(self, summary: Any) -> None:
         self._agent_status = summary.overall_status
         if summary.guard is not None:
-            self._guard_status = "✓ passed" if summary.guard.passed else "✗ findings"
+            if summary.guard.passed:
+                self._guard_status = "✓ passed"
+            else:
+                errs = getattr(summary.guard, "errors", self._guard_errors)
+                warns = getattr(summary.guard, "warnings", self._guard_warnings)
+                parts = []
+                if errs:
+                    parts.append(f"{errs} errors")
+                if warns:
+                    parts.append(f"{warns} warnings")
+                self._guard_status = f"✗ {', '.join(parts)}" if parts else "✗ findings"
         if summary.checks is not None:
             self._check_status = (
                 "✗ failed" if summary.checks.has_required_failures else "✓ passed"

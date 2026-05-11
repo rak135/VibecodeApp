@@ -354,7 +354,7 @@
     {
       "title": "P9.3 Apply TUI monitor review fixes",
       "description": "Read docs/audit/OBSERVABLE_RUN_MONITOR_P9_TUI_MONITOR_REVIEW.md.\n\nApply only actionable fixes.\nIf no fixes are needed, write:\ndocs/audit/OBSERVABLE_RUN_MONITOR_P9_TUI_MONITOR_FIX.md\n\nRun compile and affected tests.",
-      "completed": false,
+      "completed": true,
       "engine": "opencode",
       "model": "deepseek/deepseek-v4-pro",
       "engine_args": [

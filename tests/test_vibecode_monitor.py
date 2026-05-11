@@ -12,7 +12,6 @@ Covers:
 from __future__ import annotations
 
 from datetime import datetime, timezone
-from pathlib import Path
 from types import SimpleNamespace
 from unittest.mock import MagicMock, patch
 
@@ -21,8 +20,11 @@ import pytest
 from vibecode.events import (
     EVENT_AGENT_PROCESS,
     EVENT_CHECK,
+    EVENT_CONTEXT,
     EVENT_GUARD,
+    EVENT_GUARD_FINDING,
     EVENT_HANDOFF,
+    EVENT_PROMPT,
     EVENT_RUN_LIFECYCLE,
     EVENT_SUMMARY,
     EventLevel,
@@ -210,6 +212,151 @@ class TestFormatVibecodeeLine:
         line = format_vibecode_line(event)
         assert EVENT_RUN_LIFECYCLE in line
         assert "Run started" in line
+
+    def test_context_event_shows_snapshot_path(self):
+        event = _evt(
+            EVENT_CONTEXT,
+            message="Context pack written",
+            data={
+                "phase": "written",
+                "path": "/tmp/vibecode/current/context_pack.md",
+                "snapshot_path": "/tmp/.vibecode/runs/sess-123/context_pack.md",
+                "size_bytes": 5000,
+            },
+        )
+        line = format_vibecode_line(event)
+        assert "Context pack written" in line
+        assert ".vibecode/runs/sess-123/context_pack.md" in line
+        assert EVENT_CONTEXT in line
+
+    def test_context_event_falls_back_to_path_when_no_snapshot(self):
+        event = _evt(
+            EVENT_CONTEXT,
+            message="Context pack written",
+            data={
+                "phase": "written",
+                "path": "/tmp/vibecode/current/context_pack.md",
+                "snapshot_path": None,
+                "size_bytes": 5000,
+            },
+        )
+        line = format_vibecode_line(event)
+        assert "Context pack written" in line
+        assert "/tmp/vibecode/current/context_pack.md" in line
+
+    def test_context_event_no_path_no_crash(self):
+        event = _evt(
+            EVENT_CONTEXT,
+            message="Context pack written",
+            data={"phase": "written"},
+        )
+        line = format_vibecode_line(event)
+        assert "Context pack written" in line
+
+    def test_prompt_event_shows_snapshot_path_platform_profile(self):
+        event = _evt(
+            EVENT_PROMPT,
+            message="Prompt written",
+            data={
+                "phase": "written",
+                "snapshot_path": "/tmp/.vibecode/runs/sess-123/opencode_prompt.md",
+                "platform": "opencode",
+                "profile": "safe",
+                "size_bytes": 1200,
+            },
+        )
+        line = format_vibecode_line(event)
+        assert "Prompt written" in line
+        assert "opencode_prompt.md" in line
+        assert "opencode" in line
+        assert "safe" in line
+        assert EVENT_PROMPT in line
+
+    def test_prompt_event_falls_back_to_path_when_no_snapshot(self):
+        event = _evt(
+            EVENT_PROMPT,
+            message="Prompt written",
+            data={
+                "phase": "written",
+                "path": "/tmp/vibecode/current/opencode_prompt.md",
+                "snapshot_path": None,
+                "platform": "opencode",
+                "profile": "fast",
+                "size_bytes": 800,
+            },
+        )
+        line = format_vibecode_line(event)
+        assert "opencode_prompt.md" in line
+        assert "opencode" in line
+        assert "fast" in line
+
+    def test_guard_finding_warning_shows_details(self):
+        event = _evt(
+            EVENT_GUARD_FINDING,
+            level=EventLevel.WARNING,
+            message="source-test-change-balance",
+            data={
+                "rule_id": "source-test-change-balance",
+                "severity": "warning",
+                "category": "test-balance",
+                "path": "src/foo.py",
+                "title": "Source changed but tests unchanged",
+                "message": "Source file src/foo.py was modified without corresponding test changes.",
+                "recommended_fix": "Add or update tests in tests/test_foo.py.",
+                "required_tests": ["test_foo_feature"],
+            },
+        )
+        line = format_vibecode_line(event)
+        assert "WARNING" in line
+        assert EVENT_GUARD_FINDING in line
+        assert "warning" in line.upper().lower() or "WARNING" in line
+        assert "test-balance" in line
+        assert "src/foo.py" in line
+        assert "Source changed but tests unchanged" in line
+        assert "Add or update tests" in line
+        assert "test_foo_feature" in line
+
+    def test_guard_finding_error_shows_severity(self):
+        event = _evt(
+            EVENT_GUARD_FINDING,
+            level=EventLevel.ERROR,
+            message="protected-file-modified",
+            data={
+                "rule_id": "protected-file-modified",
+                "severity": "error",
+                "category": "protection",
+                "path": ".vibecode/architecture/INVARIANTS.md",
+                "title": "Protected file was modified",
+                "message": "The file is a protected invariant.",
+                "recommended_fix": "Revert the change.",
+                "required_tests": [],
+            },
+        )
+        line = format_vibecode_line(event)
+        assert "ERROR" in line
+        assert EVENT_GUARD_FINDING in line
+        assert "INVARIANTS.md" in line
+        assert "Protected file was modified" in line
+        assert "Revert the change" in line
+
+    def test_guard_finding_no_tests_no_fix_no_crash(self):
+        event = _evt(
+            EVENT_GUARD_FINDING,
+            level=EventLevel.WARNING,
+            message="some finding",
+            data={
+                "rule_id": "r1",
+                "severity": "warning",
+                "category": "general",
+                "path": "f.txt",
+                "title": "Some finding",
+                "recommended_fix": "",
+                "required_tests": [],
+            },
+        )
+        line = format_vibecode_line(event)
+        assert "some finding" in line or "Some finding" in line
+        assert EVENT_GUARD_FINDING in line
 
 
 # ---------------------------------------------------------------------------

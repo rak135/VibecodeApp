@@ -393,7 +393,7 @@ def create_parser() -> argparse.ArgumentParser:
             "  Status bar: agent status, guard status, checks status, run artifact path.\n\n"
             "Note: this is a streaming-output monitor (text mode), not a PTY.  For\n"
             "full interactive terminal control, run OpenCode directly.\n\n"
-            "Press Q to quit (the agent run continues until it exits naturally)."
+            "Press Q to close the monitor (running agent process behavior is not managed)."
         ),
     )
     monitor_parser.add_argument(
