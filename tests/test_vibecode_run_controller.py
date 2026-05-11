@@ -682,3 +682,263 @@ class TestAllowDirty:
         )
         assert git_completed is not None
         assert git_completed.data["passed"] is True
+
+
+# ---------------------------------------------------------------------------
+# Tests: context pack and prompt snapshot events
+# ---------------------------------------------------------------------------
+
+
+def _get_ctx_written(sink: InMemoryEventSink):
+    """Return the EVENT_CONTEXT 'written' event from *sink*."""
+    return next(
+        e for e in sink.events
+        if e.type == EVENT_CONTEXT and e.data and e.data.get("phase") == "written"
+    )
+
+
+def _get_prompt_written(sink: InMemoryEventSink):
+    """Return the EVENT_PROMPT 'written' event from *sink*."""
+    return next(
+        e for e in sink.events
+        if e.type == EVENT_PROMPT and e.data and e.data.get("phase") == "written"
+    )
+
+
+class TestContextAndPromptSnapshotEvents:
+    """Verify that context pack and prompt events carry snapshot paths and metadata."""
+
+    def test_context_event_has_snapshot_path(self, repo: Path, fake_bin: Path):
+        """EVENT_CONTEXT written event includes a non-None snapshot_path."""
+        _make_fake_opencode(fake_bin)
+        sink = InMemoryEventSink()
+        RunController(
+            root=repo, task="fix the login bug", platform="opencode",
+            profile_name="safe", allow_dirty=False, no_index=True,
+            sink=sink, session_id="snap-ctx-001",
+        ).execute()
+
+        evt = _get_ctx_written(sink)
+        assert "snapshot_path" in evt.data
+        assert evt.data["snapshot_path"] is not None
+
+    def test_context_event_snapshot_path_contains_session_id(self, repo: Path, fake_bin: Path):
+        """The snapshot_path in EVENT_CONTEXT is inside the session run directory."""
+        _make_fake_opencode(fake_bin)
+        sink = InMemoryEventSink()
+        RunController(
+            root=repo, task="t", platform="opencode",
+            profile_name="safe", allow_dirty=False, no_index=True,
+            sink=sink, session_id="snap-ctx-002",
+        ).execute()
+
+        evt = _get_ctx_written(sink)
+        assert "snap-ctx-002" in evt.data["snapshot_path"]
+
+    def test_context_snapshot_file_exists_on_disk(self, repo: Path, fake_bin: Path):
+        """The file at snapshot_path actually exists and is non-empty."""
+        _make_fake_opencode(fake_bin)
+        sink = InMemoryEventSink()
+        RunController(
+            root=repo, task="t", platform="opencode",
+            profile_name="safe", allow_dirty=False, no_index=True,
+            sink=sink, session_id="snap-ctx-003",
+        ).execute()
+
+        snapshot_path = Path(_get_ctx_written(sink).data["snapshot_path"])
+        assert snapshot_path.exists(), f"snapshot not found: {snapshot_path}"
+        assert snapshot_path.stat().st_size > 0
+
+    def test_context_snapshot_path_is_under_run_dir(self, repo: Path, fake_bin: Path):
+        """snapshot_path in EVENT_CONTEXT is inside .vibecode/runs/<session_id>/."""
+        _make_fake_opencode(fake_bin)
+        sink = InMemoryEventSink()
+        RunController(
+            root=repo, task="t", platform="opencode",
+            profile_name="safe", allow_dirty=False, no_index=True,
+            sink=sink, session_id="snap-rundir-001",
+        ).execute()
+
+        run_dir = repo / ".vibecode" / "runs" / "snap-rundir-001"
+        snapshot_path = Path(_get_ctx_written(sink).data["snapshot_path"])
+        assert str(snapshot_path).startswith(str(run_dir))
+
+    def test_context_event_has_positive_size_bytes(self, repo: Path, fake_bin: Path):
+        """EVENT_CONTEXT written event has size_bytes > 0."""
+        _make_fake_opencode(fake_bin)
+        sink = InMemoryEventSink()
+        RunController(
+            root=repo, task="t", platform="opencode",
+            profile_name="safe", allow_dirty=False, no_index=True,
+            sink=sink,
+        ).execute()
+
+        evt = _get_ctx_written(sink)
+        assert "size_bytes" in evt.data
+        assert isinstance(evt.data["size_bytes"], int)
+        assert evt.data["size_bytes"] > 0
+
+    def test_context_event_has_task_summary(self, repo: Path, fake_bin: Path):
+        """task_summary in EVENT_CONTEXT matches the controller's task."""
+        _make_fake_opencode(fake_bin)
+        sink = InMemoryEventSink()
+        RunController(
+            root=repo, task="fix the auth module", platform="opencode",
+            profile_name="safe", allow_dirty=False, no_index=True,
+            sink=sink,
+        ).execute()
+
+        evt = _get_ctx_written(sink)
+        assert evt.data.get("task_summary") == "fix the auth module"
+
+    def test_context_event_task_summary_is_truncated_for_long_tasks(self, repo: Path, fake_bin: Path):
+        """task_summary is at most 200 characters even for very long task strings."""
+        _make_fake_opencode(fake_bin)
+        long_task = "x" * 300
+        sink = InMemoryEventSink()
+        RunController(
+            root=repo, task=long_task, platform="opencode",
+            profile_name="safe", allow_dirty=False, no_index=True,
+            sink=sink,
+        ).execute()
+
+        evt = _get_ctx_written(sink)
+        assert len(evt.data.get("task_summary", "")) <= 200
+
+    def test_context_event_has_sections_list(self, repo: Path, fake_bin: Path):
+        """sections in EVENT_CONTEXT is a non-empty list of heading strings."""
+        _make_fake_opencode(fake_bin)
+        sink = InMemoryEventSink()
+        RunController(
+            root=repo, task="t", platform="opencode",
+            profile_name="safe", allow_dirty=False, no_index=True,
+            sink=sink,
+        ).execute()
+
+        evt = _get_ctx_written(sink)
+        assert "sections" in evt.data
+        assert isinstance(evt.data["sections"], list)
+        assert len(evt.data["sections"]) > 0
+        assert all(isinstance(s, str) for s in evt.data["sections"])
+
+    def test_context_sections_match_context_pack_headings(self, repo: Path, fake_bin: Path):
+        """sections in EVENT_CONTEXT matches ## headings in the written context pack file."""
+        _make_fake_opencode(fake_bin)
+        sink = InMemoryEventSink()
+        RunController(
+            root=repo, task="t", platform="opencode",
+            profile_name="safe", allow_dirty=False, no_index=True,
+            sink=sink,
+        ).execute()
+
+        evt = _get_ctx_written(sink)
+        context_pack_path = Path(evt.data["path"])
+        expected_sections = [
+            line[3:].strip()
+            for line in context_pack_path.read_text(encoding="utf-8").splitlines()
+            if line.startswith("## ")
+        ]
+        assert evt.data["sections"] == expected_sections
+
+    def test_prompt_event_has_snapshot_path(self, repo: Path, fake_bin: Path):
+        """EVENT_PROMPT written event includes a non-None snapshot_path."""
+        _make_fake_opencode(fake_bin)
+        sink = InMemoryEventSink()
+        RunController(
+            root=repo, task="t", platform="opencode",
+            profile_name="safe", allow_dirty=False, no_index=True,
+            sink=sink, session_id="snap-prompt-001",
+        ).execute()
+
+        evt = _get_prompt_written(sink)
+        assert "snapshot_path" in evt.data
+        assert evt.data["snapshot_path"] is not None
+
+    def test_prompt_event_snapshot_path_contains_session_id(self, repo: Path, fake_bin: Path):
+        """snapshot_path in EVENT_PROMPT is inside the session run directory."""
+        _make_fake_opencode(fake_bin)
+        sink = InMemoryEventSink()
+        RunController(
+            root=repo, task="t", platform="opencode",
+            profile_name="safe", allow_dirty=False, no_index=True,
+            sink=sink, session_id="snap-prompt-002",
+        ).execute()
+
+        evt = _get_prompt_written(sink)
+        assert "snap-prompt-002" in evt.data["snapshot_path"]
+
+    def test_prompt_event_has_platform_and_profile(self, repo: Path, fake_bin: Path):
+        """EVENT_PROMPT written event includes platform and profile fields."""
+        _make_fake_opencode(fake_bin)
+        sink = InMemoryEventSink()
+        RunController(
+            root=repo, task="t", platform="opencode",
+            profile_name="safe", allow_dirty=False, no_index=True,
+            sink=sink,
+        ).execute()
+
+        evt = _get_prompt_written(sink)
+        assert evt.data.get("platform") == "opencode"
+        assert evt.data.get("profile") == "safe"
+
+    def test_prompt_event_has_size_bytes(self, repo: Path, fake_bin: Path):
+        """EVENT_PROMPT written event has size_bytes as an integer."""
+        _make_fake_opencode(fake_bin)
+        sink = InMemoryEventSink()
+        RunController(
+            root=repo, task="t", platform="opencode",
+            profile_name="safe", allow_dirty=False, no_index=True,
+            sink=sink,
+        ).execute()
+
+        evt = _get_prompt_written(sink)
+        assert "size_bytes" in evt.data
+        assert isinstance(evt.data["size_bytes"], int)
+
+    def test_context_snapshots_are_session_specific(self, repo: Path, fake_bin: Path):
+        """Two runs produce independent context pack snapshot paths."""
+        _make_fake_opencode(fake_bin)
+
+        sink_a = InMemoryEventSink()
+        sink_b = InMemoryEventSink()
+
+        RunController(
+            root=repo, task="t", platform="opencode",
+            profile_name="safe", allow_dirty=False, no_index=True,
+            sink=sink_a, session_id="snap-sess-A",
+        ).execute()
+        RunController(
+            root=repo, task="t", platform="opencode",
+            profile_name="safe", allow_dirty=False, no_index=True,
+            sink=sink_b, session_id="snap-sess-B",
+        ).execute()
+
+        path_a = _get_ctx_written(sink_a).data["snapshot_path"]
+        path_b = _get_ctx_written(sink_b).data["snapshot_path"]
+        assert path_a != path_b
+        assert "snap-sess-A" in path_a
+        assert "snap-sess-B" in path_b
+
+    def test_prompt_snapshots_are_session_specific(self, repo: Path, fake_bin: Path):
+        """Two runs produce independent prompt snapshot paths."""
+        _make_fake_opencode(fake_bin)
+
+        sink_a = InMemoryEventSink()
+        sink_b = InMemoryEventSink()
+
+        RunController(
+            root=repo, task="t", platform="opencode",
+            profile_name="safe", allow_dirty=False, no_index=True,
+            sink=sink_a, session_id="snap-prompt-sess-A",
+        ).execute()
+        RunController(
+            root=repo, task="t", platform="opencode",
+            profile_name="safe", allow_dirty=False, no_index=True,
+            sink=sink_b, session_id="snap-prompt-sess-B",
+        ).execute()
+
+        path_a = _get_prompt_written(sink_a).data["snapshot_path"]
+        path_b = _get_prompt_written(sink_b).data["snapshot_path"]
+        assert path_a != path_b
+        assert "snap-prompt-sess-A" in path_a
+        assert "snap-prompt-sess-B" in path_b

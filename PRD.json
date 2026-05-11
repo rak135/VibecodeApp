@@ -260,7 +260,7 @@
     {
       "title": "P7.1 Add prompt and context snapshot events",
       "description": "Make prompt/context truth first-class in observable runs.\n\nRequired behavior:\n- When a context pack is generated, emit event with:\n  - path to current context pack,\n  - path to run snapshot,\n  - approximate size,\n  - task summary,\n  - included sections if available.\n- When an OpenCode prompt is generated, emit event with:\n  - path to current prompt,\n  - path to run snapshot,\n  - approximate size,\n  - platform/model/profile if available.\n- Copy prompt and context pack into .vibecode/runs/<session_id>/.\n- The monitor must be able to show where the exact prompt is stored.\n- Do not always dump full prompt into the live event message. Store it in artifact file and put path/summary into event data.\n- Add tests ensuring prompt/context snapshots are tied to the session.\n\nRun compile and affected tests.",
-      "completed": false,
+      "completed": true,
       "engine": "copilot",
       "model": "claude-sonnet-4.6",
       "engine_args": [

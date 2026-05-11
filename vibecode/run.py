@@ -380,6 +380,17 @@ def _run_post_checks(
     return guard_result, check_result, handoff_result
 
 
+def _extract_context_pack_sections(path: Path) -> list[str]:
+    """Return section headings (``## ...``) from a context pack file."""
+    if not path.exists():
+        return []
+    sections: list[str] = []
+    for line in path.read_text(encoding="utf-8", errors="replace").splitlines():
+        if line.startswith("## "):
+            sections.append(line[3:].strip())
+    return sections
+
+
 def _exit_code_for_status(overall: str) -> int:
     if overall in ("failure", "error"):
         return 1
@@ -646,14 +657,33 @@ class RunController:
                        data={"phase": "finished", "status": "error"})
             return None, 1
 
+        # Snapshot to run dir before emitting so snapshot_path is available in event data.
+        context_snapshot_ok = session.snapshot_context_pack()
+        prompt_snapshot_ok = session.snapshot_prompt()
+
+        context_size = context_pack_path.stat().st_size
+        context_sections = _extract_context_pack_sections(context_pack_path)
         self._emit(EVENT_CONTEXT, EventLevel.INFO, "Context pack written",
-                   data={"phase": "written", "success": True, "path": str(context_pack_path)})
+                   data={
+                       "phase": "written",
+                       "success": True,
+                       "path": str(context_pack_path),
+                       "snapshot_path": str(session.context_pack_md) if context_snapshot_ok else None,
+                       "size_bytes": context_size,
+                       "task_summary": self.task[:200],
+                       "sections": context_sections,
+                   })
 
-        session.snapshot_prompt()
-        session.snapshot_context_pack()
-
+        prompt_size = prompt_path.stat().st_size if prompt_path.exists() else 0
         self._emit(EVENT_PROMPT, EventLevel.INFO, "Prompt written",
-                   data={"phase": "written", "path": str(prompt_path)})
+                   data={
+                       "phase": "written",
+                       "path": str(prompt_path) if prompt_path.exists() else None,
+                       "snapshot_path": str(session.opencode_prompt_md) if prompt_snapshot_ok else None,
+                       "size_bytes": prompt_size,
+                       "platform": self.platform,
+                       "profile": self.profile_name,
+                   })
 
         # ----------------------------------------------------------------
         # 4. Resolve platform command
