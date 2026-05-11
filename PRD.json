@@ -343,7 +343,7 @@
     {
       "title": "P9.2 Review TUI monitor MVP",
       "description": "Review the TUI monitor implementation.\n\nWrite review output to:\ndocs/audit/OBSERVABLE_RUN_MONITOR_P9_TUI_MONITOR_REVIEW.md\n\nCheck:\n- It uses the event spine rather than scraping CLI output.\n- It clearly separates agent output from VibecodeApp events.\n- It does not claim full interactive terminal support if not implemented.\n- It shows guard warnings clearly.\n- It shows prompt/context artifact paths.\n- It does not break existing dashboard or run commands.\n- Tests cover import/formatting enough to prevent immediate rot.\n\nDo not modify implementation files. Only write the review document.",
-      "completed": false,
+      "completed": true,
       "engine": "codex",
       "model": "gpt-5.5",
       "engine_args": [
