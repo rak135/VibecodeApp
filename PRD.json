@@ -46,7 +46,7 @@
     {
       "title": "P1.1 Implement structured event spine",
       "description": "Implement the foundational event model for observable runs.\n\nLikely new file:\nvibecode/events.py\n\nRequired concepts:\n- VibecodeEvent as a serializable dataclass or equivalent typed structure.\n- Stable event fields:\n  - event_id\n  - session_id\n  - timestamp\n  - type\n  - level: debug/info/warning/error\n  - message\n  - data\n- Event type constants or enum-like names for run lifecycle, context, prompt, agent process, MCP, git delta, guard, checks, handoff, and summary.\n- EventSink protocol/interface with emit(event).\n- InMemoryEventSink for tests.\n- JsonlEventSink that appends one JSON object per line.\n- ConsoleEventSink that can print compact readable messages.\n- MultiEventSink that fans out events to multiple sinks.\n- NullEventSink for call sites that do not care.\n- Helper function to create events consistently, including timestamp/session_id.\n\nDesign rules:\n- Keep this module dependency-light and boring.\n- Do not import high-level run/guard/context modules from events.py.\n- JSON serialization must be deterministic enough for tests.\n- Event data must accept plain JSON-compatible values only.\n- If non-JSON values are passed, either convert safely or fail with a clear error.\n\nTests:\nAdd focused tests for:\n- event serialization roundtrip,\n- JSONL append behavior,\n- multi sink fan-out,\n- in-memory sink capture,\n- invalid/non-serializable data handling if implemented.\n\nRun:\n- python -m compileall vibecode\n- pytest tests related to events, or full pytest if practical.",
-      "completed": false,
+      "completed": true,
       "engine": "opencode",
       "model": "deepseek/deepseek-v4-pro",
       "engine_args": [
