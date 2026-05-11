@@ -133,7 +133,7 @@
     {
       "title": "P3.2 Review run controller refactor",
       "description": "Review the run controller refactor.\n\nWrite review output to:\ndocs/audit/OBSERVABLE_RUN_MONITOR_P3_RUN_CONTROLLER_REVIEW.md\n\nCheck:\n- Behavior preservation: no accidental change to existing run semantics.\n- Event emissions are meaningful and not low-value spam.\n- The refactor did not create a god object worse than the original.\n- Failure paths emit useful events.\n- Tests use fake subprocess/platform paths and do not require real OpenCode.\n- Session artifacts and events are connected properly.\n- There is no hidden hard enforcement added.\n\nDo not modify implementation files. Only write the review document.",
-      "completed": false,
+      "completed": true,
       "engine": "codex",
       "model": "gpt-5.5",
       "engine_args": [
