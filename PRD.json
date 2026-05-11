@@ -203,7 +203,7 @@
     {
       "title": "P5.2 Review advisory guard semantics",
       "description": "Review the advisory guard change.\n\nWrite review output to:\ndocs/audit/OBSERVABLE_RUN_MONITOR_P5_ADVISORY_GUARD_REVIEW.md\n\nCheck:\n- Advisory mode does not hide serious guard findings.\n- Run status language is honest and not misleading.\n- Agent exit code remains visible.\n- Strict behavior, if added, is explicit and documented.\n- Tests prove the new default.\n- No unrelated guard rules were weakened.\n- No accidental bypass of checks/handoff reporting.\n\nDo not modify implementation files. Only write the review document.",
-      "completed": false,
+      "completed": true,
       "engine": "codex",
       "model": "gpt-5.5",
       "engine_args": [
