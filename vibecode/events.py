@@ -40,6 +40,10 @@ EVENT_AGENT_PROCESS = "run.agent_process"
 EVENT_MCP = "run.mcp"
 #: Git delta / diff event.
 EVENT_GIT_DELTA = "run.git_delta"
+#: Git preflight / working-tree inspection event.
+EVENT_GIT_PREFLIGHT = "run.git_preflight"
+#: Index freshness check / generation event.
+EVENT_INDEX_CHECK = "run.index_check"
 #: Guard evaluation event.
 EVENT_GUARD = "run.guard"
 #: Required checks event.

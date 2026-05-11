@@ -54,6 +54,22 @@ from vibecode.check import CheckRun, run_checks, write_check_results
 from vibecode.config import load_config
 from vibecode.context import cmd_context
 from vibecode.diff_summary import DiffSummary, diff_summarise
+from vibecode.events import (
+    EventLevel,
+    EventSink,
+    NullEventSink,
+    create_event,
+    EVENT_AGENT_PROCESS,
+    EVENT_CHECK,
+    EVENT_CONTEXT,
+    EVENT_GIT_PREFLIGHT,
+    EVENT_GUARD,
+    EVENT_HANDOFF,
+    EVENT_INDEX_CHECK,
+    EVENT_PROMPT,
+    EVENT_RUN_LIFECYCLE,
+    EVENT_SUMMARY,
+)
 from vibecode.guard import GuardResult, _load_test_map, evaluate_project_guard, write_guard_result
 from vibecode.git_state import GitState, current_git_commit, inspect_git_state
 from vibecode.handoff import HandoffResult, validate_handoff_files
@@ -352,6 +368,579 @@ def _run_post_checks(
     return guard_result, check_result, handoff_result
 
 
+def _exit_code_for_status(overall: str) -> int:
+    if overall in ("failure", "error"):
+        return 1
+    if overall == "incomplete":
+        return 2
+    return 0
+
+
+class RunController:
+    """Orchestrates a vibecode run session with structured event emissions.
+
+    Parameters
+    ----------
+    root:
+        Absolute path to the repository root.
+    task:
+        Task description for the context pack.
+    platform:
+        Target platform (e.g. ``"opencode"``).
+    profile_name:
+        Advisory permission profile name.
+    allow_dirty:
+        Allow running on a dirty git working tree (warn only).
+    no_index:
+        Skip automatic index generation / refresh.
+    sink:
+        Event sink; defaults to :class:`~vibecode.events.NullEventSink` when
+        ``None``.
+    session_id:
+        Override the session identifier (useful for tests).
+    """
+
+    def __init__(
+        self,
+        root: Path,
+        task: str,
+        platform: str,
+        profile_name: str,
+        allow_dirty: bool,
+        no_index: bool,
+        sink: "EventSink | None" = None,
+        session_id: str | None = None,
+    ) -> None:
+        self.root = root
+        self.task = task
+        self.platform = platform
+        self.profile_name = profile_name
+        self.allow_dirty = allow_dirty
+        self.no_index = no_index
+        self.sink: EventSink = sink if sink is not None else NullEventSink()
+        self.session_id = session_id or datetime.now(tz=timezone.utc).strftime("%Y%m%dT%H%M%S%fZ")
+
+    # ------------------------------------------------------------------
+    # Internal helpers
+    # ------------------------------------------------------------------
+
+    def _emit(
+        self,
+        type_: str,
+        level: EventLevel,
+        message: str,
+        *,
+        data: dict[str, Any] | None = None,
+    ) -> None:
+        event = create_event(self.session_id, type_, level, message, data=data)
+        self.sink.emit(event)
+
+    # ------------------------------------------------------------------
+    # Public API
+    # ------------------------------------------------------------------
+
+    def execute(self) -> tuple["RunSummary | None", int]:
+        """Execute the run session.
+
+        Returns
+        -------
+        tuple[RunSummary | None, int]
+            The run summary (or ``None`` on early abort) and the process exit
+            code (0 = success, 1 = failure/error, 2 = incomplete).
+        """
+        root = self.root
+        vibecode_dir = root / ".vibecode"
+        session = RunSession(root, self.session_id)
+
+        self._emit(
+            EVENT_RUN_LIFECYCLE, EventLevel.INFO, "Run started",
+            data={"phase": "started", "task": self.task, "platform": self.platform,
+                  "profile": self.profile_name},
+        )
+
+        # ---- Prerequisites ----
+        if not (vibecode_dir / "project.yaml").exists():
+            print("Error: no .vibecode/project.yaml found. Run 'vibecode init' first.", file=sys.stderr)
+            self._emit(EVENT_RUN_LIFECYCLE, EventLevel.ERROR, "Run aborted: no project.yaml",
+                       data={"phase": "finished", "status": "error", "error": "no_project_yaml"})
+            return None, 1
+
+        profile_ok, profile_error = _validate_permission_profile(root, self.profile_name)
+        if not profile_ok:
+            print(f"Error: {profile_error}", file=sys.stderr)
+            self._emit(EVENT_RUN_LIFECYCLE, EventLevel.ERROR, f"Run aborted: {profile_error}",
+                       data={"phase": "finished", "status": "error", "error": "invalid_profile"})
+            return None, 1
+
+        # ----------------------------------------------------------------
+        # 1. Git preflight
+        # ----------------------------------------------------------------
+        self._emit(EVENT_GIT_PREFLIGHT, EventLevel.INFO, "Git preflight started",
+                   data={"phase": "started"})
+        clean_ok, messages = _run_git_check(root, self.allow_dirty)
+        if not clean_ok and not self.allow_dirty:
+            for msg in messages:
+                print(f"Error: {msg}", file=sys.stderr)
+                self._emit(EVENT_GIT_PREFLIGHT, EventLevel.ERROR, msg,
+                           data={"phase": "warning", "blocking": True})
+            self._emit(EVENT_GIT_PREFLIGHT, EventLevel.ERROR, "Git preflight failed",
+                       data={"phase": "completed", "passed": False})
+            self._emit(EVENT_RUN_LIFECYCLE, EventLevel.ERROR, "Run aborted: git preflight failed",
+                       data={"phase": "finished", "status": "error"})
+            return None, 1
+
+        for msg in messages:
+            print(f"Warning: {msg}", file=sys.stderr)
+            self._emit(EVENT_GIT_PREFLIGHT, EventLevel.WARNING, msg,
+                       data={"phase": "warning", "blocking": False})
+        self._emit(EVENT_GIT_PREFLIGHT, EventLevel.INFO, "Git preflight completed",
+                   data={"phase": "completed", "passed": True, "dirty": bool(messages)})
+
+        initial_git_state = None
+        try:
+            initial_git_state = inspect_git_state(root)
+        except Exception as exc:
+            print(f"Warning: could not inspect git state for post-run checks: {exc}", file=sys.stderr)
+
+        # ----------------------------------------------------------------
+        # 2. Index check
+        # ----------------------------------------------------------------
+        self._emit(EVENT_INDEX_CHECK, EventLevel.INFO, "Index check started",
+                   data={"phase": "started"})
+        index_path = vibecode_dir / "current" / "last_index.json"
+        if not self.no_index and (not index_path.exists() or (vibecode_dir / "project.yaml").exists()):
+            stale = False
+            if index_path.exists():
+                try:
+                    record = json.loads(index_path.read_text(encoding="utf-8"))
+                    started = record.get("started_at", "")
+                    if started:
+                        started_dt = datetime.fromisoformat(started)
+                        age = (datetime.now(tz=timezone.utc) - started_dt).total_seconds()
+                        if age > 300:
+                            stale = True
+                    if not stale:
+                        recorded_commit = record.get("git_commit")
+                        if recorded_commit and recorded_commit != "unknown":
+                            current_commit = current_git_commit(root)
+                            if current_commit != "unknown" and current_commit != recorded_commit:
+                                print(
+                                    f"Index was built for commit {recorded_commit}, "
+                                    f"but HEAD is now {current_commit} — re-indexing.",
+                                    file=sys.stderr,
+                                )
+                                stale = True
+                    if not stale:
+                        recorded_fingerprint = record.get("file_set_fingerprint")
+                        if recorded_fingerprint:
+                            include = None
+                            exclude = None
+                            try:
+                                _cfg = load_config(vibecode_dir)
+                                include = _cfg.include
+                                exclude = _cfg.exclude
+                            except Exception:
+                                pass
+                            current_fingerprint = compute_current_file_set_fingerprint(
+                                root, include=include, exclude=exclude
+                            )
+                            if current_fingerprint is not None and current_fingerprint != recorded_fingerprint:
+                                print(
+                                    "Indexed file set has changed since the last index "
+                                    "-- running 'vibecode index' to refresh.",
+                                    file=sys.stderr,
+                                )
+                                stale = True
+                except Exception:
+                    stale = True
+
+            if not index_path.exists() or stale:
+                print("Index is missing or stale — running 'vibecode index' first.", file=sys.stderr)
+                rc = cmd_index(type("Args", (), {"repo_root": str(root), "debug": False})())
+                if rc != 0:
+                    print("Error: index generation failed.", file=sys.stderr)
+                    self._emit(EVENT_INDEX_CHECK, EventLevel.ERROR, "Index generation failed",
+                               data={"phase": "completed", "fresh": False})
+                    self._emit(EVENT_RUN_LIFECYCLE, EventLevel.ERROR,
+                               "Run aborted: index generation failed",
+                               data={"phase": "finished", "status": "error"})
+                    return None, 1
+
+        if not index_path.exists():
+            print("Error: no index found.  Run 'vibecode index' first.", file=sys.stderr)
+            self._emit(EVENT_INDEX_CHECK, EventLevel.ERROR, "No index found",
+                       data={"phase": "completed", "fresh": False})
+            self._emit(EVENT_RUN_LIFECYCLE, EventLevel.ERROR, "Run aborted: no index",
+                       data={"phase": "finished", "status": "error"})
+            return None, 1
+
+        inventory_err = check_inventory_health(root)
+        if inventory_err:
+            print(f"Error: {inventory_err}", file=sys.stderr)
+            self._emit(EVENT_INDEX_CHECK, EventLevel.ERROR,
+                       f"Inventory health check failed: {inventory_err}",
+                       data={"phase": "completed", "fresh": False})
+            self._emit(EVENT_RUN_LIFECYCLE, EventLevel.ERROR, "Run aborted: inventory error",
+                       data={"phase": "finished", "status": "error"})
+            return None, 1
+
+        self._emit(EVENT_INDEX_CHECK, EventLevel.INFO, "Index check completed",
+                   data={"phase": "completed", "fresh": True})
+
+        # ----------------------------------------------------------------
+        # 3. Context pack + prompt
+        # ----------------------------------------------------------------
+        self._emit(EVENT_CONTEXT, EventLevel.INFO, "Context pack generation started",
+                   data={"phase": "started"})
+        context_rc = cmd_context(type("Args", (), {
+            "context_arg": None,
+            "task_option": self.task,
+            "repo": str(root),
+            "platform": self.platform,
+            "task": None,
+        })())
+        if context_rc != 0:
+            print("Error: context pack generation failed.", file=sys.stderr)
+            self._emit(EVENT_CONTEXT, EventLevel.ERROR, "Context pack generation failed",
+                       data={"phase": "written", "success": False})
+            self._emit(EVENT_RUN_LIFECYCLE, EventLevel.ERROR,
+                       "Run aborted: context pack failed",
+                       data={"phase": "finished", "status": "error"})
+            return None, 1
+
+        context_pack_path = vibecode_dir / "current" / "context_pack.md"
+        prompt_path = vibecode_dir / "current" / "opencode_prompt.md"
+
+        if not context_pack_path.exists():
+            print("Error: context pack was not written.", file=sys.stderr)
+            self._emit(EVENT_CONTEXT, EventLevel.ERROR, "Context pack file not found",
+                       data={"phase": "written", "success": False})
+            self._emit(EVENT_RUN_LIFECYCLE, EventLevel.ERROR,
+                       "Run aborted: context pack not found",
+                       data={"phase": "finished", "status": "error"})
+            return None, 1
+
+        self._emit(EVENT_CONTEXT, EventLevel.INFO, "Context pack written",
+                   data={"phase": "written", "success": True, "path": str(context_pack_path)})
+
+        session.snapshot_prompt()
+        session.snapshot_context_pack()
+
+        self._emit(EVENT_PROMPT, EventLevel.INFO, "Prompt written",
+                   data={"phase": "written", "path": str(prompt_path)})
+
+        # ----------------------------------------------------------------
+        # 4. Resolve platform command
+        # ----------------------------------------------------------------
+        cfg = None
+        try:
+            cfg = load_config(vibecode_dir)
+        except Exception:
+            pass
+
+        command = _get_opencode_command(cfg, os.environ)
+        if command is None:
+            print(
+                "Error: OpenCode command not found. "
+                "Install OpenCode or set the OPENCODE_COMMAND environment variable.",
+                file=sys.stderr,
+            )
+            _write_run_metadata(
+                session.run_dir, self.session_id,
+                build_run_plan(root, task=self.task, platform=self.platform,
+                               profile_name=self.profile_name, allow_dirty=self.allow_dirty),
+                command=None, exit_code=-1, stdout="", stderr="OpenCode command not found.",
+            )
+            self._emit(EVENT_AGENT_PROCESS, EventLevel.ERROR, "Agent command not found",
+                       data={"phase": "started", "error": "command_not_found"})
+            self._emit(EVENT_RUN_LIFECYCLE, EventLevel.ERROR,
+                       "Run aborted: agent command not found",
+                       data={"phase": "finished", "status": "error"})
+            return None, 1
+
+        status = check_opencode(command)
+        if not status:
+            print(f"Error: OpenCode check failed — {status.message}", file=sys.stderr)
+            _write_run_metadata(
+                session.run_dir, self.session_id,
+                build_run_plan(root, task=self.task, platform=self.platform,
+                               profile_name=self.profile_name, allow_dirty=self.allow_dirty),
+                command=command, exit_code=-1, stdout="", stderr=status.message,
+            )
+            self._emit(EVENT_AGENT_PROCESS, EventLevel.ERROR,
+                       f"Agent check failed: {status.message}",
+                       data={"phase": "started", "error": "check_failed"})
+            self._emit(EVENT_RUN_LIFECYCLE, EventLevel.ERROR,
+                       "Run aborted: agent check failed",
+                       data={"phase": "finished", "status": "error"})
+            return None, 1
+
+        # ----------------------------------------------------------------
+        # 5. Invoke platform agent
+        # ----------------------------------------------------------------
+        prompt_content = (
+            prompt_path.read_text(encoding="utf-8")
+            if prompt_path.exists()
+            else context_pack_path.read_text(encoding="utf-8")
+        )
+        run_plan = build_run_plan(
+            root, task=self.task, platform=self.platform,
+            profile_name=self.profile_name, allow_dirty=self.allow_dirty,
+        )
+
+        if run_plan.preflight_errors:
+            for e in run_plan.preflight_errors:
+                print(f"Error: [{e.level}] {e.message}", file=sys.stderr)
+            _write_run_metadata(
+                session.run_dir, self.session_id, run_plan,
+                command=command, exit_code=-1, stdout="", stderr="Preflight errors detected.",
+                error="Preflight errors: " + "; ".join(e.message for e in run_plan.preflight_errors),
+            )
+            self._emit(EVENT_RUN_LIFECYCLE, EventLevel.ERROR, "Run aborted: preflight errors",
+                       data={"phase": "finished", "status": "error"})
+            return None, 1
+
+        try:
+            pre_agent_git_state = inspect_git_state(root)
+        except Exception as exc:
+            pre_agent_git_state = initial_git_state
+            print(f"Warning: could not inspect pre-agent git state: {exc}", file=sys.stderr)
+
+        print(f"Running {command} ...", file=sys.stderr)
+        print(f"  session:  {self.session_id}", file=sys.stderr)
+        print(f"  task:     {self.task}", file=sys.stderr)
+        print(f"  prompt:   {prompt_path.relative_to(root)}", file=sys.stderr)
+        print("", file=sys.stderr)
+
+        self._emit(EVENT_AGENT_PROCESS, EventLevel.INFO, f"Agent started: {command}",
+                   data={"phase": "started", "command": command, "session_id": self.session_id})
+
+        try:
+            # shell=True: the command is a trusted local executable configured
+            # by the user via OPENCODE_COMMAND (or the default 'opencode').
+            # Windows .cmd/.bat wrappers and compound commands require shell
+            # execution.  See the module-level trust-model documentation.
+            result = subprocess.run(
+                command,
+                input=prompt_content,
+                capture_output=True,
+                text=True,
+                timeout=300,
+                cwd=str(root),
+                shell=True,
+            )
+            exit_code = result.returncode
+            stdout = result.stdout
+            stderr = result.stderr
+        except subprocess.TimeoutExpired:
+            exit_code = -1
+            stdout = ""
+            stderr = "Command timed out after 300 seconds."
+        except OSError as exc:
+            exit_code = -1
+            stdout = ""
+            stderr = f"Failed to execute {command}: {exc}"
+
+        agent_status = "success" if exit_code == 0 else "failure"
+        agent_level = EventLevel.INFO if exit_code == 0 else EventLevel.ERROR
+        self._emit(EVENT_AGENT_PROCESS, agent_level, f"Agent finished (exit_code={exit_code})",
+                   data={"phase": "finished", "exit_code": exit_code, "status": agent_status})
+
+        session.ensure_dir()
+        session.agent_stdout_log.write_text(stdout, encoding="utf-8")
+        session.agent_stderr_log.write_text(stderr, encoding="utf-8")
+
+        if stdout:
+            print(stdout, end="")
+        if stderr:
+            print(stderr, end="", file=sys.stderr)
+        if exit_code != 0:
+            print(f"\nAgent exited with code {exit_code}.", file=sys.stderr)
+
+        # ----------------------------------------------------------------
+        # 6. Post-run quality checks
+        # ----------------------------------------------------------------
+        print("\nRunning post-run checks ...", file=sys.stderr)
+
+        post_run_git_state = None
+        try:
+            post_run_git_state = inspect_git_state(root)
+        except Exception as exc:
+            print(f"Warning: could not inspect post-run git state: {exc}", file=sys.stderr)
+
+        agent_git_state = _agent_delta_git_state(pre_agent_git_state, post_run_git_state)
+
+        # Guard
+        guard_result: GuardResult | None = None
+        self._emit(EVENT_GUARD, EventLevel.INFO, "Guard started", data={"phase": "started"})
+        try:
+            if agent_git_state and agent_git_state.is_git_repo:
+                test_map = _load_test_map(vibecode_dir)
+                guard_result = evaluate_project_guard(
+                    agent_git_state, vibecode_dir, task=self.task, test_map=test_map
+                )
+                try:
+                    write_guard_result(guard_result, vibecode_dir, root)
+                except Exception:
+                    pass
+            else:
+                print("Warning: skipped guard (not a git repository).", file=sys.stderr)
+        except Exception as exc:
+            print(f"Warning: guard check failed with error: {exc}", file=sys.stderr)
+
+        guard_passed = guard_result.passed if guard_result else True
+        self._emit(
+            EVENT_GUARD,
+            EventLevel.INFO if guard_passed else EventLevel.WARNING,
+            "Guard completed",
+            data={"phase": "completed", "passed": guard_passed,
+                  "findings": len(guard_result.findings) if guard_result else 0},
+        )
+
+        # Required checks
+        check_result: CheckRun | None = None
+        self._emit(EVENT_CHECK, EventLevel.INFO, "Checks started", data={"phase": "started"})
+        try:
+            check_result = run_checks(root)
+            write_check_results(check_result, vibecode_dir)
+        except Exception as exc:
+            print(f"Warning: required checks failed with error: {exc}", file=sys.stderr)
+
+        checks_passed = not check_result.has_required_failures if check_result else True
+        self._emit(
+            EVENT_CHECK,
+            EventLevel.INFO if checks_passed else EventLevel.WARNING,
+            "Checks completed",
+            data={"phase": "completed", "passed": checks_passed,
+                  "total": check_result.total if check_result else 0,
+                  "failed": check_result.failed if check_result else 0},
+        )
+
+        # Handoff
+        handoff_result: HandoffResult | None = None
+        self._emit(EVENT_HANDOFF, EventLevel.INFO, "Handoff started", data={"phase": "started"})
+        try:
+            if agent_git_state and agent_git_state.is_git_repo:
+                diff_paths = agent_git_state.diff_name_only + agent_git_state.untracked_paths
+                handoff_result = validate_handoff_files(root, diff=diff_paths)
+            else:
+                print("Warning: skipped handoff-check (not a git repository).", file=sys.stderr)
+        except Exception as exc:
+            print(f"Warning: handoff-check failed with error: {exc}", file=sys.stderr)
+
+        handoff_passed = handoff_result.passed if handoff_result else True
+        self._emit(
+            EVENT_HANDOFF,
+            EventLevel.INFO if handoff_passed else EventLevel.WARNING,
+            "Handoff completed",
+            data={"phase": "completed", "passed": handoff_passed,
+                  "issues": len(handoff_result.issues) if handoff_result else 0},
+        )
+
+        # Persist per-session reports
+        session.ensure_dir()
+        if guard_result:
+            session.guard_report_json.write_text(
+                json.dumps(guard_result.as_dict(root=root), indent=2, ensure_ascii=False) + "\n",
+                encoding="utf-8",
+            )
+        if check_result:
+            session.checks_report_json.write_text(
+                json.dumps(check_result.as_dict(), indent=2, ensure_ascii=False) + "\n",
+                encoding="utf-8",
+            )
+        if handoff_result:
+            session.handoff_report_json.write_text(
+                json.dumps(handoff_result.as_dict(), indent=2, ensure_ascii=False) + "\n",
+                encoding="utf-8",
+            )
+
+        # ---- Diff summary ----
+        diff_summary = diff_summarise(pre_agent_git_state, post_run_git_state, repo_root=root)
+
+        # ----------------------------------------------------------------
+        # 7. Write session metadata and summary
+        # ----------------------------------------------------------------
+        started_at = run_plan.metadata.get("started_at", datetime.now(tz=timezone.utc).isoformat())
+
+        summary = RunSummary(
+            session_id=self.session_id,
+            started_at=started_at,
+            finished_at=datetime.now(tz=timezone.utc).isoformat(),
+            platform=self.platform,
+            profile=self.profile_name,
+            repo_root=str(root),
+            task=self.task,
+            dirty=run_plan.dirty,
+            index_fresh=run_plan.index_fresh,
+            command=command,
+            exit_code=exit_code,
+            stdout=stdout,
+            stderr=stderr,
+            agent_status=agent_status,
+            guard=guard_result,
+            checks=check_result,
+            handoff=handoff_result,
+            diff=diff_summary,
+        )
+
+        _write_run_metadata(
+            session.run_dir, self.session_id, run_plan,
+            command=command, exit_code=exit_code,
+            stdout=stdout, stderr=stderr,
+        )
+        summary_path = _write_run_summary(vibecode_dir, summary)
+        print(f"\nRun summary written: {summary_path.relative_to(root)}", file=sys.stderr)
+
+        self._emit(EVENT_SUMMARY, EventLevel.INFO, "Run summary written",
+                   data={"phase": "written", "path": str(summary_path),
+                         "status": summary.overall_status})
+
+        # ----------------------------------------------------------------
+        # 8. Print concise result
+        # ----------------------------------------------------------------
+        overall = summary.overall_status
+        print(f"\n{'=' * 50}", file=sys.stderr)
+        print(f"  RUN {overall.upper()}", file=sys.stderr)
+        print(f"{'=' * 50}", file=sys.stderr)
+
+        if guard_result and not guard_result.passed:
+            errors = tuple(f for f in guard_result.findings if f.severity == "error")
+            warnings = tuple(f for f in guard_result.findings if f.severity == "warning")
+            print(f"  Guard: {len(errors)} error(s), {len(warnings)} warning(s)", file=sys.stderr)
+        elif guard_result:
+            print("  Guard: passed", file=sys.stderr)
+
+        if check_result:
+            print(
+                f"  Checks: {check_result.passed}/{check_result.total} passed"
+                f"  ({check_result.failed} failed, {check_result.warnings} warnings)",
+                file=sys.stderr,
+            )
+
+        if handoff_result and not handoff_result.passed:
+            print(f"  Handoff: {len(handoff_result.issues)} issue(s)", file=sys.stderr)
+        elif handoff_result:
+            print("  Handoff: passed", file=sys.stderr)
+
+        if diff_summary.changed_files:
+            print("", file=sys.stderr)
+            print(diff_summary.as_text(), file=sys.stderr)
+
+        print(f"{'=' * 50}\n", file=sys.stderr)
+
+        # ---- RunFinished ----
+        finish_level = (
+            EventLevel.INFO if overall == "success"
+            else EventLevel.ERROR if overall == "error"
+            else EventLevel.WARNING
+        )
+        self._emit(EVENT_RUN_LIFECYCLE, finish_level, f"Run finished: {overall}",
+                   data={"phase": "finished", "status": overall})
+
+        return summary, _exit_code_for_status(overall)
+
+
 def cmd_run(args) -> int:
     """CLI entry point for ``vibecode run``."""
     repo_arg = getattr(args, "repo_root", None)
@@ -366,360 +955,14 @@ def cmd_run(args) -> int:
         print("Error: repo root is required.", file=sys.stderr)
         return 1
 
-    # repo_arg is already a resolved Path (normalised by the CLI dispatcher).
     root: Path = repo_arg
-    vibecode_dir = root / ".vibecode"
-    session_id = datetime.now(tz=timezone.utc).strftime("%Y%m%dT%H%M%S%fZ")
-    session = RunSession(root, session_id)
-
-    if not (vibecode_dir / "project.yaml").exists():
-        print("Error: no .vibecode/project.yaml found. Run 'vibecode init' first.", file=sys.stderr)
-        return 1
-
-    profile_ok, profile_error = _validate_permission_profile(root, profile_name)
-    if not profile_ok:
-        print(f"Error: {profile_error}", file=sys.stderr)
-        return 1
-
-    # ------------------------------------------------------------------
-    # 1. Git status check
-    # ------------------------------------------------------------------
-    clean_ok, messages = _run_git_check(root, allow_dirty)
-    if not clean_ok and not allow_dirty:
-        for msg in messages:
-            print(f"Error: {msg}", file=sys.stderr)
-        return 1
-
-    if messages:
-        for msg in messages:
-            print(f"Warning: {msg}", file=sys.stderr)
-
-    # Capture early state for preflight/dirty comparison. The agent baseline is
-    # captured later, after Vibecode writes context/runtime files.
-    initial_git_state = None
-    try:
-        initial_git_state = inspect_git_state(root)
-    except Exception as exc:
-        print(f"Warning: could not inspect git state for post-run checks: {exc}", file=sys.stderr)
-
-    # ------------------------------------------------------------------
-    # 2. Ensure index is fresh (generate / refresh if missing or stale)
-    # ------------------------------------------------------------------
-    index_path = vibecode_dir / "current" / "last_index.json"
-    if not no_index and (not index_path.exists() or (root / ".vibecode" / "project.yaml").exists()):
-        # Check if index looks stale: older than 5 minutes or git commit changed.
-        stale = False
-        if index_path.exists():
-            try:
-                import json as _json
-                record = _json.loads(index_path.read_text(encoding="utf-8"))
-                started = record.get("started_at", "")
-                if started:
-                    from datetime import datetime as _dt, timezone as _tz
-                    started_dt = _dt.fromisoformat(started)
-                    age = (_dt.now(tz=_tz.utc) - started_dt).total_seconds()
-                    if age > 300:  # 5 minutes
-                        stale = True
-                # Check if the git commit has changed since the index was built.
-                if not stale:
-                    recorded_commit = record.get("git_commit")
-                    if recorded_commit and recorded_commit != "unknown":
-                        current_commit = current_git_commit(root)
-                        if current_commit != "unknown" and current_commit != recorded_commit:
-                            print(
-                                f"Index was built for commit {recorded_commit}, "
-                                f"but HEAD is now {current_commit} — re-indexing.",
-                                file=sys.stderr,
-                            )
-                            stale = True
-                # Check file-set fingerprint for added/removed files.
-                if not stale:
-                    recorded_fingerprint = record.get("file_set_fingerprint")
-                    if recorded_fingerprint:
-                        include = None
-                        exclude = None
-                        try:
-                            from vibecode.config import load_config as _load_cfg
-                            _cfg = _load_cfg(vibecode_dir)
-                            include = _cfg.include
-                            exclude = _cfg.exclude
-                        except Exception:
-                            pass
-                        current_fingerprint = compute_current_file_set_fingerprint(
-                            root, include=include, exclude=exclude
-                        )
-                        if current_fingerprint is not None and current_fingerprint != recorded_fingerprint:
-                            print(
-                                "Indexed file set has changed since the last index "
-                                "-- running 'vibecode index' to refresh.",
-                                file=sys.stderr,
-                            )
-                            stale = True
-            except Exception:
-                stale = True
-
-        if not index_path.exists() or stale:
-            print("Index is missing or stale — running 'vibecode index' first.", file=sys.stderr)
-            rc = cmd_index(type("Args", (), {"repo_root": str(root), "debug": False})())
-            if rc != 0:
-                print("Error: index generation failed.", file=sys.stderr)
-                return 1
-
-    if not index_path.exists():
-        print("Error: no index found.  Run 'vibecode index' first.", file=sys.stderr)
-        return 1
-
-    # Verify inventory health — fail early if inventory is broken.
-    inventory_err = check_inventory_health(root)
-    if inventory_err:
-        print(f"Error: {inventory_err}", file=sys.stderr)
-        return 1
-
-    # ------------------------------------------------------------------
-    # 3. Generate context pack + platform prompt
-    # ------------------------------------------------------------------
-    # Reuse cmd_context which writes context_pack.md and optionally the
-    # platform-specific prompt file.
-    context_rc = cmd_context(type("Args", (), {
-        "context_arg": None,
-        "task_option": task,
-        "repo": str(root),
-        "platform": platform,
-        "task": None,
-    })())
-    if context_rc != 0:
-        print("Error: context pack generation failed.", file=sys.stderr)
-        return 1
-
-    context_pack_path = vibecode_dir / "current" / "context_pack.md"
-    prompt_path = vibecode_dir / "current" / "opencode_prompt.md"
-
-    if not context_pack_path.exists():
-        print("Error: context pack was not written.", file=sys.stderr)
-        return 1
-
-    session.snapshot_prompt()
-    session.snapshot_context_pack()
-
-    # ------------------------------------------------------------------
-    # 4. Resolve the platform command
-    # ------------------------------------------------------------------
-    cfg = None
-    try:
-        cfg = load_config(vibecode_dir)
-    except Exception:
-        pass
-
-    command = _get_opencode_command(cfg, os.environ)
-    if command is None:
-        print(
-            "Error: OpenCode command not found. "
-            "Install OpenCode or set the OPENCODE_COMMAND environment variable.",
-            file=sys.stderr,
-        )
-        # Write metadata even on command-not-found so callers can inspect it.
-        _write_run_metadata(
-            session.run_dir, session_id,
-            build_run_plan(root, task=task, platform=platform, profile_name=profile_name, allow_dirty=allow_dirty),
-            command=None, exit_code=-1, stdout="", stderr="OpenCode command not found.",
-        )
-        return 1
-
-    # Verify the command can actually run.
-    status = check_opencode(command)
-    if not status:
-        print(f"Error: OpenCode check failed — {status.message}", file=sys.stderr)
-        _write_run_metadata(
-            session.run_dir, session_id,
-            build_run_plan(root, task=task, platform=platform, profile_name=profile_name, allow_dirty=allow_dirty),
-            command=command, exit_code=-1, stdout="", stderr=status.message,
-        )
-        return 1
-
-    # ------------------------------------------------------------------
-    # 5. Invoke the platform command with the prompt on stdin
-    # ------------------------------------------------------------------
-    prompt_content = prompt_path.read_text(encoding="utf-8") if prompt_path.exists() else context_pack_path.read_text(encoding="utf-8")
-
-    run_plan = build_run_plan(root, task=task, platform=platform, profile_name=profile_name, allow_dirty=allow_dirty)
-
-    if run_plan.preflight_errors:
-        for e in run_plan.preflight_errors:
-            print(f"Error: [{e.level}] {e.message}", file=sys.stderr)
-        _write_run_metadata(
-            session.run_dir, session_id, run_plan,
-            command=command, exit_code=-1, stdout="", stderr="Preflight errors detected.",
-            error="Preflight errors: " + "; ".join(e.message for e in run_plan.preflight_errors),
-        )
-        return 1
-
-    try:
-        pre_agent_git_state = inspect_git_state(root)
-    except Exception as exc:
-        pre_agent_git_state = initial_git_state
-        print(f"Warning: could not inspect pre-agent git state: {exc}", file=sys.stderr)
-
-    print(f"Running {command} ...", file=sys.stderr)
-    print(f"  session:  {session_id}", file=sys.stderr)
-    print(f"  task:     {task}", file=sys.stderr)
-    print(f"  prompt:   {prompt_path.relative_to(root)}", file=sys.stderr)
-    print("", file=sys.stderr)
-
-    try:
-        # shell=True: the command is a trusted local executable configured
-        # by the user via OPENCODE_COMMAND (or the default 'opencode').
-        # Windows .cmd/.bat wrappers and compound commands require shell
-        # execution.  See the module-level trust-model documentation.
-        result = subprocess.run(
-            command,
-            input=prompt_content,
-            capture_output=True,
-            text=True,
-            timeout=300,
-            cwd=str(root),
-            shell=True,
-        )
-        exit_code = result.returncode
-        stdout = result.stdout
-        stderr = result.stderr
-    except subprocess.TimeoutExpired:
-        exit_code = -1
-        stdout = ""
-        stderr = "Command timed out after 300 seconds."
-    except OSError as exc:
-        exit_code = -1
-        stdout = ""
-        stderr = f"Failed to execute {command}: {exc}"
-
-    agent_status = "success" if exit_code == 0 else "failure"
-
-    session.ensure_dir()
-    session.agent_stdout_log.write_text(stdout, encoding="utf-8")
-    session.agent_stderr_log.write_text(stderr, encoding="utf-8")
-
-    # ------------------------------------------------------------------
-    # 6. Show agent results
-    # ------------------------------------------------------------------
-    if stdout:
-        print(stdout, end="")
-    if stderr:
-        print(stderr, end="", file=sys.stderr)
-
-    if exit_code != 0:
-        print(f"\nAgent exited with code {exit_code}.", file=sys.stderr)
-
-    # -------------------------------------------------------------------------
-    # 7. Post-run quality checks (guard, required checks, handoff)
-    # -------------------------------------------------------------------------
-    print("\nRunning post-run checks ...", file=sys.stderr)
-
-    post_run_git_state = None
-    try:
-        post_run_git_state = inspect_git_state(root)
-    except Exception as exc:
-        print(f"Warning: could not inspect post-run git state: {exc}", file=sys.stderr)
-
-    agent_git_state = _agent_delta_git_state(pre_agent_git_state, post_run_git_state)
-
-    guard_result, check_result, handoff_result = _run_post_checks(
-        root, vibecode_dir, agent_git_state, session_id, task=task,
-    )
-
-    session.ensure_dir()
-    if guard_result:
-        session.guard_report_json.write_text(
-            json.dumps(guard_result.as_dict(root=root), indent=2, ensure_ascii=False) + "\n",
-            encoding="utf-8",
-        )
-    if check_result:
-        session.checks_report_json.write_text(
-            json.dumps(check_result.as_dict(), indent=2, ensure_ascii=False) + "\n",
-            encoding="utf-8",
-        )
-    if handoff_result:
-        session.handoff_report_json.write_text(
-            json.dumps(handoff_result.as_dict(), indent=2, ensure_ascii=False) + "\n",
-            encoding="utf-8",
-        )
-
-    # -------------------------------------------------------------------------
-    # 7b. Diff summary — compare agent baseline and post-run git state
-    # -------------------------------------------------------------------------
-    diff_summary = diff_summarise(pre_agent_git_state, post_run_git_state, repo_root=root)
-
-    # -------------------------------------------------------------------------
-    # 8. Write session metadata and summary
-    # -------------------------------------------------------------------------
-    started_at = run_plan.metadata.get("started_at", datetime.now(tz=timezone.utc).isoformat())
-
-    summary = RunSummary(
-        session_id=session_id,
-        started_at=started_at,
-        finished_at=datetime.now(tz=timezone.utc).isoformat(),
-        platform=platform,
-        profile=profile_name,
-        repo_root=str(root),
+    controller = RunController(
+        root=root,
         task=task,
-        dirty=run_plan.dirty,
-        index_fresh=run_plan.index_fresh,
-        command=command,
-        exit_code=exit_code,
-        stdout=stdout,
-        stderr=stderr,
-        agent_status=agent_status,
-        guard=guard_result,
-        checks=check_result,
-        handoff=handoff_result,
-        diff=diff_summary,
+        platform=platform,
+        profile_name=profile_name,
+        allow_dirty=allow_dirty,
+        no_index=no_index,
     )
-
-    # Write session metadata and nested summary.
-    _write_run_metadata(
-        session.run_dir, session_id, run_plan,
-        command=command, exit_code=exit_code,
-        stdout=stdout, stderr=stderr,
-    )
-    summary_path = _write_run_summary(vibecode_dir, summary)
-    print(f"\nRun summary written: {summary_path.relative_to(root)}", file=sys.stderr)
-
-    # -------------------------------------------------------------------------
-    # 9. Print concise result
-    # -------------------------------------------------------------------------
-    overall = summary.overall_status
-    print(f"\n{'=' * 50}", file=sys.stderr)
-    print(f"  RUN {overall.upper()}", file=sys.stderr)
-    print(f"{'=' * 50}", file=sys.stderr)
-
-    if guard_result and not guard_result.passed:
-        errors = tuple(f for f in guard_result.findings if f.severity == "error")
-        warnings = tuple(f for f in guard_result.findings if f.severity == "warning")
-        print(f"  Guard: {len(errors)} error(s), {len(warnings)} warning(s)", file=sys.stderr)
-    elif guard_result:
-        print("  Guard: passed", file=sys.stderr)
-
-    if check_result:
-        print(f"  Checks: {check_result.passed}/{check_result.total} passed"
-              f"  ({check_result.failed} failed, {check_result.warnings} warnings)", file=sys.stderr)
-
-    if handoff_result and not handoff_result.passed:
-        print(f"  Handoff: {len(handoff_result.issues)} issue(s)", file=sys.stderr)
-    elif handoff_result:
-        print("  Handoff: passed", file=sys.stderr)
-
-    # Print diff summary
-    if diff_summary.changed_files:
-        print("", file=sys.stderr)
-        print(diff_summary.as_text(), file=sys.stderr)
-
-    print(f"{'=' * 50}\n", file=sys.stderr)
-
-    # ------------------------------------------------------------------
-    # 10. Exit code
-    # ------------------------------------------------------------------
-    if overall == "failure":
-        return 1
-    if overall == "error":
-        return 1
-    if overall == "incomplete":
-        return 2
-    return 0
+    _, exit_code = controller.execute()
+    return exit_code
