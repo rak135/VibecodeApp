@@ -320,7 +320,7 @@ def test_json_fallback_datetime():
 
 
 def test_json_fallback_path():
-    from pathlib import PurePosixPath, PureWindowsPath
+    from pathlib import PurePosixPath
 
     p = PurePosixPath("/a/b")
     assert _json_fallback(p) == "/a/b"
@@ -372,16 +372,14 @@ def test_event_with_path_in_data_serializes():
 # ── protocol compatibility check ──────────────────────────────────────
 
 
-def test_all_sinks_satisfy_protocol():
+def test_all_sinks_satisfy_protocol(tmp_path):
     """Verify that all sink classes conform to the EventSink protocol."""
     sinks: list[EventSink] = [
         InMemoryEventSink(),
-        JsonlEventSink("test.jsonl"),
+        JsonlEventSink(tmp_path / "test.jsonl"),
         ConsoleEventSink(),
         MultiEventSink(),
         NullEventSink(),
     ]
     for sink in sinks:
         sink.emit(_make_event())
-    # Clean up the JSONL file created during this test
-    Path("test.jsonl").unlink(missing_ok=True)
