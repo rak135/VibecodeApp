@@ -2,11 +2,13 @@
   "name": "VibecodeApp Observable Run Monitor",
   "description": "Implement an event-driven observable run monitor for VibecodeApp.\n\nProduct goal:\nVibecodeApp should become an observable control layer around OpenCode. The operator should be able to run a task and see two parallel truth surfaces:\n1. the OpenCode / agent console output,\n2. the VibecodeApp monitor stream showing what VibecodeApp prepared, what prompt/context it gave to the agent, what the agent asked from VibecodeApp via MCP, what changed in the repository, where advisory guards warned, and why.\n\nImportant product decision:\nGuards are advisory by default. They must not hard-block the run yet. The default behavior should be transparent warning, drift reporting, and review guidance. Strict/blocking mode may be introduced as an explicit option only, but the main default is advisory.\n\nArchitectural goal:\nDo not bolt a second console onto the existing batch command. Build a small event spine first. CLI, TUI, future GUI, JSONL logs, run replay, and tests must all consume the same run events. UI is only a view over recorded truth.\n\nCore invariants:\n- Preserve current CLI behavior unless a task explicitly changes it.\n- No hidden enforcement by default.\n- Every important run action must be observable as a structured event.\n- Every run must be replayable from files under .vibecode/runs/<session_id>/.\n- Prompt/context snapshots must be tied to a concrete run, not only stored in .vibecode/current.\n- Guard findings must be understandable to a human: what happened, where, why it matters, and what to do next.\n- Reviews must be written as artifacts and correction tasks must apply only grounded, actionable fixes.",
   "defaults": {
-    "engine": "opencode",
-    "model": "deepseek/deepseek-v4-pro",
+    "engine": "copilot",
+    "model": "claude-sonnet-4.6",
     "engine_args": [
-      "--variant",
-      "high"
+      "--reasoning-effort",
+      "high",
+      "--stream",
+      "off"
     ]
   },
   "tasks": [
@@ -14,11 +16,13 @@
       "title": "P0.1 Audit current run, guard, context, MCP, and TUI surfaces",
       "description": "Create a focused implementation audit before changing behavior.\n\nInspect the current repository and produce a concise but concrete audit artifact at:\ndocs/audit/OBSERVABLE_RUN_MONITOR_BASELINE.md\n\nThe audit must cover:\n- Current CLI entry points related to run/context/guard/check/handoff/dashboard/serve.\n- How vibecode run currently creates context packs and OpenCode prompts.\n- How vibecode run currently invokes OpenCode or other external platform commands.\n- Where stdout/stderr/exit code are captured.\n- Where run summary files are written today.\n- How guard findings are represented today.\n- Whether guard failures currently affect overall status or process exit behavior.\n- How MCP server tools are implemented today and whether they can be instrumented.\n- How existing TUI/dashboard code is structured and whether it can be reused.\n- Current tests that cover run/guard/context/MCP/TUI behavior.\n- Known risk areas and likely files to touch.\n\nDo not implement the monitor in this task. This is a baseline truth record only.\nRun at least:\n- python -m compileall vibecode\n- pytest, or the narrowest available test command if full pytest is too slow.\nRecord exactly what was run and whether it passed.",
       "completed": true,
-      "engine": "opencode",
-      "model": "deepseek/deepseek-v4-pro",
+      "engine": "copilot",
+      "model": "claude-sonnet-4.6",
       "engine_args": [
-        "--variant",
-        "high"
+        "--reasoning-effort",
+        "high",
+        "--stream",
+        "off"
       ]
     },
     {
@@ -36,6 +40,17 @@
       "title": "P0.3 Fix baseline audit issues if review found any",
       "description": "Read docs/audit/OBSERVABLE_RUN_MONITOR_BASELINE_REVIEW.md.\n\nIf the review contains actionable issues, update docs/audit/OBSERVABLE_RUN_MONITOR_BASELINE.md so it becomes accurate.\nIf the review found no issues, write a short no-op note to:\ndocs/audit/OBSERVABLE_RUN_MONITOR_BASELINE_FIX.md\n\nDo not change runtime behavior in this task.\nRun compile/tests only if source files were touched.",
       "completed": true,
+      "engine": "opencode",
+      "model": "deepseek/deepseek-v4-pro",
+      "engine_args": [
+        "--variant",
+        "high"
+      ]
+    },
+    {
+      "title": "P1.1 Implement structured event spine",
+      "description": "Implement the foundational event model for observable runs.\n\nLikely new file:\nvibecode/events.py\n\nRequired concepts:\n- VibecodeEvent as a serializable dataclass or equivalent typed structure.\n- Stable event fields:\n  - event_id\n  - session_id\n  - timestamp\n  - type\n  - level: debug/info/warning/error\n  - message\n  - data\n- Event type constants or enum-like names for run lifecycle, context, prompt, agent process, MCP, git delta, guard, checks, handoff, and summary.\n- EventSink protocol/interface with emit(event).\n- InMemoryEventSink for tests.\n- JsonlEventSink that appends one JSON object per line.\n- ConsoleEventSink that can print compact readable messages.\n- MultiEventSink that fans out events to multiple sinks.\n- NullEventSink for call sites that do not care.\n- Helper function to create events consistently, including timestamp/session_id.\n\nDesign rules:\n- Keep this module dependency-light and boring.\n- Do not import high-level run/guard/context modules from events.py.\n- JSON serialization must be deterministic enough for tests.\n- Event data must accept plain JSON-compatible values only.\n- If non-JSON values are passed, either convert safely or fail with a clear error.\n\nTests:\nAdd focused tests for:\n- event serialization roundtrip,\n- JSONL append behavior,\n- multi sink fan-out,\n- in-memory sink capture,\n- invalid/non-serializable data handling if implemented.\n\nRun:\n- python -m compileall vibecode\n- pytest tests related to events, or full pytest if practical.",
+      "completed": true,
       "engine": "copilot",
       "model": "claude-sonnet-4.6",
       "engine_args": [
@@ -43,17 +58,6 @@
         "high",
         "--stream",
         "off"
-      ]
-    },
-    {
-      "title": "P1.1 Implement structured event spine",
-      "description": "Implement the foundational event model for observable runs.\n\nLikely new file:\nvibecode/events.py\n\nRequired concepts:\n- VibecodeEvent as a serializable dataclass or equivalent typed structure.\n- Stable event fields:\n  - event_id\n  - session_id\n  - timestamp\n  - type\n  - level: debug/info/warning/error\n  - message\n  - data\n- Event type constants or enum-like names for run lifecycle, context, prompt, agent process, MCP, git delta, guard, checks, handoff, and summary.\n- EventSink protocol/interface with emit(event).\n- InMemoryEventSink for tests.\n- JsonlEventSink that appends one JSON object per line.\n- ConsoleEventSink that can print compact readable messages.\n- MultiEventSink that fans out events to multiple sinks.\n- NullEventSink for call sites that do not care.\n- Helper function to create events consistently, including timestamp/session_id.\n\nDesign rules:\n- Keep this module dependency-light and boring.\n- Do not import high-level run/guard/context modules from events.py.\n- JSON serialization must be deterministic enough for tests.\n- Event data must accept plain JSON-compatible values only.\n- If non-JSON values are passed, either convert safely or fail with a clear error.\n\nTests:\nAdd focused tests for:\n- event serialization roundtrip,\n- JSONL append behavior,\n- multi sink fan-out,\n- in-memory sink capture,\n- invalid/non-serializable data handling if implemented.\n\nRun:\n- python -m compileall vibecode\n- pytest tests related to events, or full pytest if practical.",
-      "completed": true,
-      "engine": "opencode",
-      "model": "deepseek/deepseek-v4-pro",
-      "engine_args": [
-        "--variant",
-        "high"
       ]
     },
     {
@@ -71,6 +75,17 @@
       "title": "P1.3 Apply event spine review fixes",
       "description": "Read docs/audit/OBSERVABLE_RUN_MONITOR_P1_EVENT_SPINE_REVIEW.md.\n\nApply only actionable fixes from the review. Do not expand scope.\nIf no fixes are needed, write:\ndocs/audit/OBSERVABLE_RUN_MONITOR_P1_EVENT_SPINE_FIX.md\nwith a no-op explanation.\n\nRun:\n- python -m compileall vibecode\n- relevant event tests\n- any affected existing tests.",
       "completed": true,
+      "engine": "opencode",
+      "model": "deepseek/deepseek-v4-pro",
+      "engine_args": [
+        "--variant",
+        "high"
+      ]
+    },
+    {
+      "title": "P2.1 Implement per-run session paths and durable run artifacts",
+      "description": "Implement a small run session artifact layer.\n\nGoal:\nEvery observable run must have a stable folder under:\n.vibecode/runs/<session_id>/\n\nLikely new or changed module:\nvibecode/session_log.py\nor a similarly named low-level module.\n\nRequired behavior:\n- Create or resolve a run session directory.\n- Define paths for:\n  - events.jsonl\n  - summary.json\n  - opencode_prompt.md\n  - context_pack.md\n  - guard_report.json\n  - guard_report.md\n  - checks_report.json\n  - handoff_report.json or handoff_report.md if applicable\n  - agent_stdout.log\n  - agent_stderr.log\n- Provide safe helpers to copy/snapshot current prompt and context files into the run directory.\n- Do not remove existing .vibecode/current behavior yet; run snapshots are additive.\n- Provide a way for run code to create JsonlEventSink pointing to the session events.jsonl.\n- Ensure paths work on Windows.\n- Ensure parent directories are created.\n- Do not introduce global mutable session state unless absolutely necessary.\n\nTests:\n- session directory creation,\n- expected paths,\n- snapshot copy behavior,\n- Windows-safe path assumptions where possible,\n- no crash when optional source file is absent if that behavior is chosen.\n\nRun compile and relevant tests.",
+      "completed": true,
       "engine": "copilot",
       "model": "claude-sonnet-4.6",
       "engine_args": [
@@ -78,17 +93,6 @@
         "high",
         "--stream",
         "off"
-      ]
-    },
-    {
-      "title": "P2.1 Implement per-run session paths and durable run artifacts",
-      "description": "Implement a small run session artifact layer.\n\nGoal:\nEvery observable run must have a stable folder under:\n.vibecode/runs/<session_id>/\n\nLikely new or changed module:\nvibecode/session_log.py\nor a similarly named low-level module.\n\nRequired behavior:\n- Create or resolve a run session directory.\n- Define paths for:\n  - events.jsonl\n  - summary.json\n  - opencode_prompt.md\n  - context_pack.md\n  - guard_report.json\n  - guard_report.md\n  - checks_report.json\n  - handoff_report.json or handoff_report.md if applicable\n  - agent_stdout.log\n  - agent_stderr.log\n- Provide safe helpers to copy/snapshot current prompt and context files into the run directory.\n- Do not remove existing .vibecode/current behavior yet; run snapshots are additive.\n- Provide a way for run code to create JsonlEventSink pointing to the session events.jsonl.\n- Ensure paths work on Windows.\n- Ensure parent directories are created.\n- Do not introduce global mutable session state unless absolutely necessary.\n\nTests:\n- session directory creation,\n- expected paths,\n- snapshot copy behavior,\n- Windows-safe path assumptions where possible,\n- no crash when optional source file is absent if that behavior is chosen.\n\nRun compile and relevant tests.",
-      "completed": false,
-      "engine": "opencode",
-      "model": "deepseek/deepseek-v4-pro",
-      "engine_args": [
-        "--variant",
-        "high"
       ]
     },
     {
@@ -106,6 +110,17 @@
       "title": "P2.3 Apply session artifact review fixes",
       "description": "Read docs/audit/OBSERVABLE_RUN_MONITOR_P2_SESSION_ARTIFACTS_REVIEW.md.\n\nApply only grounded fixes. If no fixes are needed, write:\ndocs/audit/OBSERVABLE_RUN_MONITOR_P2_SESSION_ARTIFACTS_FIX.md\n\nRun compile and affected tests.",
       "completed": false,
+      "engine": "opencode",
+      "model": "deepseek/deepseek-v4-pro",
+      "engine_args": [
+        "--variant",
+        "high"
+      ]
+    },
+    {
+      "title": "P3.1 Refactor run command around observable run controller",
+      "description": "Refactor vibecode run so it can emit structured events without breaking normal CLI use.\n\nGoal:\nCreate a RunController or equivalent orchestration class/function that receives:\n- repo root/config,\n- task,\n- platform,\n- optional model/profile/permissions args if currently supported,\n- event sink,\n- session artifact paths.\n\nIt should orchestrate the same high-level behavior as the current run command:\n- git/preflight status,\n- index freshness decision,\n- context pack generation,\n- prompt generation,\n- external agent invocation,\n- post-run guard/check/handoff,\n- summary writing.\n\nRequired event emissions:\n- RunStarted\n- GitPreflightStarted / GitPreflightCompleted / GitPreflightWarning\n- IndexCheckStarted / IndexCheckCompleted\n- ContextPackStarted / ContextPackWritten\n- PromptWritten\n- AgentStarted\n- AgentFinished\n- GuardStarted / GuardCompleted\n- ChecksStarted / ChecksCompleted\n- HandoffStarted / HandoffCompleted\n- RunSummaryWritten\n- RunFinished\n\nRules:\n- Avoid a giant rewrite. Extract, then instrument.\n- Existing command-line behavior should remain usable.\n- If event sink is absent, use NullEventSink.\n- The CLI may still print a compact summary, but important truth must come from events and run artifacts.\n- Do not implement live TUI yet.\n- Do not change guard advisory/blocking semantics yet unless strictly necessary; that is P5.\n\nTests:\n- use fake/minimal platform invocation where possible,\n- prove a run emits a sensible ordered set of events,\n- prove summary is still written,\n- prove failures produce error events,\n- prove legacy CLI path still works at least through narrow tests.\n\nRun compile and affected tests.",
+      "completed": false,
       "engine": "copilot",
       "model": "claude-sonnet-4.6",
       "engine_args": [
@@ -113,17 +128,6 @@
         "high",
         "--stream",
         "off"
-      ]
-    },
-    {
-      "title": "P3.1 Refactor run command around observable run controller",
-      "description": "Refactor vibecode run so it can emit structured events without breaking normal CLI use.\n\nGoal:\nCreate a RunController or equivalent orchestration class/function that receives:\n- repo root/config,\n- task,\n- platform,\n- optional model/profile/permissions args if currently supported,\n- event sink,\n- session artifact paths.\n\nIt should orchestrate the same high-level behavior as the current run command:\n- git/preflight status,\n- index freshness decision,\n- context pack generation,\n- prompt generation,\n- external agent invocation,\n- post-run guard/check/handoff,\n- summary writing.\n\nRequired event emissions:\n- RunStarted\n- GitPreflightStarted / GitPreflightCompleted / GitPreflightWarning\n- IndexCheckStarted / IndexCheckCompleted\n- ContextPackStarted / ContextPackWritten\n- PromptWritten\n- AgentStarted\n- AgentFinished\n- GuardStarted / GuardCompleted\n- ChecksStarted / ChecksCompleted\n- HandoffStarted / HandoffCompleted\n- RunSummaryWritten\n- RunFinished\n\nRules:\n- Avoid a giant rewrite. Extract, then instrument.\n- Existing command-line behavior should remain usable.\n- If event sink is absent, use NullEventSink.\n- The CLI may still print a compact summary, but important truth must come from events and run artifacts.\n- Do not implement live TUI yet.\n- Do not change guard advisory/blocking semantics yet unless strictly necessary; that is P5.\n\nTests:\n- use fake/minimal platform invocation where possible,\n- prove a run emits a sensible ordered set of events,\n- prove summary is still written,\n- prove failures produce error events,\n- prove legacy CLI path still works at least through narrow tests.\n\nRun compile and affected tests.",
-      "completed": false,
-      "engine": "opencode",
-      "model": "deepseek/deepseek-v4-pro",
-      "engine_args": [
-        "--variant",
-        "high"
       ]
     },
     {
@@ -141,6 +145,17 @@
       "title": "P3.3 Apply run controller review fixes",
       "description": "Read docs/audit/OBSERVABLE_RUN_MONITOR_P3_RUN_CONTROLLER_REVIEW.md.\n\nApply only actionable fixes from the review.\nIf no fixes are needed, write:\ndocs/audit/OBSERVABLE_RUN_MONITOR_P3_RUN_CONTROLLER_FIX.md\n\nRun compile and affected tests.",
       "completed": false,
+      "engine": "opencode",
+      "model": "deepseek/deepseek-v4-pro",
+      "engine_args": [
+        "--variant",
+        "high"
+      ]
+    },
+    {
+      "title": "P4.1 Add streaming agent process output",
+      "description": "Change external agent execution from purely batch-style capture to streaming-capable execution.\n\nGoal:\nWhen OpenCode runs, VibecodeApp should be able to stream agent stdout/stderr events live while still preserving final logs and exit code.\n\nRequired behavior:\n- Add a streaming process runner abstraction if none exists.\n- Use subprocess.Popen or equivalent to read stdout/stderr incrementally.\n- Emit AgentStdout events for stdout lines/chunks.\n- Emit AgentStderr events for stderr lines/chunks.\n- Write full stdout to .vibecode/runs/<session_id>/agent_stdout.log.\n- Write full stderr to .vibecode/runs/<session_id>/agent_stderr.log.\n- Preserve final exit code.\n- Preserve existing batch behavior for non-monitor CLI if needed, but prefer one implementation path.\n- Handle Windows safely.\n- Avoid deadlock when both stdout and stderr produce output.\n- Do not attempt full interactive PTY/ConPTY support in this task. This is streaming output MVP, not an embedded terminal.\n\nTests:\n- fake process that prints stdout and exits 0,\n- fake process that prints stderr and exits nonzero,\n- mixed stdout/stderr if practical,\n- verify events and log files.\n\nRun compile and affected tests.",
+      "completed": false,
       "engine": "copilot",
       "model": "claude-sonnet-4.6",
       "engine_args": [
@@ -148,17 +163,6 @@
         "high",
         "--stream",
         "off"
-      ]
-    },
-    {
-      "title": "P4.1 Add streaming agent process output",
-      "description": "Change external agent execution from purely batch-style capture to streaming-capable execution.\n\nGoal:\nWhen OpenCode runs, VibecodeApp should be able to stream agent stdout/stderr events live while still preserving final logs and exit code.\n\nRequired behavior:\n- Add a streaming process runner abstraction if none exists.\n- Use subprocess.Popen or equivalent to read stdout/stderr incrementally.\n- Emit AgentStdout events for stdout lines/chunks.\n- Emit AgentStderr events for stderr lines/chunks.\n- Write full stdout to .vibecode/runs/<session_id>/agent_stdout.log.\n- Write full stderr to .vibecode/runs/<session_id>/agent_stderr.log.\n- Preserve final exit code.\n- Preserve existing batch behavior for non-monitor CLI if needed, but prefer one implementation path.\n- Handle Windows safely.\n- Avoid deadlock when both stdout and stderr produce output.\n- Do not attempt full interactive PTY/ConPTY support in this task. This is streaming output MVP, not an embedded terminal.\n\nTests:\n- fake process that prints stdout and exits 0,\n- fake process that prints stderr and exits nonzero,\n- mixed stdout/stderr if practical,\n- verify events and log files.\n\nRun compile and affected tests.",
-      "completed": false,
-      "engine": "opencode",
-      "model": "deepseek/deepseek-v4-pro",
-      "engine_args": [
-        "--variant",
-        "high"
       ]
     },
     {
@@ -176,6 +180,17 @@
       "title": "P4.3 Apply streaming agent review fixes",
       "description": "Read docs/audit/OBSERVABLE_RUN_MONITOR_P4_STREAMING_AGENT_REVIEW.md.\n\nApply only actionable fixes.\nIf no fixes are needed, write:\ndocs/audit/OBSERVABLE_RUN_MONITOR_P4_STREAMING_AGENT_FIX.md\n\nRun compile and affected tests.",
       "completed": false,
+      "engine": "opencode",
+      "model": "deepseek/deepseek-v4-pro",
+      "engine_args": [
+        "--variant",
+        "high"
+      ]
+    },
+    {
+      "title": "P5.1 Make guard behavior advisory by default",
+      "description": "Update run-level guard handling so guard findings are warning/reporting truth by default, not hard enforcement.\n\nProduct rule:\nGuard must say what failed, where drift happened, and why it matters. But default run behavior must not hard-block solely because guard found issues.\n\nRequired behavior:\n- Introduce an explicit guard mode concept if useful:\n  - advisory/default\n  - strict/blocking optional\n- In advisory mode:\n  - guard findings are preserved,\n  - severity is preserved,\n  - run summary says something like needs_review or completed_with_warnings when appropriate,\n  - OpenCode exit code truth is not hidden,\n  - guard warnings do not automatically convert the whole run into failure.\n- In strict mode, if implemented:\n  - preserve existing hard-fail behavior or a clearly documented blocking behavior.\n- CLI help/docs must make clear that advisory is default.\n- Existing tests that expect guard failure to equal run failure must be updated only if they represent old default semantics.\n- Add tests proving advisory guard does not hard-block.\n\nBe careful:\nDo not water down the findings themselves. Severity can still be error. The difference is default enforcement policy, not truth.\n\nRun compile and affected tests.",
+      "completed": false,
       "engine": "copilot",
       "model": "claude-sonnet-4.6",
       "engine_args": [
@@ -183,17 +198,6 @@
         "high",
         "--stream",
         "off"
-      ]
-    },
-    {
-      "title": "P5.1 Make guard behavior advisory by default",
-      "description": "Update run-level guard handling so guard findings are warning/reporting truth by default, not hard enforcement.\n\nProduct rule:\nGuard must say what failed, where drift happened, and why it matters. But default run behavior must not hard-block solely because guard found issues.\n\nRequired behavior:\n- Introduce an explicit guard mode concept if useful:\n  - advisory/default\n  - strict/blocking optional\n- In advisory mode:\n  - guard findings are preserved,\n  - severity is preserved,\n  - run summary says something like needs_review or completed_with_warnings when appropriate,\n  - OpenCode exit code truth is not hidden,\n  - guard warnings do not automatically convert the whole run into failure.\n- In strict mode, if implemented:\n  - preserve existing hard-fail behavior or a clearly documented blocking behavior.\n- CLI help/docs must make clear that advisory is default.\n- Existing tests that expect guard failure to equal run failure must be updated only if they represent old default semantics.\n- Add tests proving advisory guard does not hard-block.\n\nBe careful:\nDo not water down the findings themselves. Severity can still be error. The difference is default enforcement policy, not truth.\n\nRun compile and affected tests.",
-      "completed": false,
-      "engine": "opencode",
-      "model": "deepseek/deepseek-v4-pro",
-      "engine_args": [
-        "--variant",
-        "high"
       ]
     },
     {
@@ -211,6 +215,17 @@
       "title": "P5.3 Apply advisory guard review fixes",
       "description": "Read docs/audit/OBSERVABLE_RUN_MONITOR_P5_ADVISORY_GUARD_REVIEW.md.\n\nApply only actionable fixes.\nIf no fixes are needed, write:\ndocs/audit/OBSERVABLE_RUN_MONITOR_P5_ADVISORY_GUARD_FIX.md\n\nRun compile and affected tests.",
       "completed": false,
+      "engine": "opencode",
+      "model": "deepseek/deepseek-v4-pro",
+      "engine_args": [
+        "--variant",
+        "high"
+      ]
+    },
+    {
+      "title": "P6.1 Improve guard findings into human-readable drift reports",
+      "description": "Improve guard/report output so the operator can understand exactly what happened.\n\nGoal:\nGuard reporting must be useful in the Vibecode monitor panel. It cannot be a vague fail/pass blob.\n\nFor each finding, expose or derive:\n- severity,\n- rule_id,\n- category/domain,\n- file path or affected area,\n- concise title,\n- what happened,\n- why it matters,\n- suggested fix,\n- evidence/context,\n- related check/test if known.\n\nRequired outputs:\n- machine-readable guard_report.json in the run session folder,\n- human-readable guard_report.md in the run session folder,\n- GuardFindingEmitted events for individual findings or grouped findings,\n- GuardCompleted event with counts by severity/category.\n\nUI/report style:\n- Group findings by severity and category.\n- Keep messages concise but actionable.\n- Include exact paths.\n- Do not bury the operator in raw JSON unless they ask for detail.\n\nTests:\n- report generated when findings exist,\n- report generated or skipped clearly when no findings exist,\n- grouped counts are correct,\n- event data includes key fields.\n\nRun compile and affected tests.",
+      "completed": false,
       "engine": "copilot",
       "model": "claude-sonnet-4.6",
       "engine_args": [
@@ -218,17 +233,6 @@
         "high",
         "--stream",
         "off"
-      ]
-    },
-    {
-      "title": "P6.1 Improve guard findings into human-readable drift reports",
-      "description": "Improve guard/report output so the operator can understand exactly what happened.\n\nGoal:\nGuard reporting must be useful in the Vibecode monitor panel. It cannot be a vague fail/pass blob.\n\nFor each finding, expose or derive:\n- severity,\n- rule_id,\n- category/domain,\n- file path or affected area,\n- concise title,\n- what happened,\n- why it matters,\n- suggested fix,\n- evidence/context,\n- related check/test if known.\n\nRequired outputs:\n- machine-readable guard_report.json in the run session folder,\n- human-readable guard_report.md in the run session folder,\n- GuardFindingEmitted events for individual findings or grouped findings,\n- GuardCompleted event with counts by severity/category.\n\nUI/report style:\n- Group findings by severity and category.\n- Keep messages concise but actionable.\n- Include exact paths.\n- Do not bury the operator in raw JSON unless they ask for detail.\n\nTests:\n- report generated when findings exist,\n- report generated or skipped clearly when no findings exist,\n- grouped counts are correct,\n- event data includes key fields.\n\nRun compile and affected tests.",
-      "completed": false,
-      "engine": "opencode",
-      "model": "deepseek/deepseek-v4-pro",
-      "engine_args": [
-        "--variant",
-        "high"
       ]
     },
     {
@@ -246,6 +250,17 @@
       "title": "P6.3 Apply guard report review fixes",
       "description": "Read docs/audit/OBSERVABLE_RUN_MONITOR_P6_GUARD_REPORT_REVIEW.md.\n\nApply only actionable fixes.\nIf no fixes are needed, write:\ndocs/audit/OBSERVABLE_RUN_MONITOR_P6_GUARD_REPORT_FIX.md\n\nRun compile and affected tests.",
       "completed": false,
+      "engine": "opencode",
+      "model": "deepseek/deepseek-v4-pro",
+      "engine_args": [
+        "--variant",
+        "high"
+      ]
+    },
+    {
+      "title": "P7.1 Add prompt and context snapshot events",
+      "description": "Make prompt/context truth first-class in observable runs.\n\nRequired behavior:\n- When a context pack is generated, emit event with:\n  - path to current context pack,\n  - path to run snapshot,\n  - approximate size,\n  - task summary,\n  - included sections if available.\n- When an OpenCode prompt is generated, emit event with:\n  - path to current prompt,\n  - path to run snapshot,\n  - approximate size,\n  - platform/model/profile if available.\n- Copy prompt and context pack into .vibecode/runs/<session_id>/.\n- The monitor must be able to show where the exact prompt is stored.\n- Do not always dump full prompt into the live event message. Store it in artifact file and put path/summary into event data.\n- Add tests ensuring prompt/context snapshots are tied to the session.\n\nRun compile and affected tests.",
+      "completed": false,
       "engine": "copilot",
       "model": "claude-sonnet-4.6",
       "engine_args": [
@@ -253,17 +268,6 @@
         "high",
         "--stream",
         "off"
-      ]
-    },
-    {
-      "title": "P7.1 Add prompt and context snapshot events",
-      "description": "Make prompt/context truth first-class in observable runs.\n\nRequired behavior:\n- When a context pack is generated, emit event with:\n  - path to current context pack,\n  - path to run snapshot,\n  - approximate size,\n  - task summary,\n  - included sections if available.\n- When an OpenCode prompt is generated, emit event with:\n  - path to current prompt,\n  - path to run snapshot,\n  - approximate size,\n  - platform/model/profile if available.\n- Copy prompt and context pack into .vibecode/runs/<session_id>/.\n- The monitor must be able to show where the exact prompt is stored.\n- Do not always dump full prompt into the live event message. Store it in artifact file and put path/summary into event data.\n- Add tests ensuring prompt/context snapshots are tied to the session.\n\nRun compile and affected tests.",
-      "completed": false,
-      "engine": "opencode",
-      "model": "deepseek/deepseek-v4-pro",
-      "engine_args": [
-        "--variant",
-        "high"
       ]
     },
     {
@@ -281,6 +285,17 @@
       "title": "P7.3 Apply prompt/context review fixes",
       "description": "Read docs/audit/OBSERVABLE_RUN_MONITOR_P7_PROMPT_CONTEXT_REVIEW.md.\n\nApply only actionable fixes.\nIf no fixes are needed, write:\ndocs/audit/OBSERVABLE_RUN_MONITOR_P7_PROMPT_CONTEXT_FIX.md\n\nRun compile and affected tests.",
       "completed": false,
+      "engine": "opencode",
+      "model": "deepseek/deepseek-v4-pro",
+      "engine_args": [
+        "--variant",
+        "high"
+      ]
+    },
+    {
+      "title": "P8.1 Add MCP tool-call observability",
+      "description": "Instrument VibecodeApp MCP tools so the operator can see what the agent asked VibecodeApp.\n\nGoal:\nWhen OpenCode or another agent calls VibecodeApp MCP tools, VibecodeApp should log:\n- tool name,\n- sanitized arguments,\n- result summary,\n- error if any,\n- timestamp,\n- optional session_id if available.\n\nRequired behavior:\n- Add event/logging hooks around MCP tools such as get_file_card, find_symbol, list_high_risk if they exist.\n- Emit or write:\n  - McpToolCalled\n  - McpToolReturned\n  - McpToolFailed\n- If MCP server runs out-of-process from the run controller, use a safe fallback log path such as .vibecode/logs/mcp_events.jsonl.\n- If a VIBECODE_SESSION_ID environment variable or similar session correlation can be passed to the MCP server, implement it narrowly and document it.\n- Do not dump huge MCP responses. Store a compact result summary:\n  - number of symbols,\n  - number of files,\n  - risk count,\n  - approximate chars,\n  - path queried,\n  - error message if failed.\n- Preserve full tool correctness.\n\nTests:\n- direct tool call produces log/event,\n- failures are logged,\n- result summary avoids large blobs,\n- no MCP dependency import failure is introduced in normal non-MCP flows.\n\nRun compile and affected tests.",
+      "completed": false,
       "engine": "copilot",
       "model": "claude-sonnet-4.6",
       "engine_args": [
@@ -288,17 +303,6 @@
         "high",
         "--stream",
         "off"
-      ]
-    },
-    {
-      "title": "P8.1 Add MCP tool-call observability",
-      "description": "Instrument VibecodeApp MCP tools so the operator can see what the agent asked VibecodeApp.\n\nGoal:\nWhen OpenCode or another agent calls VibecodeApp MCP tools, VibecodeApp should log:\n- tool name,\n- sanitized arguments,\n- result summary,\n- error if any,\n- timestamp,\n- optional session_id if available.\n\nRequired behavior:\n- Add event/logging hooks around MCP tools such as get_file_card, find_symbol, list_high_risk if they exist.\n- Emit or write:\n  - McpToolCalled\n  - McpToolReturned\n  - McpToolFailed\n- If MCP server runs out-of-process from the run controller, use a safe fallback log path such as .vibecode/logs/mcp_events.jsonl.\n- If a VIBECODE_SESSION_ID environment variable or similar session correlation can be passed to the MCP server, implement it narrowly and document it.\n- Do not dump huge MCP responses. Store a compact result summary:\n  - number of symbols,\n  - number of files,\n  - risk count,\n  - approximate chars,\n  - path queried,\n  - error message if failed.\n- Preserve full tool correctness.\n\nTests:\n- direct tool call produces log/event,\n- failures are logged,\n- result summary avoids large blobs,\n- no MCP dependency import failure is introduced in normal non-MCP flows.\n\nRun compile and affected tests.",
-      "completed": false,
-      "engine": "opencode",
-      "model": "deepseek/deepseek-v4-pro",
-      "engine_args": [
-        "--variant",
-        "high"
       ]
     },
     {
@@ -316,6 +320,17 @@
       "title": "P8.3 Apply MCP observability review fixes",
       "description": "Read docs/audit/OBSERVABLE_RUN_MONITOR_P8_MCP_OBSERVABILITY_REVIEW.md.\n\nApply only actionable fixes.\nIf no fixes are needed, write:\ndocs/audit/OBSERVABLE_RUN_MONITOR_P8_MCP_OBSERVABILITY_FIX.md\n\nRun compile and affected tests.",
       "completed": false,
+      "engine": "opencode",
+      "model": "deepseek/deepseek-v4-pro",
+      "engine_args": [
+        "--variant",
+        "high"
+      ]
+    },
+    {
+      "title": "P9.1 Implement TUI two-pane monitor MVP",
+      "description": "Implement the first operator-facing monitor command.\n\nGoal:\nA TUI command should run an OpenCode task and show two live panes:\n- left pane: OpenCode/agent stdout and stderr stream,\n- right pane: VibecodeApp event stream and advisory warnings.\n\nPreferred command shape:\nvibecode monitor --platform opencode --task \"...\"\n\nIf existing CLI style suggests a different command shape, keep it consistent and document it.\n\nMVP layout:\n- Header with repo root, session id, task, platform/model.\n- Left text pane for AgentStdout/AgentStderr.\n- Right text pane for Vibecode events.\n- Bottom/status area showing:\n  - agent status,\n  - guard status,\n  - checks status,\n  - run artifact path.\n- Key binding or simple instruction to open/view prompt path is optional, not required.\n- The TUI can be basic. Do not overbuild.\n- It may reuse Textual if already present.\n- It must consume events from the same event spine, not parse random printed text.\n- If full interactive OpenCode terminal is not supported, document that this MVP streams output and is not a PTY.\n\nFallback:\nIf Textual integration is too risky, implement a minimal non-interactive live monitor mode first, but prefer proper TUI if the project already has Textual.\n\nTests:\n- unit tests for event-to-panel formatting if practical,\n- command registration/import test,\n- non-UI smoke path with fake runner if possible.\n\nRun compile and affected tests.",
+      "completed": false,
       "engine": "copilot",
       "model": "claude-sonnet-4.6",
       "engine_args": [
@@ -323,17 +338,6 @@
         "high",
         "--stream",
         "off"
-      ]
-    },
-    {
-      "title": "P9.1 Implement TUI two-pane monitor MVP",
-      "description": "Implement the first operator-facing monitor command.\n\nGoal:\nA TUI command should run an OpenCode task and show two live panes:\n- left pane: OpenCode/agent stdout and stderr stream,\n- right pane: VibecodeApp event stream and advisory warnings.\n\nPreferred command shape:\nvibecode monitor --platform opencode --task \"...\"\n\nIf existing CLI style suggests a different command shape, keep it consistent and document it.\n\nMVP layout:\n- Header with repo root, session id, task, platform/model.\n- Left text pane for AgentStdout/AgentStderr.\n- Right text pane for Vibecode events.\n- Bottom/status area showing:\n  - agent status,\n  - guard status,\n  - checks status,\n  - run artifact path.\n- Key binding or simple instruction to open/view prompt path is optional, not required.\n- The TUI can be basic. Do not overbuild.\n- It may reuse Textual if already present.\n- It must consume events from the same event spine, not parse random printed text.\n- If full interactive OpenCode terminal is not supported, document that this MVP streams output and is not a PTY.\n\nFallback:\nIf Textual integration is too risky, implement a minimal non-interactive live monitor mode first, but prefer proper TUI if the project already has Textual.\n\nTests:\n- unit tests for event-to-panel formatting if practical,\n- command registration/import test,\n- non-UI smoke path with fake runner if possible.\n\nRun compile and affected tests.",
-      "completed": false,
-      "engine": "opencode",
-      "model": "deepseek/deepseek-v4-pro",
-      "engine_args": [
-        "--variant",
-        "high"
       ]
     },
     {
@@ -351,6 +355,17 @@
       "title": "P9.3 Apply TUI monitor review fixes",
       "description": "Read docs/audit/OBSERVABLE_RUN_MONITOR_P9_TUI_MONITOR_REVIEW.md.\n\nApply only actionable fixes.\nIf no fixes are needed, write:\ndocs/audit/OBSERVABLE_RUN_MONITOR_P9_TUI_MONITOR_FIX.md\n\nRun compile and affected tests.",
       "completed": false,
+      "engine": "opencode",
+      "model": "deepseek/deepseek-v4-pro",
+      "engine_args": [
+        "--variant",
+        "high"
+      ]
+    },
+    {
+      "title": "P10.1 Add run replay/show command",
+      "description": "Add a small command to inspect a previous observable run from its artifacts.\n\nGoal:\nBecause events are saved to events.jsonl, the operator should be able to review a run after it finishes.\n\nPreferred command examples:\n- vibecode show-run <session_id>\n- vibecode runs list\nor use the existing CLI conventions if different.\n\nRequired behavior:\n- List recent run session ids if implementing list.\n- Show summary for a selected run:\n  - task,\n  - platform/model,\n  - start/end,\n  - agent exit code,\n  - guard counts,\n  - checks status,\n  - artifact paths.\n- Optionally replay event messages in chronological order.\n- Do not require rerunning the agent.\n- Handle missing/corrupt events.jsonl gracefully.\n\nTests:\n- parse events.jsonl,\n- show summary from artifacts,\n- missing run id error is clear.\n\nRun compile and affected tests.",
+      "completed": false,
       "engine": "copilot",
       "model": "claude-sonnet-4.6",
       "engine_args": [
@@ -358,17 +373,6 @@
         "high",
         "--stream",
         "off"
-      ]
-    },
-    {
-      "title": "P10.1 Add run replay/show command",
-      "description": "Add a small command to inspect a previous observable run from its artifacts.\n\nGoal:\nBecause events are saved to events.jsonl, the operator should be able to review a run after it finishes.\n\nPreferred command examples:\n- vibecode show-run <session_id>\n- vibecode runs list\nor use the existing CLI conventions if different.\n\nRequired behavior:\n- List recent run session ids if implementing list.\n- Show summary for a selected run:\n  - task,\n  - platform/model,\n  - start/end,\n  - agent exit code,\n  - guard counts,\n  - checks status,\n  - artifact paths.\n- Optionally replay event messages in chronological order.\n- Do not require rerunning the agent.\n- Handle missing/corrupt events.jsonl gracefully.\n\nTests:\n- parse events.jsonl,\n- show summary from artifacts,\n- missing run id error is clear.\n\nRun compile and affected tests.",
-      "completed": false,
-      "engine": "opencode",
-      "model": "deepseek/deepseek-v4-pro",
-      "engine_args": [
-        "--variant",
-        "high"
       ]
     },
     {
@@ -386,6 +390,17 @@
       "title": "P10.3 Apply run replay/show review fixes",
       "description": "Read docs/audit/OBSERVABLE_RUN_MONITOR_P10_RUN_REPLAY_REVIEW.md.\n\nApply only actionable fixes.\nIf no fixes are needed, write:\ndocs/audit/OBSERVABLE_RUN_MONITOR_P10_RUN_REPLAY_FIX.md\n\nRun compile and affected tests.",
       "completed": false,
+      "engine": "opencode",
+      "model": "deepseek/deepseek-v4-pro",
+      "engine_args": [
+        "--variant",
+        "high"
+      ]
+    },
+    {
+      "title": "P11.1 Update documentation and AGENTS guidance",
+      "description": "Update user-facing and agent-facing docs to match the implemented observable monitor reality.\n\nLikely files:\n- README.md\n- docs/QUICKSTART.md\n- AGENTS.md\n- possibly docs/CONTROL_LAYER_FINAL_AUDIT.md or a new docs/audit status document\n\nRequired docs content:\n- Explain VibecodeApp observable run monitor concept.\n- Explain default advisory guard behavior.\n- Explain strict mode only if implemented.\n- Explain the two-pane TUI monitor command.\n- Explain where run artifacts are written.\n- Explain where prompt/context snapshots are stored.\n- Explain how to inspect a previous run.\n- Explain MCP observability if implemented and any limitations.\n- Clearly say whether the monitor is streaming stdout/stderr only or a true interactive PTY.\n- Remove or flag stale claims contradicted by implementation.\n\nDo not oversell. If something is not implemented, say it is not implemented.\nRun docs-related checks if the repo has any.",
+      "completed": false,
       "engine": "copilot",
       "model": "claude-sonnet-4.6",
       "engine_args": [
@@ -393,17 +408,6 @@
         "high",
         "--stream",
         "off"
-      ]
-    },
-    {
-      "title": "P11.1 Update documentation and AGENTS guidance",
-      "description": "Update user-facing and agent-facing docs to match the implemented observable monitor reality.\n\nLikely files:\n- README.md\n- docs/QUICKSTART.md\n- AGENTS.md\n- possibly docs/CONTROL_LAYER_FINAL_AUDIT.md or a new docs/audit status document\n\nRequired docs content:\n- Explain VibecodeApp observable run monitor concept.\n- Explain default advisory guard behavior.\n- Explain strict mode only if implemented.\n- Explain the two-pane TUI monitor command.\n- Explain where run artifacts are written.\n- Explain where prompt/context snapshots are stored.\n- Explain how to inspect a previous run.\n- Explain MCP observability if implemented and any limitations.\n- Clearly say whether the monitor is streaming stdout/stderr only or a true interactive PTY.\n- Remove or flag stale claims contradicted by implementation.\n\nDo not oversell. If something is not implemented, say it is not implemented.\nRun docs-related checks if the repo has any.",
-      "completed": false,
-      "engine": "opencode",
-      "model": "deepseek/deepseek-v4-pro",
-      "engine_args": [
-        "--variant",
-        "high"
       ]
     },
     {
@@ -421,6 +425,17 @@
       "title": "P11.3 Apply documentation review fixes",
       "description": "Read docs/audit/OBSERVABLE_RUN_MONITOR_P11_DOCS_REVIEW.md.\n\nApply only actionable documentation fixes.\nIf no fixes are needed, write:\ndocs/audit/OBSERVABLE_RUN_MONITOR_P11_DOCS_FIX.md\n\nRun docs checks if available, otherwise run compile/tests only if source files were touched.",
       "completed": false,
+      "engine": "opencode",
+      "model": "deepseek/deepseek-v4-pro",
+      "engine_args": [
+        "--variant",
+        "high"
+      ]
+    },
+    {
+      "title": "P12.1 Final validation and dogfood report",
+      "description": "Run final validation and write an end-to-end dogfood report.\n\nRequired validation:\n- python -m compileall vibecode\n- full pytest if practical; otherwise explain why not and run the broadest safe subset\n- a fake/safe monitor run if possible without requiring paid/real OpenCode\n- a real OpenCode smoke run only if available and safe in the environment\n- show-run/replay command smoke if implemented\n- verify run folder contains:\n  - events.jsonl\n  - summary.json\n  - prompt/context snapshots when generated\n  - agent logs when an agent run happened\n  - guard report when guard ran\n\nWrite:\ndocs/audit/OBSERVABLE_RUN_MONITOR_FINAL_DOGFOOD_REPORT.md\n\nReport must include:\n- exact commands run,\n- pass/fail results,\n- known limitations,\n- any skipped checks and why,\n- whether the product goal is met,\n- next recommended work.\n\nDo not hide failures. If something is broken, say exactly what.",
+      "completed": false,
       "engine": "copilot",
       "model": "claude-sonnet-4.6",
       "engine_args": [
@@ -428,17 +443,6 @@
         "high",
         "--stream",
         "off"
-      ]
-    },
-    {
-      "title": "P12.1 Final validation and dogfood report",
-      "description": "Run final validation and write an end-to-end dogfood report.\n\nRequired validation:\n- python -m compileall vibecode\n- full pytest if practical; otherwise explain why not and run the broadest safe subset\n- a fake/safe monitor run if possible without requiring paid/real OpenCode\n- a real OpenCode smoke run only if available and safe in the environment\n- show-run/replay command smoke if implemented\n- verify run folder contains:\n  - events.jsonl\n  - summary.json\n  - prompt/context snapshots when generated\n  - agent logs when an agent run happened\n  - guard report when guard ran\n\nWrite:\ndocs/audit/OBSERVABLE_RUN_MONITOR_FINAL_DOGFOOD_REPORT.md\n\nReport must include:\n- exact commands run,\n- pass/fail results,\n- known limitations,\n- any skipped checks and why,\n- whether the product goal is met,\n- next recommended work.\n\nDo not hide failures. If something is broken, say exactly what.",
-      "completed": false,
-      "engine": "opencode",
-      "model": "deepseek/deepseek-v4-pro",
-      "engine_args": [
-        "--variant",
-        "high"
       ]
     },
     {
@@ -456,13 +460,11 @@
       "title": "P12.3 Apply final review fixes and close implementation",
       "description": "Read docs/audit/OBSERVABLE_RUN_MONITOR_FINAL_REVIEW.md.\n\nApply only final review fixes that are concrete and safe.\nIf the review identifies large follow-up work, do not start a new large refactor; document it under:\ndocs/audit/OBSERVABLE_RUN_MONITOR_FOLLOWUPS.md\n\nRun final validation again after any source changes:\n- python -m compileall vibecode\n- affected tests\n- full pytest if practical\n\nIf no concrete fixes are needed, write a no-op note to:\ndocs/audit/OBSERVABLE_RUN_MONITOR_FINAL_FIX.md\n\nUpdate docs/audit/OBSERVABLE_RUN_MONITOR_FINAL_DOGFOOD_REPORT.md with final post-fix status if needed.",
       "completed": false,
-      "engine": "copilot",
-      "model": "claude-sonnet-4.6",
+      "engine": "opencode",
+      "model": "deepseek/deepseek-v4-pro",
       "engine_args": [
-        "--reasoning-effort",
-        "high",
-        "--stream",
-        "off"
+        "--variant",
+        "high"
       ]
     }
   ]
