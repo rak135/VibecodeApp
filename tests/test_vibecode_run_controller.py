@@ -134,9 +134,21 @@ def _minimal_vibecode(repo: Path) -> None:
 
 
 def _fake_opencode_script(
-    tmp_path: Path, exit_code: int = 0, stdout: str = "OK\n", stderr: str = ""
+    tmp_path: Path, exit_code: int = 0, stdout: str = "OK\n", stderr: str = "",
+    stdin_path: str | None = None,
 ) -> Path:
-    """Create fake opencode command on PATH. Returns the .cmd wrapper path."""
+    """Create fake opencode command on PATH. Returns the .cmd wrapper path.
+
+    When *stdin_path* is not None, the fake opencode writes its stdin to that
+    file before exiting.  This allows tests to verify the exact prompt content
+    passed to the agent process.
+    """
+    stdin_capture_block = ""
+    if stdin_path is not None:
+        stdin_capture_block = f"""
+import pathlib
+pathlib.Path({stdin_path!r}).write_text(inp, encoding='utf-8')
+"""
     py_script = tmp_path / "opencode.py"
     py_script.write_text(
         f"""#!{sys.executable}
@@ -147,7 +159,7 @@ if "--version" in argv:
     sys.stdout.write("fake-opencode 1.0.0\\n")
     sys.exit(0)
 
-inp = sys.stdin.read()
+inp = sys.stdin.read(){stdin_capture_block}
 sys.stderr.write({stderr!r})
 sys.stdout.write({stdout!r})
 sys.exit({exit_code})
@@ -189,9 +201,10 @@ def fake_bin(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> Path:
 
 
 def _make_fake_opencode(
-    fake_dir: Path, exit_code: int = 0, stdout: str = "OK\n", stderr: str = ""
+    fake_dir: Path, exit_code: int = 0, stdout: str = "OK\n", stderr: str = "",
+    stdin_path: str | None = None,
 ) -> None:
-    _fake_opencode_script(fake_dir, exit_code=exit_code, stdout=stdout, stderr=stderr)
+    _fake_opencode_script(fake_dir, exit_code=exit_code, stdout=stdout, stderr=stderr, stdin_path=stdin_path)
 
 
 # ---------------------------------------------------------------------------
@@ -942,3 +955,78 @@ class TestContextAndPromptSnapshotEvents:
         assert path_a != path_b
         assert "snap-prompt-sess-A" in path_a
         assert "snap-prompt-sess-B" in path_b
+
+    def test_context_event_data_has_no_raw_body_text(self, repo: Path, fake_bin: Path):
+        """EVENT_CONTEXT data must not embed raw context pack body text."""
+        _make_fake_opencode(fake_bin)
+        sink = InMemoryEventSink()
+        RunController(
+            root=repo, task="snapshot body check", platform="opencode",
+            profile_name="safe", allow_dirty=False, no_index=True,
+            sink=sink, session_id="body-ctx-001",
+        ).execute()
+
+        evt = _get_ctx_written(sink)
+        data_json = json.dumps(evt.data, sort_keys=True)
+
+        context_pack_path = Path(evt.data["path"])
+        body = context_pack_path.read_text(encoding="utf-8") if context_pack_path.exists() else ""
+
+        assert "body" not in evt.data
+        for key in evt.data:
+            assert isinstance(evt.data[key], (str, int, list, type(None))), \
+                f"data key '{key}' has non-trivial type {type(evt.data[key])}"
+
+        if len(body) > 100:
+            assert body[:100] not in data_json, "raw context pack start found in event data"
+            assert body[-100:] not in data_json, "raw context pack end found in event data"
+
+    def test_prompt_event_data_has_no_raw_body_text(self, repo: Path, fake_bin: Path):
+        """EVENT_PROMPT data must not embed raw prompt body text."""
+        _make_fake_opencode(fake_bin)
+        sink = InMemoryEventSink()
+        RunController(
+            root=repo, task="prompt body check", platform="opencode",
+            profile_name="safe", allow_dirty=False, no_index=True,
+            sink=sink, session_id="body-prompt-001",
+        ).execute()
+
+        evt = _get_prompt_written(sink)
+        data_json = json.dumps(evt.data, sort_keys=True)
+
+        assert "body" not in evt.data
+        assert "content" not in evt.data
+        assert "prompt_text" not in evt.data
+        assert "prompt_raw" not in evt.data
+        for key in evt.data:
+            assert isinstance(evt.data[key], (str, int, list, type(None))), \
+                f"data key '{key}' has non-trivial type {type(evt.data[key])}"
+
+        prompt_path = Path(evt.data["path"]) if evt.data.get("path") else None
+        if prompt_path and prompt_path.exists():
+            body = prompt_path.read_text(encoding="utf-8")
+            if len(body) > 100:
+                assert body[:100] not in data_json, "raw prompt start found in event data"
+                assert body[-100:] not in data_json, "raw prompt end found in event data"
+
+    def test_fake_opencode_stdin_matches_prompt_snapshot(self, repo: Path, fake_bin: Path):
+        """Fake OpenCode stdin exactly matches the prompt snapshot on disk."""
+        stdin_capture = fake_bin / "stdin_captured.txt"
+        _make_fake_opencode(fake_bin, stdin_path=str(stdin_capture))
+        sink = InMemoryEventSink()
+        RunController(
+            root=repo, task="stdin match test", platform="opencode",
+            profile_name="safe", allow_dirty=False, no_index=True,
+            sink=sink, session_id="stdin-match-001",
+        ).execute()
+
+        prompt_evt = _get_prompt_written(sink)
+        snapshot_path = Path(prompt_evt.data["snapshot_path"])
+        assert snapshot_path.exists(), f"prompt snapshot missing: {snapshot_path}"
+
+        snapshot_text = snapshot_path.read_text(encoding="utf-8")
+        assert stdin_capture.exists(), "fake opencode did not write stdin"
+        stdin_text = stdin_capture.read_text(encoding="utf-8")
+
+        assert stdin_text == snapshot_text, \
+            f"stdin ({len(stdin_text)} chars) != snapshot ({len(snapshot_text)} chars)"
