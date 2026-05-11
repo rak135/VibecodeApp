@@ -1,0 +1,1 @@
+{"$schema": "vibecode/file-inventory/v1", "files": [{"path": "a.py"}], "context_cards": [{"path": "a.py", "purpose": "x", "symbols": null, "facts": null, "heuristics": null}]}

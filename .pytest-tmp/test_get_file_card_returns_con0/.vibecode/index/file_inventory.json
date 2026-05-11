@@ -1,0 +1,105 @@
+{
+  "$schema": "vibecode/file-inventory/v1",
+  "project_id": "integration-test",
+  "generated_at": "2026-05-11T22:51:43.295059+00:00",
+  "root": "C:/DATA/PROJECTS/VibecodeApp/.pytest-tmp/test_get_file_card_returns_con0",
+  "files": [
+    {
+      "path": ".vibecode/project.yaml",
+      "language": "yaml",
+      "size_bytes": 70,
+      "role_guess": "unknown",
+      "is_test": false,
+      "is_config": false,
+      "is_doc": false,
+      "risk_level": "low",
+      "tracked": "untracked"
+    },
+    {
+      "path": "README.md",
+      "language": "markdown",
+      "size_bytes": 25,
+      "role_guess": "doc",
+      "is_test": false,
+      "is_config": false,
+      "is_doc": true,
+      "risk_level": "low",
+      "tracked": "untracked"
+    },
+    {
+      "path": "src/app.py",
+      "language": "python",
+      "size_bytes": 113,
+      "role_guess": "unknown",
+      "is_test": false,
+      "is_config": false,
+      "is_doc": false,
+      "risk_level": "low",
+      "tracked": "untracked"
+    },
+    {
+      "path": "src/utils.py",
+      "language": "python",
+      "size_bytes": 106,
+      "role_guess": "unknown",
+      "is_test": false,
+      "is_config": false,
+      "is_doc": false,
+      "risk_level": "low",
+      "tracked": "untracked"
+    }
+  ],
+  "context_cards": [
+    {
+      "path": "src/app.py",
+      "language": "python",
+      "purpose": "Main application module.",
+      "symbols": [
+        {
+          "name": "run",
+          "kind": "function",
+          "line": 3
+        }
+      ],
+      "content_snippet": "\"\"\"Main application module.\"\"\"\n\ndef run(host: str, port: int) -> None:\n    \"\"\"Start the server.\"\"\"\n    pass\n",
+      "detail_level": "basic",
+      "facts": [
+        {
+          "kind": "unsafe_permission",
+          "line": 0,
+          "text": "world-writable file"
+        }
+      ],
+      "heuristics": []
+    },
+    {
+      "path": "src/utils.py",
+      "language": "python",
+      "purpose": "Utility helpers.",
+      "symbols": [
+        {
+          "name": "helper",
+          "kind": "function",
+          "line": 3
+        }
+      ],
+      "content_snippet": "\"\"\"Utility helpers.\"\"\"\n\ndef helper(x, y, z, a, b, c, d) -> None:\n    \"\"\"Too many params.\"\"\"\n    pass\n",
+      "detail_level": "basic",
+      "facts": [
+        {
+          "kind": "unsafe_permission",
+          "line": 0,
+          "text": "world-writable file"
+        }
+      ],
+      "heuristics": [
+        {
+          "kind": "high_param_count",
+          "symbol": "helper",
+          "detail": "7 parameters",
+          "severity": "medium"
+        }
+      ]
+    }
+  ]
+}

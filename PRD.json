@@ -319,7 +319,7 @@
     {
       "title": "P8.3 Apply MCP observability review fixes",
       "description": "Read docs/audit/OBSERVABLE_RUN_MONITOR_P8_MCP_OBSERVABILITY_REVIEW.md.\n\nApply only actionable fixes.\nIf no fixes are needed, write:\ndocs/audit/OBSERVABLE_RUN_MONITOR_P8_MCP_OBSERVABILITY_FIX.md\n\nRun compile and affected tests.",
-      "completed": false,
+      "completed": true,
       "engine": "opencode",
       "model": "deepseek/deepseek-v4-pro",
       "engine_args": [

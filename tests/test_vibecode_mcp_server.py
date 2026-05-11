@@ -462,6 +462,26 @@ class TestCmdServe:
 
         assert rc == 0
 
+    def test_cmd_serve_forwards_log_path_and_session_id(self, tmp_path, monkeypatch):
+        from vibecode.mcp_server import cmd_serve
+
+        self._init_repo(tmp_path)
+        _write(tmp_path / ".vibecode" / "index" / "file_inventory.json", _make_inventory())
+        _write(tmp_path / ".vibecode" / "index" / "risk_report.json", _make_risk_report())
+
+        monkeypatch.setenv("VIBECODE_SESSION_ID", "sess-42")
+        expected_log = tmp_path / ".vibecode" / "logs" / "mcp_events.jsonl"
+
+        args = SimpleNamespace(repo_root=str(tmp_path))
+        with patch("vibecode.mcp_server.build_mcp_server") as mock_build:
+            mock_build.return_value = MagicMock()
+            cmd_serve(args)
+
+        mock_build.assert_called_once()
+        kwargs = mock_build.call_args.kwargs
+        assert kwargs["log_path"] == expected_log
+        assert kwargs["session_id"] == "sess-42"
+
 
 # ---------------------------------------------------------------------------
 # CLI parser – serve subcommand
@@ -812,6 +832,32 @@ class TestMcpToolLogging:
         returned = [e for e in sink.events_by_type(EVENT_MCP) if "McpToolReturned" in e.message]
         assert returned[0].data["result_chars"] == len(result)
 
+    def test_find_symbol_result_summary_contains_no_raw_result(self, tmp_path):
+        from vibecode.events import EVENT_MCP, InMemoryEventSink
+
+        sink = InMemoryEventSink()
+        vs = self._server(tmp_path, cards=[_sample_card()], sink=sink)
+        vs.find_symbol("run")
+
+        for event in sink.events_by_type(EVENT_MCP):
+            if event.data:
+                data_str = json.dumps(event.data)
+                assert "function" not in data_str, "Raw symbol kind must not appear in event data"
+                assert "line 10" not in data_str, "Raw line number text must not appear"
+
+    def test_list_high_risk_result_summary_contains_no_raw_result(self, tmp_path):
+        from vibecode.events import EVENT_MCP, InMemoryEventSink
+
+        sink = InMemoryEventSink()
+        vs = self._server(tmp_path, risk_items=[_sample_risk_item(severity="high")], sink=sink)
+        vs.list_high_risk()
+
+        for event in sink.events_by_type(EVENT_MCP):
+            if event.data:
+                data_str = json.dumps(event.data)
+                assert "High-Risk Files" not in data_str, "Raw heading must not appear in event data"
+                assert "suspicious_name" not in data_str, "Raw heuristic kind must not appear"
+
     # -- No sink --------------------------------------------------------------
 
     def test_no_sink_tools_work_correctly(self, tmp_path):
@@ -881,7 +927,7 @@ class TestMcpToolLogging:
         vs.get_file_card("src/app.py")
 
         assert log_path.exists()
-        lines = [l for l in log_path.read_text(encoding="utf-8").splitlines() if l.strip()]
+        lines = [line for line in log_path.read_text(encoding="utf-8").splitlines() if line.strip()]
         assert len(lines) >= 2  # McpToolCalled + McpToolReturned
         first = json.loads(lines[0])
         assert first["type"] == "run.mcp"
@@ -898,8 +944,8 @@ class TestMcpToolLogging:
         vs = VibecodeServer(inv, risk, event_sink=sink)
         vs.find_symbol("NoMatch")
 
-        lines = [l for l in log_path.read_text(encoding="utf-8").splitlines() if l.strip()]
-        messages = [json.loads(l)["message"] for l in lines]
+        lines = [line for line in log_path.read_text(encoding="utf-8").splitlines() if line.strip()]
+        messages = [json.loads(line)["message"] for line in lines]
         assert any("McpToolCalled" in m for m in messages)
         assert any("McpToolReturned" in m for m in messages)
 
@@ -936,3 +982,62 @@ class TestMcpToolLogging:
             vs.list_high_risk()
         finally:
             sys.modules.update(mcp_mods)
+
+    # -- CLI survives missing mcp package (lazy import) -----------------------
+
+    def test_cli_help_works_when_mcp_imports_blocked(self):
+        import io
+
+        class _BlockMCP:
+            def find_spec(self, fullname, path, target=None):
+                if fullname == "mcp" or fullname.startswith("mcp."):
+                    raise ImportError(f"Simulated missing package: {fullname}")
+                return None
+
+        # Capture stdout while blocking mcp imports
+        real_stdout = sys.stdout
+        try:
+            sys.meta_path.insert(0, _BlockMCP())
+            # Clear cached mcp_server module so it re-imports under the blocker
+            for mod in list(sys.modules):
+                if mod == "vibecode.mcp_server" or mod.startswith("mcp"):
+                    del sys.modules[mod]
+
+            from vibecode.cli import create_parser
+            parser = create_parser()
+            buf = io.StringIO()
+            sys.stdout = buf
+            parser.print_help()
+            sys.stdout = real_stdout
+            help_text = buf.getvalue()
+            assert "serve" in help_text
+            assert "guard" in help_text
+        finally:
+            if _BlockMCP in [type(h) for h in sys.meta_path]:
+                sys.meta_path = [h for h in sys.meta_path if not isinstance(h, _BlockMCP)]
+            sys.stdout = real_stdout
+            # Restore cached module
+            import vibecode.mcp_server  # noqa: F401
+
+    def test_non_mcp_command_works_when_mcp_imports_blocked(self, tmp_path):
+
+        class _BlockMCP:
+            def find_spec(self, fullname, path, target=None):
+                if fullname == "mcp" or fullname.startswith("mcp."):
+                    raise ImportError(f"Simulated missing package: {fullname}")
+                return None
+
+        try:
+            sys.meta_path.insert(0, _BlockMCP())
+            for mod in list(sys.modules):
+                if mod == "vibecode.mcp_server" or mod.startswith("mcp"):
+                    del sys.modules[mod]
+
+            from vibecode.cli import create_parser
+            parser = create_parser()
+            args = parser.parse_args(["validate", str(tmp_path)])
+            assert args.command == "validate"
+        finally:
+            if _BlockMCP in [type(h) for h in sys.meta_path]:
+                sys.meta_path = [h for h in sys.meta_path if not isinstance(h, _BlockMCP)]
+            import vibecode.mcp_server  # noqa: F401

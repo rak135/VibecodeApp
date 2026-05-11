@@ -1,0 +1,4 @@
+project:
+  id: integration-test
+  name: IntegrationTest
+  root: .
