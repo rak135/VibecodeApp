@@ -24,7 +24,7 @@
     {
       "title": "P0.2 Review baseline audit",
       "description": "Review docs/audit/OBSERVABLE_RUN_MONITOR_BASELINE.md and the current code.\n\nWrite review output to:\ndocs/audit/OBSERVABLE_RUN_MONITOR_BASELINE_REVIEW.md\n\nCheck:\n- The audit is grounded in actual code, not guessed architecture.\n- The audit identifies the real run path and not only README claims.\n- The audit accurately describes current guard advisory/blocking behavior.\n- The audit identifies stale or contradictory docs if present.\n- The audit gives a realistic list of files to change.\n- The audit does not secretly implement product changes.\n\nDo not modify source code except the review document. If the audit is materially wrong, mark findings as BLOCKER with exact files/functions to inspect.",
-      "completed": false,
+      "completed": true,
       "engine": "codex",
       "model": "gpt-5.5",
       "engine_args": [
