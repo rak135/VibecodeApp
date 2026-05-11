@@ -238,7 +238,7 @@
     {
       "title": "P6.2 Review human-readable guard reporting",
       "description": "Review the guard report improvements.\n\nWrite review output to:\ndocs/audit/OBSERVABLE_RUN_MONITOR_P6_GUARD_REPORT_REVIEW.md\n\nCheck:\n- Findings are understandable to a human.\n- JSON and Markdown reports agree.\n- The report does not lose severity/rule identity.\n- No huge raw blobs are dumped into the monitor path.\n- Tests cover both findings and no-findings cases.\n- Report generation works even when guard partially fails.\n\nDo not modify implementation files. Only write the review document.",
-      "completed": false,
+      "completed": true,
       "engine": "codex",
       "model": "gpt-5.5",
       "engine_args": [
