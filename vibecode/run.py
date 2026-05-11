@@ -434,6 +434,8 @@ class RunController:
         self.profile_name = profile_name
         self.allow_dirty = allow_dirty
         self.no_index = no_index
+        if guard_mode not in ("advisory", "strict"):
+            raise ValueError(f"guard_mode must be 'advisory' or 'strict', got {guard_mode!r}")
         self.guard_mode = guard_mode
         self.sink: EventSink = sink if sink is not None else NullEventSink()
         self.session_id = session_id or datetime.now(tz=timezone.utc).strftime("%Y%m%dT%H%M%S%fZ")

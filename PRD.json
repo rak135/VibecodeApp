@@ -214,7 +214,7 @@
     {
       "title": "P5.3 Apply advisory guard review fixes",
       "description": "Read docs/audit/OBSERVABLE_RUN_MONITOR_P5_ADVISORY_GUARD_REVIEW.md.\n\nApply only actionable fixes.\nIf no fixes are needed, write:\ndocs/audit/OBSERVABLE_RUN_MONITOR_P5_ADVISORY_GUARD_FIX.md\n\nRun compile and affected tests.",
-      "completed": false,
+      "completed": true,
       "engine": "opencode",
       "model": "deepseek/deepseek-v4-pro",
       "engine_args": [

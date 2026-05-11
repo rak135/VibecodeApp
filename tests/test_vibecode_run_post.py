@@ -27,7 +27,6 @@ from vibecode.run import (
     RunSummary,
     _run_post_checks,
     _write_run_summary,
-    cmd_run,
 )
 from vibecode.run_plan import RunPlan
 
@@ -229,7 +228,6 @@ class TestRunSummaryOverallStatus:
         )
 
     def test_agent_success_no_issues_is_success(self):
-        plan = self._make_plan()
         summary = RunSummary(
             session_id="s1",
             started_at="2026-01-01T00:00:00+00:00",
@@ -250,7 +248,6 @@ class TestRunSummaryOverallStatus:
         assert summary.overall_status == "success"
 
     def test_agent_failure_causes_failure(self):
-        plan = self._make_plan()
         summary = RunSummary(
             session_id="s1",
             started_at="2026-01-01T00:00:00+00:00",
@@ -280,7 +277,6 @@ class TestRunSummaryOverallStatus:
                 ),
             )
         )
-        plan = self._make_plan()
         summary = RunSummary(
             session_id="s1",
             started_at="2026-01-01T00:00:00+00:00",
@@ -312,7 +308,6 @@ class TestRunSummaryOverallStatus:
                 ),
             )
         )
-        plan = self._make_plan()
         summary = RunSummary(
             session_id="s1",
             started_at="2026-01-01T00:00:00+00:00",
@@ -344,7 +339,6 @@ class TestRunSummaryOverallStatus:
                 ),
             )
         )
-        plan = self._make_plan()
         summary = RunSummary(
             session_id="s1",
             started_at="2026-01-01T00:00:00+00:00",
@@ -370,7 +364,6 @@ class TestRunSummaryOverallStatus:
         check_run.results = [
             CheckResult("fail1", "cmd1", True, 1, 0.5, "", ""),
         ]
-        plan = self._make_plan()
         summary = RunSummary(
             session_id="s1",
             started_at="2026-01-01T00:00:00+00:00",
@@ -395,7 +388,6 @@ class TestRunSummaryOverallStatus:
         check_run.results = [
             CheckResult("warn1", "cmd1", False, 1, 0.5, "", ""),
         ]
-        plan = self._make_plan()
         summary = RunSummary(
             session_id="s1",
             started_at="2026-01-01T00:00:00+00:00",
@@ -420,7 +412,6 @@ class TestRunSummaryOverallStatus:
         handoff.issues.append(
             HandoffIssue(file=".vibecode/handoff/NOW.md", message="NOW.md is missing")
         )
-        plan = self._make_plan()
         summary = RunSummary(
             session_id="s1",
             started_at="2026-01-01T00:00:00+00:00",
@@ -442,7 +433,6 @@ class TestRunSummaryOverallStatus:
 
     def test_handoff_passes_with_no_issues(self):
         handoff = HandoffResult(root=Path("/tmp"))
-        plan = self._make_plan()
         summary = RunSummary(
             session_id="s1",
             started_at="2026-01-01T00:00:00+00:00",
@@ -463,7 +453,6 @@ class TestRunSummaryOverallStatus:
         assert summary.overall_status == "success"
 
     def test_error_field_causes_error_status(self):
-        plan = self._make_plan()
         summary = RunSummary(
             session_id="s1",
             started_at="2026-01-01T00:00:00+00:00",
@@ -502,7 +491,6 @@ class TestRunSummaryOverallStatus:
         handoff = HandoffResult(root=Path("/tmp"))
         # handoff passes
 
-        plan = self._make_plan()
         summary = RunSummary(
             session_id="s1",
             started_at="2026-01-01T00:00:00+00:00",
@@ -543,7 +531,6 @@ class TestRunSummaryOverallStatus:
         ]
         handoff = HandoffResult(root=Path("/tmp"))
 
-        plan = self._make_plan()
         summary = RunSummary(
             session_id="s1",
             started_at="2026-01-01T00:00:00+00:00",
@@ -575,7 +562,6 @@ class TestRunSummaryOverallStatus:
         ]
         handoff = HandoffResult(root=Path("/tmp"))
 
-        plan = self._make_plan()
         summary = RunSummary(
             session_id="s1",
             started_at="2026-01-01T00:00:00+00:00",
@@ -610,20 +596,6 @@ class TestRunSummaryAsDict:
         check_run.results = [CheckResult("c1", "cmd1", True, 0, 0.1, "", "")]
         handoff = HandoffResult(root=Path("/tmp"))
 
-        plan = RunPlan(
-            repo_root="/tmp",
-            task="test",
-            dirty=False,
-            dirty_paths=(),
-            index_fresh=True,
-            index_age_seconds=0.0,
-            context_pack_path=None,
-            opencode_prompt_path=None,
-            permission_profile=None,
-            preflight_warnings=(),
-            preflight_errors=(),
-            commands=(),
-        )
         summary = RunSummary(
             session_id="s1",
             started_at="2026-01-01T00:00:00+00:00",
