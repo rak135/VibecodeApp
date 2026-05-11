@@ -381,6 +381,61 @@ def create_parser() -> argparse.ArgumentParser:
         help="Repository root directory (default: active project from registry).",
     )
 
+    # monitor
+    monitor_parser = subparsers.add_parser(
+        "monitor",
+        help="Run an agent session with a live TUI showing agent output and Vibecode events.",
+        description=(
+            "Launch a split-pane terminal monitor that runs an OpenCode session and\n"
+            "streams output live:\n\n"
+            "  Left pane:  agent stdout/stderr (raw OpenCode output).\n"
+            "  Right pane: Vibecode event spine (lifecycle, guard, checks, handoff).\n"
+            "  Status bar: agent status, guard status, checks status, run artifact path.\n\n"
+            "Note: this is a streaming-output monitor (text mode), not a PTY.  For\n"
+            "full interactive terminal control, run OpenCode directly.\n\n"
+            "Press Q to quit (the agent run continues until it exits naturally)."
+        ),
+    )
+    monitor_parser.add_argument(
+        "repo_root",
+        nargs="?",
+        default=None,
+        help="Repository root directory (default: active project from registry).",
+    )
+    monitor_parser.add_argument(
+        "--task", default="", help="Task description for the context pack."
+    )
+    monitor_parser.add_argument(
+        "--platform",
+        default="opencode",
+        choices=["opencode"],
+        help="Target platform (default: opencode).",
+    )
+    monitor_parser.add_argument(
+        "--profile",
+        default=None,
+        help="Advisory permission profile name (default: safe).",
+    )
+    monitor_parser.add_argument(
+        "--allow-dirty",
+        action="store_true",
+        default=False,
+        help="Allow running even with uncommitted changes (warn only, no error).",
+    )
+    monitor_parser.add_argument(
+        "--no-index",
+        action="store_true",
+        default=False,
+        help="Skip automatic index generation/refresh.",
+    )
+    monitor_parser.add_argument(
+        "--guard-mode",
+        default="advisory",
+        choices=["advisory", "strict"],
+        dest="guard_mode",
+        help="Guard enforcement mode (default: advisory).",
+    )
+
     # export-agents
     export_agents_parser = subparsers.add_parser(
         "export-agents", help="Export agent instructions to AGENTS.md."
@@ -565,6 +620,12 @@ def _dispatch(args, parser) -> int:
         from vibecode.tui_app import VibecodeTUI
         VibecodeTUI(repo_root=args.repo_root).run()
         return 0
+
+    if args.command == "monitor":
+        args.repo_root = _resolve_repo_root(args)
+        _require_root_exists(args.repo_root)
+        from vibecode.monitor_app import cmd_monitor
+        return cmd_monitor(args)
 
     if args.command == "export-agents":
         args.repo_root = normalise_root(args.repo_root)

@@ -330,7 +330,7 @@
     {
       "title": "P9.1 Implement TUI two-pane monitor MVP",
       "description": "Implement the first operator-facing monitor command.\n\nGoal:\nA TUI command should run an OpenCode task and show two live panes:\n- left pane: OpenCode/agent stdout and stderr stream,\n- right pane: VibecodeApp event stream and advisory warnings.\n\nPreferred command shape:\nvibecode monitor --platform opencode --task \"...\"\n\nIf existing CLI style suggests a different command shape, keep it consistent and document it.\n\nMVP layout:\n- Header with repo root, session id, task, platform/model.\n- Left text pane for AgentStdout/AgentStderr.\n- Right text pane for Vibecode events.\n- Bottom/status area showing:\n  - agent status,\n  - guard status,\n  - checks status,\n  - run artifact path.\n- Key binding or simple instruction to open/view prompt path is optional, not required.\n- The TUI can be basic. Do not overbuild.\n- It may reuse Textual if already present.\n- It must consume events from the same event spine, not parse random printed text.\n- If full interactive OpenCode terminal is not supported, document that this MVP streams output and is not a PTY.\n\nFallback:\nIf Textual integration is too risky, implement a minimal non-interactive live monitor mode first, but prefer proper TUI if the project already has Textual.\n\nTests:\n- unit tests for event-to-panel formatting if practical,\n- command registration/import test,\n- non-UI smoke path with fake runner if possible.\n\nRun compile and affected tests.",
-      "completed": false,
+      "completed": true,
       "engine": "copilot",
       "model": "claude-sonnet-4.6",
       "engine_args": [
