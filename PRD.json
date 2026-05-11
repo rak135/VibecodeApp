@@ -378,7 +378,7 @@
     {
       "title": "P10.2 Review run replay/show command",
       "description": "Review the run replay/show implementation.\n\nWrite review output to:\ndocs/audit/OBSERVABLE_RUN_MONITOR_P10_RUN_REPLAY_REVIEW.md\n\nCheck:\n- It reads artifacts instead of re-executing anything.\n- Missing/corrupt run data is handled honestly.\n- It shows enough information to debug what happened.\n- It does not expose raw huge payloads by default.\n- Tests cover normal and missing/corrupt cases.\n\nDo not modify implementation files. Only write the review document.",
-      "completed": false,
+      "completed": true,
       "engine": "codex",
       "model": "gpt-5.5",
       "engine_args": [
