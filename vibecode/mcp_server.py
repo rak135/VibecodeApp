@@ -3,8 +3,10 @@
 from __future__ import annotations
 
 import json
+import os
 import sys
 from pathlib import Path
+from typing import Any
 
 
 class VibecodeServer:
@@ -13,11 +15,31 @@ class VibecodeServer:
     The two JSON files are loaded once at construction time.  If a file is
     missing the server starts with an empty dataset and returns friendly error
     messages rather than crashing.
+
+    Parameters
+    ----------
+    event_sink:
+        Optional sink that receives :class:`~vibecode.events.VibecodeEvent` objects.
+        When provided, each tool call emits ``McpToolCalled``, ``McpToolReturned``,
+        or ``McpToolFailed`` events with a compact result summary.  No large
+        response blobs are stored — only counts, booleans, and ``result_chars``.
+    session_id:
+        Session identifier embedded in emitted events.  Falls back to the
+        ``VIBECODE_SESSION_ID`` environment variable, then ``"mcp-server"``.
     """
 
-    def __init__(self, inventory_path: Path, risk_report_path: Path) -> None:
+    def __init__(
+        self,
+        inventory_path: Path,
+        risk_report_path: Path,
+        *,
+        event_sink: Any | None = None,
+        session_id: str | None = None,
+    ) -> None:
         self._inventory = self._load_json(inventory_path, "file_inventory.json")
         self._risk_report = self._load_json(risk_report_path, "risk_report.json")
+        self._sink = event_sink
+        self._session_id = session_id or os.environ.get("VIBECODE_SESSION_ID") or "mcp-server"
 
         # card index: normalised path → card dict
         self._cards: dict[str, dict] = {}
@@ -49,14 +71,30 @@ class VibecodeServer:
         return data
 
     # ------------------------------------------------------------------
-    # Tool implementations
+    # Logging helper
     # ------------------------------------------------------------------
 
-    def get_file_card(self, file_path: str) -> str:
-        """Return a human-readable card for *file_path*.
+    def _emit(self, message: str, data: dict | None = None, *, error: bool = False) -> None:
+        """Emit an MCP event to the configured sink.  No-op when no sink is set."""
+        if self._sink is None:
+            return
+        from vibecode.events import EVENT_MCP, EventLevel, create_event
 
-        Fields rendered: purpose, symbols, snippet, facts, heuristics.
-        """
+        level = EventLevel.ERROR if error else EventLevel.INFO
+        event = create_event(
+            session_id=self._session_id,
+            type_=EVENT_MCP,
+            level=level,
+            message=message,
+            data=data,
+        )
+        self._sink.emit(event)
+
+    # ------------------------------------------------------------------
+    # Private tool implementations (pure logic, no side effects)
+    # ------------------------------------------------------------------
+
+    def _get_file_card(self, file_path: str) -> str:
         key = file_path.replace("\\", "/")
         card = self._cards.get(key)
         if card is None:
@@ -101,12 +139,8 @@ class VibecodeServer:
 
         return "\n".join(lines)
 
-    def find_symbol(self, symbol_name: str) -> str:
-        """Return a markdown-formatted list of locations for *symbol_name*.
-
-        Falls back to a case-insensitive match when the exact name is not found.
-        Returns a plain-text error message when nothing matches.
-        """
+    def _find_symbol(self, symbol_name: str) -> tuple[str, int]:
+        """Return (result_markdown, match_count)."""
         canonical = symbol_name
         matches = self._symbols.get(symbol_name)
         if not matches:
@@ -117,7 +151,7 @@ class VibecodeServer:
                     canonical = name
                     break
         if not matches:
-            return f"Symbol not found: `{symbol_name}`"
+            return f"Symbol not found: `{symbol_name}`", 0
 
         lines: list[str] = [f"## Symbol: `{canonical}`", ""]
         lines.append(f"Found in {len(matches)} file(s):")
@@ -127,16 +161,10 @@ class VibecodeServer:
             line_no = m.get("line", "?")
             fp = m.get("file_path", "?")
             lines.append(f"- **{fp}** — {kind} at line {line_no}")
-        return "\n".join(lines)
+        return "\n".join(lines), len(matches)
 
-    def list_high_risk(self) -> str:
-        """Return high-risk files from the risk report as markdown.
-
-        A file is considered high-risk when its ``risk_level`` is ``"high"``
-        or when it contains at least one heuristic with ``severity == "high"``.
-        Both conditions are checked so that files classified high at the
-        project level (but without specific heuristics) are still surfaced.
-        """
+    def _list_high_risk(self) -> tuple[str, int]:
+        """Return (result_markdown, risk_count)."""
         results: list[dict] = []
         for item in self._risk_report.get("files", []):
             high_h = [h for h in item.get("heuristics", []) if h.get("severity") == "high"]
@@ -150,7 +178,7 @@ class VibecodeServer:
                     }
                 )
         if not results:
-            return "No high-risk files found in the risk report."
+            return "No high-risk files found in the risk report.", 0
 
         lines: list[str] = [f"## High-Risk Files ({len(results)})", ""]
         for r in results:
@@ -170,14 +198,112 @@ class VibecodeServer:
                         f" `{h.get('symbol', '?')}` — {h.get('detail', '')}"
                     )
             lines.append("")
-        return "\n".join(lines)
+        return "\n".join(lines), len(results)
+
+    # ------------------------------------------------------------------
+    # Public tool methods (emit events, delegate to private impls)
+    # ------------------------------------------------------------------
+
+    def get_file_card(self, file_path: str) -> str:
+        """Return a human-readable card for *file_path*.
+
+        Fields rendered: purpose, symbols, snippet, facts, heuristics.
+        """
+        self._emit("McpToolCalled: get_file_card", {"tool": "get_file_card", "path": file_path})
+        try:
+            result = self._get_file_card(file_path)
+        except Exception as e:
+            self._emit(
+                "McpToolFailed: get_file_card",
+                {"tool": "get_file_card", "path": file_path, "error": str(e), "error_type": type(e).__name__},
+                error=True,
+            )
+            raise
+        self._emit(
+            "McpToolReturned: get_file_card",
+            {
+                "tool": "get_file_card",
+                "path": file_path,
+                "found": not result.startswith("No context card"),
+                "result_chars": len(result),
+            },
+        )
+        return result
+
+    def find_symbol(self, symbol_name: str) -> str:
+        """Return a markdown-formatted list of locations for *symbol_name*.
+
+        Falls back to a case-insensitive match when the exact name is not found.
+        Returns a plain-text error message when nothing matches.
+        """
+        self._emit("McpToolCalled: find_symbol", {"tool": "find_symbol", "symbol": symbol_name})
+        try:
+            result, match_count = self._find_symbol(symbol_name)
+        except Exception as e:
+            self._emit(
+                "McpToolFailed: find_symbol",
+                {"tool": "find_symbol", "symbol": symbol_name, "error": str(e), "error_type": type(e).__name__},
+                error=True,
+            )
+            raise
+        self._emit(
+            "McpToolReturned: find_symbol",
+            {"tool": "find_symbol", "symbol": symbol_name, "match_count": match_count, "result_chars": len(result)},
+        )
+        return result
+
+    def list_high_risk(self) -> str:
+        """Return high-risk files from the risk report as markdown.
+
+        A file is considered high-risk when its ``risk_level`` is ``"high"``
+        or when it contains at least one heuristic with ``severity == "high"``.
+        Both conditions are checked so that files classified high at the
+        project level (but without specific heuristics) are still surfaced.
+        """
+        self._emit("McpToolCalled: list_high_risk", {"tool": "list_high_risk"})
+        try:
+            result, risk_count = self._list_high_risk()
+        except Exception as e:
+            self._emit(
+                "McpToolFailed: list_high_risk",
+                {"tool": "list_high_risk", "error": str(e), "error_type": type(e).__name__},
+                error=True,
+            )
+            raise
+        self._emit(
+            "McpToolReturned: list_high_risk",
+            {"tool": "list_high_risk", "risk_count": risk_count, "result_chars": len(result)},
+        )
+        return result
 
 
-def build_mcp_server(inventory_path: Path, risk_report_path: Path):  # type: ignore[return]
-    """Build and return a :class:`~mcp.server.fastmcp.FastMCP` instance with vibecode tools."""
+def build_mcp_server(  # type: ignore[return]
+    inventory_path: Path,
+    risk_report_path: Path,
+    *,
+    log_path: Path | None = None,
+    session_id: str | None = None,
+):
+    """Build and return a :class:`~mcp.server.fastmcp.FastMCP` instance with vibecode tools.
+
+    Parameters
+    ----------
+    log_path:
+        When provided, tool events are appended as JSONL to this file.
+        Typical value: ``<repo_root>/.vibecode/logs/mcp_events.jsonl``.
+    session_id:
+        Session identifier forwarded to :class:`VibecodeServer`.  ``None``
+        falls through to the ``VIBECODE_SESSION_ID`` environment variable.
+    """
     from mcp.server.fastmcp import FastMCP
 
-    vs = VibecodeServer(inventory_path, risk_report_path)
+    event_sink: Any = None
+    if log_path is not None:
+        from vibecode.events import JsonlEventSink
+
+        event_sink = JsonlEventSink(log_path)
+
+    vs = VibecodeServer(inventory_path, risk_report_path, event_sink=event_sink, session_id=session_id)
     mcp = FastMCP("vibecode")
 
     @mcp.tool()
@@ -203,6 +329,10 @@ def cmd_serve(args) -> int:
 
     Prints a ready-to-paste OpenCode MCP configuration snippet to *stderr*
     before entering the blocking server loop.
+
+    Tool events are written to ``<repo_root>/.vibecode/logs/mcp_events.jsonl``.
+    Set the ``VIBECODE_SESSION_ID`` environment variable to correlate events
+    with an enclosing run session.
     """
     from vibecode.data_loader import load_project_data
     from vibecode.paths import normalise_root
@@ -235,6 +365,8 @@ def cmd_serve(args) -> int:
         file=sys.stderr,
     )
 
-    mcp = build_mcp_server(inventory_path, risk_report_path)
+    log_path = repo_root / ".vibecode" / "logs" / "mcp_events.jsonl"
+    session_id = os.environ.get("VIBECODE_SESSION_ID")
+    mcp = build_mcp_server(inventory_path, risk_report_path, log_path=log_path, session_id=session_id)
     mcp.run(transport="stdio")
     return 0

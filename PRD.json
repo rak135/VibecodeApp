@@ -295,7 +295,7 @@
     {
       "title": "P8.1 Add MCP tool-call observability",
       "description": "Instrument VibecodeApp MCP tools so the operator can see what the agent asked VibecodeApp.\n\nGoal:\nWhen OpenCode or another agent calls VibecodeApp MCP tools, VibecodeApp should log:\n- tool name,\n- sanitized arguments,\n- result summary,\n- error if any,\n- timestamp,\n- optional session_id if available.\n\nRequired behavior:\n- Add event/logging hooks around MCP tools such as get_file_card, find_symbol, list_high_risk if they exist.\n- Emit or write:\n  - McpToolCalled\n  - McpToolReturned\n  - McpToolFailed\n- If MCP server runs out-of-process from the run controller, use a safe fallback log path such as .vibecode/logs/mcp_events.jsonl.\n- If a VIBECODE_SESSION_ID environment variable or similar session correlation can be passed to the MCP server, implement it narrowly and document it.\n- Do not dump huge MCP responses. Store a compact result summary:\n  - number of symbols,\n  - number of files,\n  - risk count,\n  - approximate chars,\n  - path queried,\n  - error message if failed.\n- Preserve full tool correctness.\n\nTests:\n- direct tool call produces log/event,\n- failures are logged,\n- result summary avoids large blobs,\n- no MCP dependency import failure is introduced in normal non-MCP flows.\n\nRun compile and affected tests.",
-      "completed": false,
+      "completed": true,
       "engine": "copilot",
       "model": "claude-sonnet-4.6",
       "engine_args": [

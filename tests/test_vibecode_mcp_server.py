@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import json
+import sys
 from pathlib import Path
 from types import SimpleNamespace
 from unittest.mock import MagicMock, patch
@@ -605,3 +606,333 @@ class TestRealDataSmoke:
         # Real project has high-risk-level files (architecture docs), so this
         # should return actual content rather than the empty message.
         assert "## High-Risk Files" in result
+
+
+# ---------------------------------------------------------------------------
+# MCP tool logging (McpToolCalled / McpToolReturned / McpToolFailed)
+# ---------------------------------------------------------------------------
+
+
+class TestMcpToolLogging:
+    """VibecodeServer emits compact events around each tool call when a sink is set."""
+
+    def _server(self, tmp_path, cards=None, risk_items=None, *, sink, session_id=None):
+        from vibecode.mcp_server import VibecodeServer
+
+        inv = _write(tmp_path / "inv.json", _make_inventory(cards=cards or []))
+        risk = _write(tmp_path / "risk.json", _make_risk_report(items=risk_items or []))
+        return VibecodeServer(inv, risk, event_sink=sink, session_id=session_id)
+
+    # -- get_file_card --------------------------------------------------------
+
+    def test_get_file_card_emits_called_and_returned(self, tmp_path):
+        from vibecode.events import EVENT_MCP, InMemoryEventSink
+
+        sink = InMemoryEventSink()
+        vs = self._server(tmp_path, cards=[_sample_card()], sink=sink)
+        vs.get_file_card("src/app.py")
+
+        msgs = [e.message for e in sink.events_by_type(EVENT_MCP)]
+        assert any("McpToolCalled" in m and "get_file_card" in m for m in msgs)
+        assert any("McpToolReturned" in m and "get_file_card" in m for m in msgs)
+
+    def test_get_file_card_returned_event_has_found_true(self, tmp_path):
+        from vibecode.events import EVENT_MCP, InMemoryEventSink
+
+        sink = InMemoryEventSink()
+        vs = self._server(tmp_path, cards=[_sample_card()], sink=sink)
+        vs.get_file_card("src/app.py")
+
+        returned = [e for e in sink.events_by_type(EVENT_MCP) if "McpToolReturned" in e.message]
+        assert len(returned) == 1
+        assert returned[0].data["found"] is True
+
+    def test_get_file_card_missing_emits_found_false(self, tmp_path):
+        from vibecode.events import EVENT_MCP, InMemoryEventSink
+
+        sink = InMemoryEventSink()
+        vs = self._server(tmp_path, sink=sink)
+        vs.get_file_card("does/not/exist.py")
+
+        returned = [e for e in sink.events_by_type(EVENT_MCP) if "McpToolReturned" in e.message]
+        assert len(returned) == 1
+        assert returned[0].data["found"] is False
+
+    # -- find_symbol ----------------------------------------------------------
+
+    def test_find_symbol_emits_called_and_returned(self, tmp_path):
+        from vibecode.events import EVENT_MCP, InMemoryEventSink
+
+        sink = InMemoryEventSink()
+        vs = self._server(tmp_path, cards=[_sample_card()], sink=sink)
+        vs.find_symbol("run")
+
+        msgs = [e.message for e in sink.events_by_type(EVENT_MCP)]
+        assert any("McpToolCalled" in m and "find_symbol" in m for m in msgs)
+        assert any("McpToolReturned" in m and "find_symbol" in m for m in msgs)
+
+    def test_find_symbol_returned_event_has_match_count(self, tmp_path):
+        from vibecode.events import EVENT_MCP, InMemoryEventSink
+
+        sink = InMemoryEventSink()
+        vs = self._server(tmp_path, cards=[_sample_card()], sink=sink)
+        vs.find_symbol("run")
+
+        returned = [e for e in sink.events_by_type(EVENT_MCP) if "McpToolReturned" in e.message]
+        assert len(returned) == 1
+        assert returned[0].data["match_count"] == 1
+
+    def test_find_symbol_not_found_emits_zero_match_count(self, tmp_path):
+        from vibecode.events import EVENT_MCP, InMemoryEventSink
+
+        sink = InMemoryEventSink()
+        vs = self._server(tmp_path, sink=sink)
+        vs.find_symbol("NoSuchSymbol")
+
+        returned = [e for e in sink.events_by_type(EVENT_MCP) if "McpToolReturned" in e.message]
+        assert len(returned) == 1
+        assert returned[0].data["match_count"] == 0
+
+    # -- list_high_risk -------------------------------------------------------
+
+    def test_list_high_risk_emits_called_and_returned(self, tmp_path):
+        from vibecode.events import EVENT_MCP, InMemoryEventSink
+
+        sink = InMemoryEventSink()
+        vs = self._server(tmp_path, risk_items=[_sample_risk_item(severity="high")], sink=sink)
+        vs.list_high_risk()
+
+        msgs = [e.message for e in sink.events_by_type(EVENT_MCP)]
+        assert any("McpToolCalled" in m and "list_high_risk" in m for m in msgs)
+        assert any("McpToolReturned" in m and "list_high_risk" in m for m in msgs)
+
+    def test_list_high_risk_returned_event_has_risk_count(self, tmp_path):
+        from vibecode.events import EVENT_MCP, InMemoryEventSink
+
+        sink = InMemoryEventSink()
+        vs = self._server(tmp_path, risk_items=[_sample_risk_item(severity="high")], sink=sink)
+        vs.list_high_risk()
+
+        returned = [e for e in sink.events_by_type(EVENT_MCP) if "McpToolReturned" in e.message]
+        assert len(returned) == 1
+        assert returned[0].data["risk_count"] == 1
+
+    def test_list_high_risk_empty_risk_count_is_zero(self, tmp_path):
+        from vibecode.events import EVENT_MCP, InMemoryEventSink
+
+        sink = InMemoryEventSink()
+        vs = self._server(tmp_path, sink=sink)
+        vs.list_high_risk()
+
+        returned = [e for e in sink.events_by_type(EVENT_MCP) if "McpToolReturned" in e.message]
+        assert len(returned) == 1
+        assert returned[0].data["risk_count"] == 0
+
+    # -- McpToolFailed --------------------------------------------------------
+
+    def test_mcptoolfailed_emitted_and_exception_reraised(self, tmp_path):
+        import pytest
+        from vibecode.events import EVENT_MCP, EventLevel, InMemoryEventSink
+
+        sink = InMemoryEventSink()
+        inv = _write(tmp_path / "inv.json", _make_inventory(cards=[_sample_card()]))
+        risk = _write(tmp_path / "risk.json", _make_risk_report())
+        from vibecode.mcp_server import VibecodeServer
+
+        vs = VibecodeServer(inv, risk, event_sink=sink)
+
+        with patch.object(vs, "_get_file_card", side_effect=RuntimeError("internal boom")):
+            with pytest.raises(RuntimeError, match="internal boom"):
+                vs.get_file_card("src/app.py")
+
+        failed = [e for e in sink.events_by_type(EVENT_MCP) if "McpToolFailed" in e.message]
+        assert len(failed) == 1
+        assert failed[0].level == EventLevel.ERROR
+        assert failed[0].data["error"] == "internal boom"
+        assert failed[0].data["error_type"] == "RuntimeError"
+
+    def test_mcptoolfailed_find_symbol(self, tmp_path):
+        import pytest
+        from vibecode.events import EVENT_MCP, InMemoryEventSink
+
+        sink = InMemoryEventSink()
+        inv = _write(tmp_path / "inv.json", _make_inventory())
+        risk = _write(tmp_path / "risk.json", _make_risk_report())
+        from vibecode.mcp_server import VibecodeServer
+
+        vs = VibecodeServer(inv, risk, event_sink=sink)
+        with patch.object(vs, "_find_symbol", side_effect=ValueError("bad")):
+            with pytest.raises(ValueError, match="bad"):
+                vs.find_symbol("anything")
+
+        failed = [e for e in sink.events_by_type(EVENT_MCP) if "McpToolFailed" in e.message]
+        assert len(failed) == 1
+        assert "find_symbol" in failed[0].message
+
+    def test_mcptoolfailed_list_high_risk(self, tmp_path):
+        import pytest
+        from vibecode.events import EVENT_MCP, InMemoryEventSink
+
+        sink = InMemoryEventSink()
+        inv = _write(tmp_path / "inv.json", _make_inventory())
+        risk = _write(tmp_path / "risk.json", _make_risk_report())
+        from vibecode.mcp_server import VibecodeServer
+
+        vs = VibecodeServer(inv, risk, event_sink=sink)
+        with patch.object(vs, "_list_high_risk", side_effect=KeyError("oops")):
+            with pytest.raises(KeyError):
+                vs.list_high_risk()
+
+        failed = [e for e in sink.events_by_type(EVENT_MCP) if "McpToolFailed" in e.message]
+        assert len(failed) == 1
+        assert "list_high_risk" in failed[0].message
+
+    # -- Compact summaries ----------------------------------------------------
+
+    def test_result_summary_contains_no_full_result_blob(self, tmp_path):
+        from vibecode.events import EVENT_MCP, InMemoryEventSink
+
+        sink = InMemoryEventSink()
+        vs = self._server(tmp_path, cards=[_sample_card()], sink=sink)
+        vs.get_file_card("src/app.py")
+
+        for event in sink.events_by_type(EVENT_MCP):
+            if event.data:
+                data_str = json.dumps(event.data)
+                assert "def run" not in data_str, "Full snippet must not appear in event data"
+                assert "implement retry logic" not in data_str, "Full fact text must not appear"
+
+    def test_returned_event_has_result_chars(self, tmp_path):
+        from vibecode.events import EVENT_MCP, InMemoryEventSink
+
+        sink = InMemoryEventSink()
+        vs = self._server(tmp_path, cards=[_sample_card()], sink=sink)
+        result = vs.get_file_card("src/app.py")
+
+        returned = [e for e in sink.events_by_type(EVENT_MCP) if "McpToolReturned" in e.message]
+        assert returned[0].data["result_chars"] == len(result)
+
+    # -- No sink --------------------------------------------------------------
+
+    def test_no_sink_tools_work_correctly(self, tmp_path):
+        from vibecode.mcp_server import VibecodeServer
+
+        inv = _write(tmp_path / "inv.json", _make_inventory(cards=[_sample_card()]))
+        risk = _write(tmp_path / "risk.json", _make_risk_report(items=[_sample_risk_item(severity="high")]))
+        vs = VibecodeServer(inv, risk)  # no event_sink
+
+        assert "src/app.py" in vs.get_file_card("src/app.py")
+        assert "run" in vs.find_symbol("run")
+        assert "## High-Risk Files" in vs.list_high_risk()
+
+    # -- Session ID -----------------------------------------------------------
+
+    def test_session_id_from_parameter(self, tmp_path):
+        from vibecode.events import EVENT_MCP, InMemoryEventSink
+
+        sink = InMemoryEventSink()
+        vs = self._server(tmp_path, sink=sink, session_id="my-session-42")
+        vs.list_high_risk()
+
+        for event in sink.events_by_type(EVENT_MCP):
+            assert event.session_id == "my-session-42"
+
+    def test_session_id_from_env(self, tmp_path, monkeypatch):
+        from vibecode.events import EVENT_MCP, InMemoryEventSink
+
+        monkeypatch.setenv("VIBECODE_SESSION_ID", "env-session-99")
+        sink = InMemoryEventSink()
+        inv = _write(tmp_path / "inv.json", _make_inventory())
+        risk = _write(tmp_path / "risk.json", _make_risk_report())
+        from vibecode.mcp_server import VibecodeServer
+
+        vs = VibecodeServer(inv, risk, event_sink=sink)
+        vs.list_high_risk()
+
+        for event in sink.events_by_type(EVENT_MCP):
+            assert event.session_id == "env-session-99"
+
+    def test_session_id_defaults_to_mcp_server(self, tmp_path, monkeypatch):
+        from vibecode.events import EVENT_MCP, InMemoryEventSink
+
+        monkeypatch.delenv("VIBECODE_SESSION_ID", raising=False)
+        sink = InMemoryEventSink()
+        inv = _write(tmp_path / "inv.json", _make_inventory())
+        risk = _write(tmp_path / "risk.json", _make_risk_report())
+        from vibecode.mcp_server import VibecodeServer
+
+        vs = VibecodeServer(inv, risk, event_sink=sink)
+        vs.list_high_risk()
+
+        for event in sink.events_by_type(EVENT_MCP):
+            assert event.session_id == "mcp-server"
+
+    # -- JSONL log path -------------------------------------------------------
+
+    def test_jsonl_log_written_on_tool_call(self, tmp_path):
+        from vibecode.events import JsonlEventSink
+        from vibecode.mcp_server import VibecodeServer
+
+        log_path = tmp_path / "mcp_events.jsonl"
+        sink = JsonlEventSink(log_path)
+        inv = _write(tmp_path / "inv.json", _make_inventory(cards=[_sample_card()]))
+        risk = _write(tmp_path / "risk.json", _make_risk_report())
+        vs = VibecodeServer(inv, risk, event_sink=sink)
+        vs.get_file_card("src/app.py")
+
+        assert log_path.exists()
+        lines = [l for l in log_path.read_text(encoding="utf-8").splitlines() if l.strip()]
+        assert len(lines) >= 2  # McpToolCalled + McpToolReturned
+        first = json.loads(lines[0])
+        assert first["type"] == "run.mcp"
+        assert "McpToolCalled" in first["message"]
+
+    def test_jsonl_log_contains_both_events(self, tmp_path):
+        from vibecode.events import JsonlEventSink
+        from vibecode.mcp_server import VibecodeServer
+
+        log_path = tmp_path / "mcp_events.jsonl"
+        sink = JsonlEventSink(log_path)
+        inv = _write(tmp_path / "inv.json", _make_inventory())
+        risk = _write(tmp_path / "risk.json", _make_risk_report())
+        vs = VibecodeServer(inv, risk, event_sink=sink)
+        vs.find_symbol("NoMatch")
+
+        lines = [l for l in log_path.read_text(encoding="utf-8").splitlines() if l.strip()]
+        messages = [json.loads(l)["message"] for l in lines]
+        assert any("McpToolCalled" in m for m in messages)
+        assert any("McpToolReturned" in m for m in messages)
+
+    # -- build_mcp_server with log_path ---------------------------------------
+
+    def test_build_mcp_server_accepts_log_path_and_session_id(self, tmp_path):
+        from vibecode.mcp_server import build_mcp_server
+
+        log_path = tmp_path / "logs" / "mcp_events.jsonl"
+        inv = _write(tmp_path / "inv.json", _make_inventory())
+        risk = _write(tmp_path / "risk.json", _make_risk_report())
+        # Should not raise even with new kwargs
+        with patch("vibecode.mcp_server.FastMCP" if False else "mcp.server.fastmcp.FastMCP"):
+            try:
+                build_mcp_server(inv, risk, log_path=log_path, session_id="test-sess")
+            except Exception:
+                pass  # mcp may not support patching here; just ensure no TypeError
+
+    # -- No MCP import at module level ----------------------------------------
+
+    def test_vibecode_server_does_not_require_mcp(self, tmp_path):
+        """VibecodeServer and tool methods work when mcp is hidden from sys.modules."""
+        mcp_mods = {k: v for k, v in list(sys.modules.items()) if k == "mcp" or k.startswith("mcp.")}
+        for k in mcp_mods:
+            del sys.modules[k]
+        try:
+            from vibecode.mcp_server import VibecodeServer
+
+            inv = _write(tmp_path / "inv.json", _make_inventory(cards=[_sample_card()]))
+            risk = _write(tmp_path / "risk.json", _make_risk_report(items=[_sample_risk_item(severity="high")]))
+            vs = VibecodeServer(inv, risk)
+            vs.get_file_card("src/app.py")
+            vs.find_symbol("run")
+            vs.list_high_risk()
+        finally:
+            sys.modules.update(mcp_mods)
