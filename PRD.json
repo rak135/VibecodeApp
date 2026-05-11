@@ -98,7 +98,7 @@
     {
       "title": "P2.2 Review session artifact layer",
       "description": "Review the session artifact implementation.\n\nWrite review output to:\ndocs/audit/OBSERVABLE_RUN_MONITOR_P2_SESSION_ARTIFACTS_REVIEW.md\n\nCheck:\n- Paths are under .vibecode/runs/<session_id>, not scattered.\n- Existing .vibecode/current behavior is preserved.\n- Snapshot behavior is explicit and tested.\n- No brittle absolute paths.\n- No accidental deletion of current/generated/runtime artifacts.\n- Tests cover missing parent directories and normal snapshot flow.\n\nDo not modify implementation files. Only write the review document.",
-      "completed": false,
+      "completed": true,
       "engine": "codex",
       "model": "gpt-5.5",
       "engine_args": [
