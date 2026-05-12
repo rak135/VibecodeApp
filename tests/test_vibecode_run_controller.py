@@ -29,9 +29,11 @@ from vibecode.events import (
     EVENT_SUMMARY,
     EventLevel,
     InMemoryEventSink,
+    VibecodeEvent,
 )
 from vibecode.permissions import PROFILES
 from vibecode.run import RunController
+from vibecode.show_run import load_run_events
 
 
 # ---------------------------------------------------------------------------
@@ -126,6 +128,45 @@ def _minimal_vibecode(repo: Path) -> None:
     _write(handoff_dir / "NOW.md", "# Now\n\nWorking.\n")
     _write(handoff_dir / "NEXT.md", "# Next\n\nDo stuff.\n")
     _write(handoff_dir / "BLOCKERS.md", "# Blockers\n\nNo blockers.\n")
+    for name, data in PROFILES.items():
+        _write(
+            repo / ".vibecode" / "agents" / f"{name}.json",
+            json.dumps(data, indent=2) + "\n",
+        )
+
+
+def _minimal_vibecode_no_index(repo: Path) -> None:
+    """Like _minimal_vibecode but WITHOUT last_index.json (for missing-index abort tests)."""
+    _write(
+        repo / ".gitignore",
+        ".vibecode/current/\n"
+        ".vibecode/generated/\n"
+        ".vibecode/runs/\n"
+        ".vibecode/tmp/\n"
+        ".vibecode/cache/\n"
+        ".vibecode/logs/\n"
+        ".vibecode/index/*.generated.*\n",
+    )
+    _write(
+        repo / ".vibecode" / "project.yaml",
+        "project:\n"
+        "  id: testproject\n"
+        "  name: Test Project\n"
+        "  root: .\n"
+        "indexing:\n"
+        "  include: ['*.py']\n"
+        "  exclude: []\n"
+        "  protected_paths: []\n"
+        "  risk_rules: []\n",
+    )
+    _write(
+        repo / ".vibecode" / "index" / "file_inventory.json",
+        json.dumps({
+            "$schema": "vibecode/file-inventory/v1",
+            "files": [{"path": "test.py", "size": 100}],
+        }),
+    )
+    (repo / ".vibecode" / "handoff").mkdir(parents=True, exist_ok=True)
     for name, data in PROFILES.items():
         _write(
             repo / ".vibecode" / "agents" / f"{name}.json",
@@ -1350,3 +1391,262 @@ class TestEarlyAbortArtifacts:
         # timestamps must be parseable ISO-8601
         datetime.fromisoformat(data["started_at"])
         datetime.fromisoformat(data["finished_at"])
+
+    # -- Missing index (no_index=True, no last_index.json) -----------------
+
+    def test_missing_index_writes_events_jsonl(self, tmp_path: Path):
+        """No last_index.json with no_index=True → durable events.jsonl."""
+        repo = tmp_path / "repo"
+        repo.mkdir()
+        _init_repo(repo)
+        _minimal_vibecode_no_index(repo)
+        _write(repo / "app.py", "x = 1\n")
+        _commit_all(repo)
+
+        controller = RunController(
+            root=repo,
+            task="missing index",
+            platform="opencode",
+            profile_name="safe",
+            allow_dirty=False,
+            no_index=True,
+            session_id="abort-no-idx-001",
+        )
+        _, exit_code = controller.execute()
+
+        assert exit_code == 1
+        events_path = repo / ".vibecode" / "runs" / "abort-no-idx-001" / "events.jsonl"
+        assert events_path.exists()
+        lines = events_path.read_text(encoding="utf-8").strip().splitlines()
+        assert len(lines) >= 2
+        first = json.loads(lines[0])
+        assert first["type"] == EVENT_RUN_LIFECYCLE
+        assert first["data"]["phase"] == "started"
+        last = json.loads(lines[-1])
+        assert last["type"] == EVENT_RUN_LIFECYCLE
+        assert last["data"]["phase"] == "finished"
+        assert last["data"]["status"] == "error"
+
+    def test_missing_index_writes_summary_json(self, tmp_path: Path):
+        """No last_index.json with no_index=True → durable summary.json."""
+        repo = tmp_path / "repo"
+        repo.mkdir()
+        _init_repo(repo)
+        _minimal_vibecode_no_index(repo)
+        _write(repo / "app.py", "x = 1\n")
+        _commit_all(repo)
+
+        controller = RunController(
+            root=repo,
+            task="missing index task",
+            platform="opencode",
+            profile_name="safe",
+            allow_dirty=False,
+            no_index=True,
+            session_id="abort-no-idx-002",
+        )
+        _, exit_code = controller.execute()
+
+        assert exit_code == 1
+        summary_path = repo / ".vibecode" / "runs" / "abort-no-idx-002" / "summary.json"
+        assert summary_path.exists()
+        data = json.loads(summary_path.read_text(encoding="utf-8"))
+        assert data["session_id"] == "abort-no-idx-002"
+        assert data["overall_status"] == "error"
+        assert "error" in data
+        assert "no index" in data["error"].lower()
+        assert "$schema" in data
+
+    # -- Inventory health failure ------------------------------------------
+
+    def test_inventory_health_failure_writes_events_jsonl(self, repo: Path, fake_bin: Path):
+        """Corrupt file_inventory.json → durable events.jsonl."""
+        _make_fake_opencode(fake_bin)
+        (repo / ".vibecode" / "index" / "file_inventory.json").write_text(
+            "{not valid json", encoding="utf-8"
+        )
+
+        controller = RunController(
+            root=repo,
+            task="inventory fail",
+            platform="opencode",
+            profile_name="safe",
+            allow_dirty=True,
+            no_index=True,
+            session_id="abort-inv-001",
+        )
+        _, exit_code = controller.execute()
+
+        assert exit_code == 1
+        events_path = repo / ".vibecode" / "runs" / "abort-inv-001" / "events.jsonl"
+        assert events_path.exists()
+        lines = events_path.read_text(encoding="utf-8").strip().splitlines()
+        assert len(lines) >= 2
+        first = json.loads(lines[0])
+        assert first["type"] == EVENT_RUN_LIFECYCLE
+        assert first["data"]["phase"] == "started"
+        last = json.loads(lines[-1])
+        assert last["type"] == EVENT_RUN_LIFECYCLE
+        assert last["data"]["phase"] == "finished"
+        assert last["data"]["status"] == "error"
+
+    def test_inventory_health_failure_writes_summary_json(self, repo: Path, fake_bin: Path):
+        """Corrupt file_inventory.json → durable summary.json."""
+        _make_fake_opencode(fake_bin)
+        (repo / ".vibecode" / "index" / "file_inventory.json").write_text(
+            "{invalid", encoding="utf-8"
+        )
+
+        controller = RunController(
+            root=repo,
+            task="inventory fail task",
+            platform="opencode",
+            profile_name="safe",
+            allow_dirty=True,
+            no_index=True,
+            session_id="abort-inv-002",
+        )
+        _, exit_code = controller.execute()
+
+        assert exit_code == 1
+        summary_path = repo / ".vibecode" / "runs" / "abort-inv-002" / "summary.json"
+        assert summary_path.exists()
+        data = json.loads(summary_path.read_text(encoding="utf-8"))
+        assert data["session_id"] == "abort-inv-002"
+        assert data["overall_status"] == "error"
+        assert "error" in data
+        assert "inventory" in data["error"].lower()
+        assert "$schema" in data
+
+    # -- Round-trip: real controller abort JSONL parsed as VibecodeEvent ---
+
+    def test_abort_events_roundtrip_as_vibecode_event(self, tmp_path: Path):
+        """Real controller abort JSONL loads as VibecodeEvent via load_run_events."""
+        controller = RunController(
+            root=tmp_path,
+            task="roundtrip test",
+            platform="opencode",
+            profile_name="safe",
+            allow_dirty=False,
+            no_index=True,
+            session_id="abort-rt-001",
+        )
+        controller.execute()
+
+        events_path = tmp_path / ".vibecode" / "runs" / "abort-rt-001" / "events.jsonl"
+        assert events_path.exists()
+
+        events, errors, exists = load_run_events(events_path)
+        assert exists is True
+        assert errors == []
+        assert len(events) >= 2, "Expected at least run.started and run.finished"
+
+        for ev in events:
+            assert isinstance(ev, VibecodeEvent), f"Expected VibecodeEvent, got {type(ev)}"
+            assert ev.session_id == "abort-rt-001"
+
+        assert events[0].type == EVENT_RUN_LIFECYCLE
+        assert events[0].data.get("phase") == "started"
+        assert events[-1].type == EVENT_RUN_LIFECYCLE
+        assert events[-1].data.get("phase") == "finished"
+        assert events[-1].level == EventLevel.ERROR
+
+
+# ---------------------------------------------------------------------------
+# Tests: user-sink fan-out (durable JSONL vs InMemoryEventSink)
+# ---------------------------------------------------------------------------
+
+
+class TestUserSinkFanOut:
+    """Verify both durable JSONL and external InMemoryEventSink receive events
+    without duplication when a non-NullEventSink is injected."""
+
+    def test_durable_jsonl_and_memory_sink_have_same_event_count(
+        self, repo: Path, fake_bin: Path
+    ):
+        _make_fake_opencode(fake_bin)
+        sink = InMemoryEventSink()
+        controller = RunController(
+            root=repo,
+            task="fanout count",
+            platform="opencode",
+            profile_name="safe",
+            allow_dirty=False,
+            no_index=True,
+            sink=sink,
+            session_id="fanout-001",
+        )
+        controller.execute()
+
+        events_path = repo / ".vibecode" / "runs" / "fanout-001" / "events.jsonl"
+        assert events_path.exists()
+        durable_events, errors, _ = load_run_events(events_path)
+        assert errors == []
+        assert len(durable_events) == len(sink.events), (
+            f"JSONL has {len(durable_events)} events, memory has {len(sink.events)}"
+        )
+
+    def test_no_duplicate_event_ids_in_jsonl(self, repo: Path, fake_bin: Path):
+        _make_fake_opencode(fake_bin)
+        sink = InMemoryEventSink()
+        controller = RunController(
+            root=repo,
+            task="fanout dup check",
+            platform="opencode",
+            profile_name="safe",
+            allow_dirty=False,
+            no_index=True,
+            sink=sink,
+            session_id="fanout-002",
+        )
+        controller.execute()
+
+        events_path = repo / ".vibecode" / "runs" / "fanout-002" / "events.jsonl"
+        durable_events, errors, _ = load_run_events(events_path)
+        assert errors == []
+        event_ids = [e.event_id for e in durable_events]
+        assert len(set(event_ids)) == len(event_ids), (
+            f"Found {len(event_ids) - len(set(event_ids))} duplicate(s) in durable JSONL"
+        )
+
+    def test_no_duplicate_event_ids_in_memory_sink(self, repo: Path, fake_bin: Path):
+        _make_fake_opencode(fake_bin)
+        sink = InMemoryEventSink()
+        controller = RunController(
+            root=repo,
+            task="fanout mem dup",
+            platform="opencode",
+            profile_name="safe",
+            allow_dirty=False,
+            no_index=True,
+            sink=sink,
+            session_id="fanout-003",
+        )
+        controller.execute()
+
+        event_ids = [e.event_id for e in sink.events]
+        assert len(set(event_ids)) == len(event_ids), (
+            f"Found {len(event_ids) - len(set(event_ids))} duplicate(s) in memory sink"
+        )
+
+    def test_matching_event_order_in_both_sinks(self, repo: Path, fake_bin: Path):
+        _make_fake_opencode(fake_bin)
+        sink = InMemoryEventSink()
+        controller = RunController(
+            root=repo,
+            task="fanout order",
+            platform="opencode",
+            profile_name="safe",
+            allow_dirty=False,
+            no_index=True,
+            sink=sink,
+            session_id="fanout-004",
+        )
+        controller.execute()
+
+        events_path = repo / ".vibecode" / "runs" / "fanout-004" / "events.jsonl"
+        durable_events, errors, _ = load_run_events(events_path)
+        assert errors == []
+        durable_ids = [e.event_id for e in durable_events]
+        memory_ids = [e.event_id for e in sink.events]
+        assert durable_ids == memory_ids, "Event IDs differ between durable JSONL and memory sink"

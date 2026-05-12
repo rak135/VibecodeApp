@@ -529,7 +529,7 @@
     {
       "title": "P14.3 Apply durable artifact review fixes",
       "description": "Read:\n`docs/audit/OBSERVABLE_RUN_MONITOR_P14_DURABLE_FAILURES_REVIEW.md`\n\nApply only grounded actionable fixes from the review. Keep scope limited to durable early-failure artifacts, event persistence, replay/show behavior for aborted runs, and skipped guard/report truth.\n\nDo not redesign the event spine or TUI. Do not change command-resolution behavior unless the review identifies a direct P14 regression. Do not remove backward compatibility for existing run artifacts.\n\nRun:\n- `python -m compileall vibecode -q`\n- `python -m pytest -p no:cacheprovider -q tests/test_vibecode_run_controller.py tests/test_vibecode_show_run.py tests/test_vibecode_session_log.py`\n- any additional affected guard/report tests\n\nIf no fixes are needed, write:\n`docs/audit/OBSERVABLE_RUN_MONITOR_P14_DURABLE_FAILURES_FIX.md`",
-      "completed": false,
+      "completed": true,
       "engine": "opencode",
       "model": "deepseek/deepseek-v4-pro",
       "engine_args": [
