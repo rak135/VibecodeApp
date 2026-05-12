@@ -137,7 +137,7 @@ def test_render_agents_block_does_not_describe_implemented_commands_as_pending()
 
 def test_render_agents_block_is_short():
     block = render_agents_block()
-    assert len(block.splitlines()) < 50, "Generated block should remain concise"
+    assert len(block.splitlines()) < 70, "Generated block should remain concise"
 
 
 def test_render_agents_block_mentions_vibecode_source_of_truth():

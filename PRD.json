@@ -400,7 +400,7 @@
     {
       "title": "P11.1 Update documentation and AGENTS guidance",
       "description": "Update user-facing and agent-facing docs to match the implemented observable monitor reality.\n\nLikely files:\n- README.md\n- docs/QUICKSTART.md\n- AGENTS.md\n- possibly docs/CONTROL_LAYER_FINAL_AUDIT.md or a new docs/audit status document\n\nRequired docs content:\n- Explain VibecodeApp observable run monitor concept.\n- Explain default advisory guard behavior.\n- Explain strict mode only if implemented.\n- Explain the two-pane TUI monitor command.\n- Explain where run artifacts are written.\n- Explain where prompt/context snapshots are stored.\n- Explain how to inspect a previous run.\n- Explain MCP observability if implemented and any limitations.\n- Clearly say whether the monitor is streaming stdout/stderr only or a true interactive PTY.\n- Remove or flag stale claims contradicted by implementation.\n\nDo not oversell. If something is not implemented, say it is not implemented.\nRun docs-related checks if the repo has any.",
-      "completed": false,
+      "completed": true,
       "engine": "copilot",
       "model": "claude-sonnet-4.6",
       "engine_args": [

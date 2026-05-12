@@ -14,7 +14,9 @@ for any local repository, and using the safe OpenCode workflow to run agent-assi
 - **`map`** — print a one-page project summary (file counts, languages, symbols, tests, high-risk files) from the last index run
 - **`context`** — generate a task-scoped `.vibecode/current/context_pack.md` ready to be pasted as agent context
 - **`run-plan`** — assemble and inspect a full run plan without launching an agent (pre-flight check)
-- **`run`** — execute the full agent loop: context generation, platform invocation, post-run guard/check/handoff
+- **`run`** — execute the full agent loop: context generation, platform invocation, post-run guard/check/handoff; use `--guard-mode advisory` (default) or `--guard-mode strict`
+- **`monitor`** — two-pane TUI that runs an OpenCode session and streams output live: left pane agent stdout/stderr, right pane Vibecode event spine (streaming text mode, not a PTY)
+- **`runs list/show`** — inspect run sessions recorded under `.vibecode/runs/`
 - **`guard`** — check git diff against guard rules (protected paths, generated files, architecture truth)
 - **`check`** — run required checks from `.vibecode/checks/required_checks.yaml`
 - **`handoff-check`** — validate handoff files (NOW/NEXT/BLOCKERS) and architecture-change recording
@@ -340,7 +342,7 @@ python -m vibecode.cli run C:\path\to\example-repo --task "Add rate limiting to 
 4. Invoke the platform command (e.g. OpenCode) with the prompt on stdin
 5. Capture stdout / stderr / exit code
 6. Run post-run guard, required checks, and handoff validation
-7. Write session metadata to `.vibecode/runs/<session_id>.json` and a summary
+7. Write session artifacts to `.vibecode/runs/<session_id>/` (summary, events, guard/check/handoff reports, logs, prompt/context snapshots)
 
 Permission profiles are **Vibecode-side advisory metadata**.  Vibecode validates
 that the selected profile exists on disk and records it in run plans and session
@@ -359,8 +361,27 @@ Flags:
 | Flag | Default | Purpose |
 |---|---|---|
 | `--profile` | safe | Permission profile name |
+| `--guard-mode` | advisory | `advisory`: guard findings logged but do not block; `strict`: guard errors cause failure and exit code 1 |
 | `--allow-dirty` | off | Allow running with uncommitted changes (warn only) |
 | `--no-index` | off | Skip automatic index generation/refresh |
+
+### Step 8b — monitor (TUI alternative)
+
+`vibecode monitor` runs the same pipeline as `run` but inside a split-pane TUI:
+
+```powershell
+python -m vibecode.cli monitor C:\path\to\example-repo --task "Add rate limiting to the auth endpoint"
+```
+
+| Pane | Contents |
+|---|---|
+| Left | OpenCode agent stdout/stderr (raw output) |
+| Right | Vibecode event spine (lifecycle, guard, checks, handoff) |
+
+The status bar shows agent status, guard status, checks status, and the run artifact path.
+Press **Q** to close the monitor.
+
+> **Important:** `vibecode monitor` is a **streaming-output monitor** (text mode). It is **not** a PTY. For full interactive terminal control (e.g. to answer OpenCode prompts in real time), run OpenCode directly.
 
 ### Step 9 — post-run audit
 
@@ -385,6 +406,40 @@ python -m vibecode.cli check C:\path\to\example-repo
 ```powershell
 python -m vibecode.cli handoff-check C:\path\to\example-repo [--json]
 ```
+
+### Step 9b — inspect a previous run
+
+Every `vibecode run` / `vibecode monitor` creates a session directory under `.vibecode/runs/`:
+
+```
+.vibecode/runs/<session_id>/
+  summary.json          ← task, status, exit code, guard/check/handoff counts
+  events.jsonl          ← structured event log (one JSON object per line)
+  guard_report.json     ← guard findings with severity, category, evidence
+  guard_report.md       ← human-readable grouped guard report
+  checks_report.json    ← required-check results
+  handoff_report.json   ← handoff validation results
+  handoff_report.md     ← human-readable handoff report
+  opencode_prompt.md    ← snapshot of the prompt sent to the agent
+  context_pack.md       ← snapshot of the context pack used
+  agent_stdout.log      ← captured agent stdout
+  agent_stderr.log      ← captured agent stderr
+```
+
+Use `vibecode runs` to browse and inspect sessions without opening the files manually:
+
+```powershell
+# List all recorded sessions (most recent first)
+python -m vibecode.cli runs list C:\path\to\example-repo
+
+# Show summary for a specific session
+python -m vibecode.cli runs show <session_id> --repo C:\path\to\example-repo
+
+# Replay all events from a session in order
+python -m vibecode.cli runs show <session_id> --repo C:\path\to\example-repo --events
+```
+
+`runs show` prints: task, platform/profile, start/end times, exit code, guard counts-by-severity, checks status, handoff status, and artifact paths that exist on disk. A missing session ID produces a clear error listing available IDs.
 
 ### Step 10 — export-agents (optional)
 
@@ -542,13 +597,23 @@ Get-ChildItem C:\path\to\example-repo\.vibecode\logs\index_runs\ | Sort-Object L
 
 ### Run metadata
 
-After a `vibecode run`, session metadata is written under `.vibecode\runs\<session_id>\summary.json`:
+After a `vibecode run` or `vibecode monitor`, session artifacts are written under `.vibecode\runs\<session_id>\`:
 
 ```powershell
-Get-ChildItem C:\path\to\example-repo\.vibecode\runs\ -Directory | Sort-Object LastWriteTime -Descending | Select-Object -First 1 | Get-ChildItem | Get-Content
+# List sessions (most recent first)
+python -m vibecode.cli runs list C:\path\to\example-repo
+
+# Show summary for the most-recent session
+python -m vibecode.cli runs show <session_id> --repo C:\path\to\example-repo
 ```
 
-The summary includes overall status, agent exit code, guard results, check results, handoff results, and a diff summary of changes made during the run.
+Or browse the raw files directly:
+
+```powershell
+Get-ChildItem C:\path\to\example-repo\.vibecode\runs\ -Directory | Sort-Object LastWriteTime -Descending | Select-Object -First 1
+```
+
+The session directory contains `summary.json`, `events.jsonl`, `guard_report.*`, `checks_report.json`, `handoff_report.*`, `agent_stdout.log`, `agent_stderr.log`, `opencode_prompt.md`, and `context_pack.md`.
 
 ---
 
@@ -596,6 +661,18 @@ The summary includes overall status, agent exit code, guard results, check resul
 │   ├── opencode_prompt.md     ← OpenCode wrapper (only when --platform opencode used)
 │   ├── last_index.json        ← summary of the last index run
 │   └── check_results.json     ← results from the last `vibecode check` run
+│
+├── runs/                      ← GENERATED; per-run session artifacts (summary, events, logs, snapshots)
+│   └── <session_id>/
+│       ├── summary.json
+│       ├── events.jsonl
+│       ├── guard_report.json / guard_report.md
+│       ├── checks_report.json
+│       ├── handoff_report.json / handoff_report.md
+│       ├── opencode_prompt.md
+│       ├── context_pack.md
+│       ├── agent_stdout.log
+│       └── agent_stderr.log
 │
 ├── generated/                 ← GENERATED; derived from human-maintained files
 │   └── AGENTS.generated.md

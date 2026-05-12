@@ -26,7 +26,7 @@ This audit is a source-truth status note, not a claim that every limitation has 
 | Registry | Stable | Named local project registry supports active project fallback only when repo argument is omitted. Explicit repo arguments, including `.`, target that path. |
 | Permissions | Stable with accepted limitation | Profiles are validated and recorded but do not enforce OpenCode permissions. Actual tool constraints must be configured in OpenCode. |
 | Write rules / AGENTS export | Stable | Source-truth vs generated/runtime doctrine is aligned across write rules, protected paths, docs, and exported AGENTS blocks. |
-| CLI | Stable | CLI-only control layer. No GUI, MCP implementation, swarm, or server is present or claimed. |
+| CLI | Stable | CLI-first control layer. MCP stdio server (`vibecode serve`), context-card dashboard (`vibecode dashboard`), and live run monitor (`vibecode monitor`) are implemented. No GUI or swarm. |
 
 ## CLI Command List
 
@@ -34,6 +34,7 @@ This audit is a source-truth status note, not a claim that every limitation has 
 |---------|--------|
 | `init` | Implemented |
 | `index` | Implemented |
+| `inventory` | Implemented — produces context cards and risk report |
 | `context` | Implemented, including `--platform opencode` prompt export |
 | `map` | Implemented |
 | `validate` | Implemented |
@@ -42,8 +43,12 @@ This audit is a source-truth status note, not a claim that every limitation has 
 | `check` | Implemented |
 | `handoff-check` | Implemented |
 | `history new` | Implemented |
-| `run` | Implemented for `--platform opencode` |
+| `run` | Implemented for `--platform opencode`; supports `--guard-mode {advisory,strict}` |
+| `monitor` | Implemented — two-pane TUI; streaming text mode, not a PTY |
+| `runs list/show` | Implemented — list and inspect `.vibecode/runs/<session_id>/` artifacts |
 | `run-plan` | Implemented |
+| `dashboard` | Implemented — Textual TUI for context cards |
+| `serve` | Implemented — MCP stdio server with `get_file_card`, `find_symbol`, `list_high_risk` |
 | `project add/use/list/remove/current` | Implemented |
 
 ## Source-Truth vs Generated/Runtime Doctrine
@@ -76,11 +81,13 @@ Generated/runtime, ignored and not manually edited:
 2. Required checks and OpenCode invocation use a trusted local shell execution model. This is acceptable for local control-layer use, but repo/user configuration must be treated as trusted input.
 3. Stale index detection uses commit metadata and a generated/runtime-aware file-set fingerprint. It does not detect uncommitted content changes inside files already present in the indexed file set.
 4. Only the OpenCode platform is implemented. Other platform adapters are future work.
-5. The product is CLI-only. There is no GUI, MCP implementation, swarm, or server.
+5. The product is CLI-first. An MCP stdio server (`vibecode serve`) and Textual TUI commands (`vibecode dashboard`, `vibecode monitor`) are implemented. There is no GUI browser or swarm.
 6. History summaries are human-maintained durable truth. Templates are not truth until filled.
 7. `run-plan` defaults to the current directory; most other commands use active project fallback only when their repo argument is omitted.
-8. `SerenaProvider` remains a stub and is not wired to CLI behavior. MCP/Serena integration is outside current scope.
+8. `SerenaProvider` remains a stub and is not wired to CLI behavior. Serena integration is outside current scope.
+9. `vibecode monitor` streams agent stdout/stderr in text mode. It is not a PTY; full interactive terminal control requires running OpenCode directly.
+10. MCP tool events are logged to `.vibecode/logs/mcp_events.jsonl`. They are not currently written into per-run session directories, and MCP events are not streamed into the monitor TUI.
 
 ## Bottom Line
 
-VibecodeApp is suitable for controlled CLI dogfooding on real repositories, provided users keep generated/runtime artifacts ignored, treat local check commands as trusted, and understand that permission profiles are advisory. It is not ready to be treated as a fully autonomous permission-enforcing agent loop; it is a control layer that prepares, constrains, checks, and documents external agent work.
+VibecodeApp is suitable for controlled CLI dogfooding on real repositories. Users should keep generated/runtime artifacts ignored, treat local check commands as trusted, understand that permission profiles are advisory, and note that `vibecode monitor` streams agent output in text mode (not a PTY). It is not intended to be a fully autonomous permission-enforcing agent loop; it is a control layer that prepares, constrains, monitors, checks, and documents external agent work.

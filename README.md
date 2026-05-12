@@ -13,10 +13,11 @@ This repository is intentionally CLI-first. VibecodeApp does not edit code itsel
 3. [Getting Started](#getting-started)
 4. [Usage](#usage)
 5. [Daily use with OpenCode](#daily-use-with-opencode)
-6. [Status](#status)
-7. [Contributing](#contributing)
-8. [License](#license)
-9. [Acknowledgments](#acknowledgments)
+6. [Observable run monitor](#observable-run-monitor)
+7. [Status](#status)
+8. [Contributing](#contributing)
+9. [License](#license)
+10. [Acknowledgments](#acknowledgments)
 
 → **[Full quickstart guide — docs/QUICKSTART.md](docs/QUICKSTART.md)**
 
@@ -308,6 +309,89 @@ Files are classified **high-risk** when:
 - they contain at least one heuristic with severity `"high"` (future rule additions).
 
 Architecture docs and check configs (`.vibecode/architecture/*.md`, `.vibecode/checks/*.yaml`) are always high-risk because they define project truth that agents must not silently modify.
+
+<p align="right">(<a href="#readme-top">back to top</a>)</p>
+
+## Observable run monitor
+
+### Running with the live monitor
+
+`vibecode monitor` is a two-pane TUI that runs an OpenCode session and streams output live:
+
+```powershell
+vibecode monitor C:\path\to\repo --task "Add rate limiting" --profile safe
+```
+
+| Pane | Contents |
+|---|---|
+| Left | OpenCode agent stdout/stderr (raw output) |
+| Right | Vibecode event spine (lifecycle, guard findings, checks, handoff) |
+
+The status bar shows agent status, guard status, checks status, and the run artifact path.
+Press **Q** to close the monitor.
+
+> **Note:** `vibecode monitor` is a streaming-output monitor (text mode). It is **not** a PTY. Full interactive terminal control requires running OpenCode directly.
+
+Flags mirror `vibecode run`:
+
+| Flag | Default | Purpose |
+|---|---|---|
+| `--task` | (required) | Task description |
+| `--profile` | safe | Advisory permission profile |
+| `--guard-mode` | advisory | `advisory` or `strict` (see below) |
+| `--allow-dirty` | off | Allow uncommitted changes |
+| `--no-index` | off | Skip automatic index refresh |
+
+### Advisory vs strict guard mode
+
+Both `vibecode run` and `vibecode monitor` accept `--guard-mode {advisory,strict}` (default: `advisory`).
+
+| Mode | Behaviour |
+|---|---|
+| **advisory** (default) | Guard findings are logged with full severity and written to `guard_report.*`, but do not block the run. Overall status becomes `needs_review`; exit code is 0. |
+| **strict** | Guard errors cause `failure` status and a non-zero exit code, blocking the run. |
+
+### Where run artifacts are written
+
+Every `vibecode run` / `vibecode monitor` creates a session directory:
+
+```
+.vibecode/runs/<session_id>/
+  summary.json          ← task, platform, profile, status, exit code, guard/check/handoff counts
+  events.jsonl          ← structured event log (one JSON object per line)
+  guard_report.json     ← guard findings with severity, category, title, evidence
+  guard_report.md       ← human-readable grouped guard report
+  checks_report.json    ← required-check results
+  handoff_report.json   ← handoff validation results
+  handoff_report.md     ← human-readable handoff report
+  opencode_prompt.md    ← snapshot of the prompt sent to the agent
+  context_pack.md       ← snapshot of the context pack used
+  agent_stdout.log      ← captured agent stdout
+  agent_stderr.log      ← captured agent stderr
+```
+
+These files are runtime artifacts — add `.vibecode/runs/` to `.gitignore` and do not commit them.
+
+### Inspecting previous runs
+
+```powershell
+# List all recorded run sessions (most recent first)
+vibecode runs list C:\path\to\repo
+
+# Show summary for a specific run
+vibecode runs show <session_id> --repo C:\path\to\repo
+
+# Replay all events from a run in order
+vibecode runs show <session_id> --repo C:\path\to\repo --events
+```
+
+`vibecode runs show` displays: task, platform/profile, start/end times, exit code, guard counts-by-severity, checks status, handoff status, and a list of artifact paths that exist on disk. Missing session IDs produce a clear error with a list of available IDs.
+
+### MCP observability
+
+When `vibecode serve` is running, each tool call emits structured events to `.vibecode/logs/mcp_events.jsonl`. Set the `VIBECODE_SESSION_ID` environment variable to correlate MCP tool calls with a specific `vibecode run` or `vibecode monitor` session.
+
+> **Limitation:** MCP tool events are appended to a single log file (not written into the per-run session directory). No streaming of MCP events into the monitor TUI is currently implemented.
 
 <p align="right">(<a href="#readme-top">back to top</a>)</p>
 
