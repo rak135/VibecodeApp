@@ -7,6 +7,7 @@ without launching a coding session.
 from __future__ import annotations
 
 import os
+import shlex
 import shutil
 import subprocess
 from dataclasses import dataclass
@@ -47,7 +48,7 @@ def resolve_opencode_command(env: Mapping[str, str] | None = None) -> str | None
     if env_cmd:
         return env_cmd
     default_cmd = _default_command()
-    if shutil.which(default_cmd.split()[0]):
+    if shutil.which(shlex.split(default_cmd)[0]):
         return default_cmd
     return None
 
@@ -70,7 +71,25 @@ def check_opencode(command: str | None = None) -> OpenCodeStatus:
 
     # Handle compound commands (e.g. "python /path/to/opencode.py")
     # by splitting and checking only the binary portion with shutil.which.
-    parts = resolved.split()
+    # Use shlex.split so that quoted Windows paths (e.g.
+    # '"C:\Program Files\OpenCode\opencode.cmd" run') are parsed safely.
+    # On Windows, posix=False is required so backslashes are not treated
+    # as escape characters; on POSIX, posix=True (the default) preserves
+    # standard shell semantics.
+    try:
+        parts = shlex.split(resolved, posix=(os.name != "nt"))
+    except ValueError as exc:
+        return OpenCodeStatus(
+            available=False,
+            command=resolved,
+            message=f"OpenCode command could not be parsed: {exc}",
+        )
+    if not parts:
+        return OpenCodeStatus(
+            available=False,
+            command=resolved,
+            message="OpenCode command is empty after parsing.",
+        )
     binary = parts[0]
     extra_args = parts[1:]
 
@@ -128,7 +147,22 @@ def check_opencode(command: str | None = None) -> OpenCodeStatus:
             message=f"OpenCode found: {version} (at {binary_path})",
         )
 
-    # Compound command — binary exists, so consider it available.
+    # Compound command — binary exists.
+    # If the first extra arg looks like a local script path, verify it exists
+    # so that missing wrapper scripts fail early rather than during agent execution.
+    if extra_args:
+        script_candidate = extra_args[0]
+        if "/" in script_candidate or "\\" in script_candidate or script_candidate.startswith("."):
+            if not os.path.exists(script_candidate):
+                return OpenCodeStatus(
+                    available=False,
+                    command=resolved,
+                    message=(
+                        f"OpenCode script '{script_candidate}' not found. "
+                        "Check the OPENCODE_COMMAND value or install the wrapper script."
+                    ),
+                )
+
     return OpenCodeStatus(
         available=True,
         command=resolved,

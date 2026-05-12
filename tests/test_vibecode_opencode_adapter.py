@@ -231,3 +231,55 @@ class TestResolveOpencodeCommand:
         # No PATH mocking needed: env_cmd takes priority before any PATH lookup.
         result = resolve_opencode_command({"OPENCODE_COMMAND": "my-custom-opencode"})
         assert result == "my-custom-opencode"
+
+
+# ---------------------------------------------------------------------------
+# check_opencode — compound command parsing (shlex-based)
+# ---------------------------------------------------------------------------
+
+
+class TestCompoundCommandParsing:
+    """Verify that compound commands are parsed safely with shlex, not str.split."""
+
+    @patch("vibecode.adapters.opencode.shutil.which", return_value="/usr/bin/python")
+    @patch("vibecode.adapters.opencode.subprocess.run")
+    def test_quoted_windows_path_parsed_correctly(self, mock_run, _which):
+        """Quoted path like '"C:\\Program Files\\OpenCode\\opencode.cmd" run'
+        must parse binary as the full quoted path, not 'C:\\Program'."""
+        mock_run.return_value = MagicMock(returncode=0, stdout="v1.0\n", stderr="")
+
+        status = check_opencode('"C:\\Program Files\\OpenCode\\opencode.cmd" run')
+
+        # shlex.split turns the quoted path into one token:
+        # ['C:\\Program Files\\OpenCode\\opencode.cmd', 'run']
+        # The binary should be the full path, not a truncated fragment.
+        assert status.available is True
+
+    @patch("vibecode.adapters.opencode.shutil.which", return_value="/usr/bin/python")
+    def test_missing_local_script_detected(self, _which):
+        """Compound command 'python missing_opencode.py' where the script
+        path looks local should fail the availability check."""
+        status = check_opencode("python ./missing_opencode.py")
+        assert status.available is False
+        assert "not found" in status.message.lower()
+        assert "missing_opencode.py" in status.message
+
+    @patch("vibecode.adapters.opencode.shutil.which", return_value="/usr/bin/python")
+    def test_non_pathlike_arg_skips_existence_check(self, _which):
+        """Compound command 'python some_module' where the arg does not look
+        like a path should not check existence (module/-m style invocation)."""
+        status = check_opencode("python some_module")
+        assert status.available is True
+
+    @patch("vibecode.adapters.opencode.shutil.which", return_value="/usr/bin/python")
+    def test_missing_absolute_script_detected(self, _which):
+        """Compound command with an absolute missing script path should fail."""
+        status = check_opencode("python /nonexistent/path/to/wrapper.py")
+        assert status.available is False
+        assert "/nonexistent/path/to/wrapper.py" in status.message
+
+    def test_malformed_quoting_returns_unavailable(self):
+        """Unterminated quote in command string should produce a safe error."""
+        status = check_opencode('opencode "unterminated')
+        assert status.available is False
+        assert "could not be parsed" in status.message.lower()
