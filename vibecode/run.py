@@ -56,7 +56,6 @@ from vibecode.diff_summary import DiffSummary, diff_summarise
 from vibecode.events import (
     EventLevel,
     EventSink,
-    InMemoryEventSink,
     MultiEventSink,
     NullEventSink,
     create_event,
@@ -221,6 +220,51 @@ def _write_run_summary(vibecode_dir: Path, summary: RunSummary) -> Path:
         encoding="utf-8",
     )
     return summary_path
+
+
+def _write_abort_summary(
+    vibecode_dir: Path,
+    session_id: str,
+    started_at: str,
+    task: str,
+    platform: str,
+    profile: str,
+    error: str,
+    *,
+    repo_root: str = "",
+) -> "Path | None":
+    """Write a minimal summary.json for a run that aborted before completing.
+
+    Called on every early-exit path so that ``vibecode runs show`` can display
+    the abort reason without re-running the agent.  Writes silently if the
+    directory cannot be created or the file cannot be written — the original
+    abort reason is never obscured.
+
+    Returns the path written, or ``None`` if writing failed.
+    """
+    try:
+        summary_dir = vibecode_dir / "runs" / session_id
+        summary_dir.mkdir(parents=True, exist_ok=True)
+        summary_path = summary_dir / "summary.json"
+        data: dict = {
+            "$schema": "vibecode/run-summary/v1",
+            "session_id": session_id,
+            "started_at": started_at,
+            "finished_at": datetime.now(tz=timezone.utc).isoformat(),
+            "platform": platform,
+            "profile": profile,
+            "repo_root": repo_root,
+            "task": task,
+            "overall_status": "error",
+            "error": error,
+        }
+        summary_path.write_text(
+            json.dumps(data, indent=2, ensure_ascii=False) + "\n",
+            encoding="utf-8",
+        )
+        return summary_path
+    except Exception:
+        return None
 
 
 def _run_git_check(root: Path, allow_dirty: bool) -> tuple[bool, list[str]]:
@@ -483,9 +527,14 @@ class RunController:
         """
         root = self.root
         vibecode_dir = root / ".vibecode"
+        started_at = datetime.now(tz=timezone.utc).isoformat()
+
+        # Create the per-run artifact directory and JSONL sink immediately so that
+        # every observable run attempt — including early aborts — has durable artifacts.
         session = RunSession(root, self.session_id)
-        buffer_sink = InMemoryEventSink()
-        sinks: list[EventSink] = [buffer_sink]
+        jsonl_sink = session.create_event_sink()
+
+        sinks: list[EventSink] = [jsonl_sink]
         if not isinstance(self.sink, NullEventSink):
             sinks.append(self.sink)
         self.sink = MultiEventSink(sinks)
@@ -501,6 +550,12 @@ class RunController:
             print("Error: no .vibecode/project.yaml found. Run 'vibecode init' first.", file=sys.stderr)
             self._emit(EVENT_RUN_LIFECYCLE, EventLevel.ERROR, "Run aborted: no project.yaml",
                        data={"phase": "finished", "status": "error", "error": "no_project_yaml"})
+            _write_abort_summary(
+                vibecode_dir, self.session_id, started_at,
+                self.task, self.platform, self.profile_name,
+                "Run aborted: no .vibecode/project.yaml found. Run 'vibecode init' first.",
+                repo_root=str(root),
+            )
             return None, 1
 
         profile_ok, profile_error = _validate_permission_profile(root, self.profile_name)
@@ -508,6 +563,12 @@ class RunController:
             print(f"Error: {profile_error}", file=sys.stderr)
             self._emit(EVENT_RUN_LIFECYCLE, EventLevel.ERROR, f"Run aborted: {profile_error}",
                        data={"phase": "finished", "status": "error", "error": "invalid_profile"})
+            _write_abort_summary(
+                vibecode_dir, self.session_id, started_at,
+                self.task, self.platform, self.profile_name,
+                f"Run aborted: {profile_error}",
+                repo_root=str(root),
+            )
             return None, 1
 
         # ----------------------------------------------------------------
@@ -525,6 +586,12 @@ class RunController:
                        data={"phase": "completed", "passed": False})
             self._emit(EVENT_RUN_LIFECYCLE, EventLevel.ERROR, "Run aborted: git preflight failed",
                        data={"phase": "finished", "status": "error"})
+            _write_abort_summary(
+                vibecode_dir, self.session_id, started_at,
+                self.task, self.platform, self.profile_name,
+                "Run aborted: git working tree is dirty. Commit or stash changes, or pass --allow-dirty.",
+                repo_root=str(root),
+            )
             return None, 1
 
         for msg in messages:
@@ -533,11 +600,6 @@ class RunController:
                        data={"phase": "warning", "blocking": False})
         self._emit(EVENT_GIT_PREFLIGHT, EventLevel.INFO, "Git preflight completed",
                    data={"phase": "completed", "passed": True, "dirty": bool(messages)})
-
-        jsonl_sink = session.create_event_sink()
-        for event in buffer_sink.events:
-            jsonl_sink.emit(event)
-        self.sink.add_sink(jsonl_sink)
 
         initial_git_state = None
         try:
@@ -607,6 +669,12 @@ class RunController:
                     self._emit(EVENT_RUN_LIFECYCLE, EventLevel.ERROR,
                                "Run aborted: index generation failed",
                                data={"phase": "finished", "status": "error"})
+                    _write_abort_summary(
+                        vibecode_dir, self.session_id, started_at,
+                        self.task, self.platform, self.profile_name,
+                        "Run aborted: index generation failed. Run 'vibecode index' manually to diagnose.",
+                        repo_root=str(root),
+                    )
                     return None, 1
 
         if not index_path.exists():
@@ -615,6 +683,12 @@ class RunController:
                        data={"phase": "completed", "fresh": False})
             self._emit(EVENT_RUN_LIFECYCLE, EventLevel.ERROR, "Run aborted: no index",
                        data={"phase": "finished", "status": "error"})
+            _write_abort_summary(
+                vibecode_dir, self.session_id, started_at,
+                self.task, self.platform, self.profile_name,
+                "Run aborted: no index found. Run 'vibecode index' first.",
+                repo_root=str(root),
+            )
             return None, 1
 
         inventory_err = check_inventory_health(root)
@@ -625,6 +699,12 @@ class RunController:
                        data={"phase": "completed", "fresh": False})
             self._emit(EVENT_RUN_LIFECYCLE, EventLevel.ERROR, "Run aborted: inventory error",
                        data={"phase": "finished", "status": "error"})
+            _write_abort_summary(
+                vibecode_dir, self.session_id, started_at,
+                self.task, self.platform, self.profile_name,
+                f"Run aborted: inventory health check failed: {inventory_err}",
+                repo_root=str(root),
+            )
             return None, 1
 
         self._emit(EVENT_INDEX_CHECK, EventLevel.INFO, "Index check completed",
@@ -649,6 +729,12 @@ class RunController:
             self._emit(EVENT_RUN_LIFECYCLE, EventLevel.ERROR,
                        "Run aborted: context pack failed",
                        data={"phase": "finished", "status": "error"})
+            _write_abort_summary(
+                vibecode_dir, self.session_id, started_at,
+                self.task, self.platform, self.profile_name,
+                "Run aborted: context pack generation failed.",
+                repo_root=str(root),
+            )
             return None, 1
 
         context_pack_path = vibecode_dir / "current" / "context_pack.md"
@@ -661,6 +747,12 @@ class RunController:
             self._emit(EVENT_RUN_LIFECYCLE, EventLevel.ERROR,
                        "Run aborted: context pack not found",
                        data={"phase": "finished", "status": "error"})
+            _write_abort_summary(
+                vibecode_dir, self.session_id, started_at,
+                self.task, self.platform, self.profile_name,
+                "Run aborted: context pack file was not written after generation.",
+                repo_root=str(root),
+            )
             return None, 1
 
         # Snapshot to run dir before emitting so snapshot_path is available in event data.
@@ -719,6 +811,12 @@ class RunController:
             self._emit(EVENT_RUN_LIFECYCLE, EventLevel.ERROR,
                        "Run aborted: agent command not found",
                        data={"phase": "finished", "status": "error"})
+            _write_abort_summary(
+                vibecode_dir, self.session_id, started_at,
+                self.task, self.platform, self.profile_name,
+                "Run aborted: OpenCode command not found. Install OpenCode or set OPENCODE_COMMAND.",
+                repo_root=str(root),
+            )
             return None, 1
 
         status = check_opencode(command)
@@ -737,6 +835,12 @@ class RunController:
             self._emit(EVENT_RUN_LIFECYCLE, EventLevel.ERROR,
                        "Run aborted: agent check failed",
                        data={"phase": "finished", "status": "error"})
+            _write_abort_summary(
+                vibecode_dir, self.session_id, started_at,
+                self.task, self.platform, self.profile_name,
+                f"Run aborted: OpenCode check failed: {status.message}",
+                repo_root=str(root),
+            )
             return None, 1
 
         # ----------------------------------------------------------------
@@ -762,6 +866,13 @@ class RunController:
             )
             self._emit(EVENT_RUN_LIFECYCLE, EventLevel.ERROR, "Run aborted: preflight errors",
                        data={"phase": "finished", "status": "error"})
+            _write_abort_summary(
+                vibecode_dir, self.session_id, started_at,
+                self.task, self.platform, self.profile_name,
+                "Run aborted: preflight errors: "
+                + "; ".join(e.message for e in run_plan.preflight_errors),
+                repo_root=str(root),
+            )
             return None, 1
 
         try:

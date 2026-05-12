@@ -1108,3 +1108,245 @@ class TestContextAndPromptSnapshotEvents:
 
         assert stdin_text == snapshot_text, \
             f"stdin ({len(stdin_text)} chars) != snapshot ({len(snapshot_text)} chars)"
+
+
+# ---------------------------------------------------------------------------
+# Tests: early-abort artifact creation
+# ---------------------------------------------------------------------------
+
+
+class TestEarlyAbortArtifacts:
+    """Verify that every early-abort path writes durable events.jsonl and summary.json."""
+
+    def test_missing_project_yaml_writes_events_jsonl(self, tmp_path: Path):
+        """Missing project.yaml → events.jsonl created with run.started event."""
+        controller = RunController(
+            root=tmp_path,
+            task="abort test",
+            platform="opencode",
+            profile_name="safe",
+            allow_dirty=False,
+            no_index=True,
+            session_id="abort-no-yaml-001",
+        )
+        _, exit_code = controller.execute()
+
+        assert exit_code == 1
+        events_path = tmp_path / ".vibecode" / "runs" / "abort-no-yaml-001" / "events.jsonl"
+        assert events_path.exists(), "events.jsonl should be created even for early aborts"
+
+        lines = events_path.read_text(encoding="utf-8").strip().splitlines()
+        assert len(lines) >= 2, "At least run.started and run.finished events expected"
+
+        first = json.loads(lines[0])
+        assert first["type"] == EVENT_RUN_LIFECYCLE
+        assert first["data"]["phase"] == "started"
+
+        last = json.loads(lines[-1])
+        assert last["type"] == EVENT_RUN_LIFECYCLE
+        assert last["data"]["phase"] == "finished"
+        assert last["data"]["status"] == "error"
+
+    def test_missing_project_yaml_writes_summary_json(self, tmp_path: Path):
+        """Missing project.yaml → summary.json with overall_status='error'."""
+        controller = RunController(
+            root=tmp_path,
+            task="abort task",
+            platform="opencode",
+            profile_name="safe",
+            allow_dirty=False,
+            no_index=True,
+            session_id="abort-no-yaml-002",
+        )
+        _, exit_code = controller.execute()
+
+        assert exit_code == 1
+        summary_path = (
+            tmp_path / ".vibecode" / "runs" / "abort-no-yaml-002" / "summary.json"
+        )
+        assert summary_path.exists(), "summary.json should be created for early aborts"
+
+        data = json.loads(summary_path.read_text(encoding="utf-8"))
+        assert data["session_id"] == "abort-no-yaml-002"
+        assert data["overall_status"] == "error"
+        assert "error" in data
+        assert "project.yaml" in data["error"].lower() or "init" in data["error"].lower()
+        assert data["task"] == "abort task"
+        assert data["platform"] == "opencode"
+
+    def test_dirty_repo_writes_events_jsonl(self, repo: Path, fake_bin: Path):
+        """Dirty repo without allow_dirty → events.jsonl with git preflight events."""
+        _make_fake_opencode(fake_bin)
+        _write(repo / "app.py", "x = 99\n")  # make dirty
+
+        controller = RunController(
+            root=repo,
+            task="dirty abort",
+            platform="opencode",
+            profile_name="safe",
+            allow_dirty=False,
+            no_index=True,
+            session_id="abort-dirty-001",
+        )
+        _, exit_code = controller.execute()
+
+        assert exit_code == 1
+        events_path = repo / ".vibecode" / "runs" / "abort-dirty-001" / "events.jsonl"
+        assert events_path.exists(), "events.jsonl should be created for dirty-repo abort"
+
+        events = [json.loads(l) for l in events_path.read_text(encoding="utf-8").strip().splitlines()]
+        types = [e["type"] for e in events]
+        assert EVENT_RUN_LIFECYCLE in types
+        assert EVENT_GIT_PREFLIGHT in types
+        # First event must be run.started
+        assert events[0]["type"] == EVENT_RUN_LIFECYCLE
+        assert events[0]["data"]["phase"] == "started"
+
+    def test_dirty_repo_writes_summary_json(self, repo: Path, fake_bin: Path):
+        """Dirty repo without allow_dirty → summary.json with error status."""
+        _make_fake_opencode(fake_bin)
+        _write(repo / "app.py", "x = 99\n")
+
+        controller = RunController(
+            root=repo,
+            task="dirty task",
+            platform="opencode",
+            profile_name="safe",
+            allow_dirty=False,
+            no_index=True,
+            session_id="abort-dirty-002",
+        )
+        _, exit_code = controller.execute()
+
+        assert exit_code == 1
+        summary_path = repo / ".vibecode" / "runs" / "abort-dirty-002" / "summary.json"
+        assert summary_path.exists()
+
+        data = json.loads(summary_path.read_text(encoding="utf-8"))
+        assert data["overall_status"] == "error"
+        assert "error" in data
+        assert data["session_id"] == "abort-dirty-002"
+
+    def test_invalid_profile_writes_events_jsonl(self, tmp_path: Path):
+        """Invalid profile → events.jsonl written before abort."""
+        (tmp_path / ".vibecode").mkdir(parents=True, exist_ok=True)
+        _write(
+            tmp_path / ".vibecode" / "project.yaml",
+            "project:\n  id: tp\n  name: T\n  root: .\n",
+        )
+
+        controller = RunController(
+            root=tmp_path,
+            task="profile abort",
+            platform="opencode",
+            profile_name="nonexistent_profile_xyz",
+            allow_dirty=False,
+            no_index=True,
+            session_id="abort-profile-001",
+        )
+        _, exit_code = controller.execute()
+
+        assert exit_code == 1
+        events_path = (
+            tmp_path / ".vibecode" / "runs" / "abort-profile-001" / "events.jsonl"
+        )
+        assert events_path.exists(), "events.jsonl should be created for invalid profile"
+
+        events = [json.loads(l) for l in events_path.read_text(encoding="utf-8").strip().splitlines()]
+        assert events[0]["data"]["phase"] == "started"
+        last = events[-1]
+        assert last["data"]["phase"] == "finished"
+        assert last["data"]["status"] == "error"
+
+    def test_invalid_profile_writes_summary_json(self, tmp_path: Path):
+        """Invalid profile → summary.json with error status."""
+        (tmp_path / ".vibecode").mkdir(parents=True, exist_ok=True)
+        _write(
+            tmp_path / ".vibecode" / "project.yaml",
+            "project:\n  id: tp\n  name: T\n  root: .\n",
+        )
+
+        controller = RunController(
+            root=tmp_path,
+            task="profile task",
+            platform="opencode",
+            profile_name="nonexistent_profile_xyz",
+            allow_dirty=False,
+            no_index=True,
+            session_id="abort-profile-002",
+        )
+        _, exit_code = controller.execute()
+
+        assert exit_code == 1
+        summary_path = (
+            tmp_path / ".vibecode" / "runs" / "abort-profile-002" / "summary.json"
+        )
+        assert summary_path.exists()
+
+        data = json.loads(summary_path.read_text(encoding="utf-8"))
+        assert data["overall_status"] == "error"
+        assert "error" in data
+        assert "nonexistent_profile_xyz" in data["error"]
+
+    def test_abort_events_jsonl_session_ids_consistent(self, tmp_path: Path):
+        """All events in events.jsonl for an early-abort run share the session_id."""
+        controller = RunController(
+            root=tmp_path,
+            task="t",
+            platform="opencode",
+            profile_name="safe",
+            allow_dirty=False,
+            no_index=True,
+            session_id="abort-sid-001",
+        )
+        controller.execute()
+
+        events_path = tmp_path / ".vibecode" / "runs" / "abort-sid-001" / "events.jsonl"
+        assert events_path.exists()
+        for line in events_path.read_text(encoding="utf-8").strip().splitlines():
+            evt = json.loads(line)
+            assert evt["session_id"] == "abort-sid-001"
+
+    def test_abort_summary_schema_field_present(self, tmp_path: Path):
+        """summary.json for early aborts has the $schema field."""
+        controller = RunController(
+            root=tmp_path,
+            task="t",
+            platform="opencode",
+            profile_name="safe",
+            allow_dirty=False,
+            no_index=True,
+            session_id="abort-schema-001",
+        )
+        controller.execute()
+
+        summary_path = (
+            tmp_path / ".vibecode" / "runs" / "abort-schema-001" / "summary.json"
+        )
+        assert summary_path.exists()
+        data = json.loads(summary_path.read_text(encoding="utf-8"))
+        assert "$schema" in data
+        assert data["$schema"] == "vibecode/run-summary/v1"
+
+    def test_abort_summary_has_started_at_and_finished_at(self, tmp_path: Path):
+        """Early-abort summary.json includes both started_at and finished_at timestamps."""
+        controller = RunController(
+            root=tmp_path,
+            task="t",
+            platform="opencode",
+            profile_name="safe",
+            allow_dirty=False,
+            no_index=True,
+            session_id="abort-ts-001",
+        )
+        controller.execute()
+
+        summary_path = (
+            tmp_path / ".vibecode" / "runs" / "abort-ts-001" / "summary.json"
+        )
+        data = json.loads(summary_path.read_text(encoding="utf-8"))
+        assert "started_at" in data
+        assert "finished_at" in data
+        # timestamps must be parseable ISO-8601
+        datetime.fromisoformat(data["started_at"])
+        datetime.fromisoformat(data["finished_at"])

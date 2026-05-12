@@ -193,6 +193,9 @@ def format_run_show(
 
     # Guard counts
     guard = summary.get("guard")
+    was_aborted = summary.get("overall_status") == "error" and "agent_status" not in summary
+    skipped_label = "(skipped — run aborted)" if was_aborted else "(not recorded)"
+
     if isinstance(guard, dict):
         passed_g = guard.get("passed", "-")
         counts = guard.get("counts_by_severity", {})
@@ -215,7 +218,7 @@ def format_run_show(
                     lines.append(f"  [{severity}] {title}")
                     lines.append(f"    path: {path}")
     else:
-        lines.append("Guard        : (not recorded)")
+        lines.append(f"Guard        : {skipped_label}")
 
     # Checks status
     checks = summary.get("checks")
@@ -232,7 +235,7 @@ def format_run_show(
             for c in failed_checks:
                 lines.append(f"  {c.get('name', '?')} (exit {c.get('exit_code', '?')})")
     else:
-        lines.append("Checks       : (not recorded)")
+        lines.append(f"Checks       : {skipped_label}")
 
     # Handoff
     handoff = summary.get("handoff")
@@ -248,7 +251,7 @@ def format_run_show(
                 for i in issues:
                     lines.append(f"  {i.get('file', '?')}: {i.get('message', '?')}")
     else:
-        lines.append("Handoff      : (not recorded)")
+        lines.append(f"Handoff      : {skipped_label}")
 
     # Top-level error
     error = summary.get("error")

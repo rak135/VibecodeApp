@@ -717,3 +717,172 @@ class TestFormatRunShowFindings:
         output = format_run_show(summary, run_dir)
 
         assert "Handoff      : passed" in output
+
+
+# ---------------------------------------------------------------------------
+# Early-abort summary display
+# ---------------------------------------------------------------------------
+
+
+def _make_abort_summary(session_id: str, **overrides) -> dict:
+    """Minimal early-abort summary (no agent_status, guard, checks, handoff)."""
+    base = {
+        "$schema": "vibecode/run-summary/v1",
+        "session_id": session_id,
+        "started_at": "2026-01-01T10:00:00+00:00",
+        "finished_at": "2026-01-01T10:00:05+00:00",
+        "platform": "opencode",
+        "profile": "safe",
+        "repo_root": "/repo",
+        "task": "some task",
+        "overall_status": "error",
+        "error": "Run aborted: no .vibecode/project.yaml found.",
+    }
+    base.update(overrides)
+    return base
+
+
+class TestEarlyAbortDisplay:
+    """Verify that format_run_show handles early-abort summaries correctly."""
+
+    def test_abort_summary_shows_error_status(self, tmp_path: Path):
+        """overall_status='error' is displayed."""
+        run_dir = _make_run_dir(tmp_path, "ab1")
+        summary = _make_abort_summary("ab1")
+
+        output = format_run_show(summary, run_dir)
+
+        assert "error" in output
+        assert "ab1" in output
+
+    def test_abort_summary_shows_error_field(self, tmp_path: Path):
+        """The 'error' message from the abort summary is displayed."""
+        run_dir = _make_run_dir(tmp_path, "ab2")
+        summary = _make_abort_summary("ab2", error="Run aborted: no project.yaml found.")
+
+        output = format_run_show(summary, run_dir)
+
+        assert "Error:" in output
+        assert "no project.yaml found" in output
+
+    def test_abort_summary_shows_skipped_for_guard(self, tmp_path: Path):
+        """Guard shows 'skipped — run aborted' for early-abort (no agent_status)."""
+        run_dir = _make_run_dir(tmp_path, "ab3")
+        summary = _make_abort_summary("ab3")
+        # no 'guard' key, no 'agent_status' key → was_aborted = True
+
+        output = format_run_show(summary, run_dir)
+
+        assert "skipped" in output
+        assert "aborted" in output
+
+    def test_abort_summary_shows_skipped_for_checks(self, tmp_path: Path):
+        """Checks shows 'skipped — run aborted' for early-abort (no agent_status)."""
+        run_dir = _make_run_dir(tmp_path, "ab4")
+        summary = _make_abort_summary("ab4")
+
+        output = format_run_show(summary, run_dir)
+
+        # "Guard        :" and "Checks       :" lines should say skipped
+        guard_line = next(l for l in output.splitlines() if l.startswith("Guard        "))
+        checks_line = next(l for l in output.splitlines() if l.startswith("Checks"))
+        assert "skipped" in guard_line
+        assert "skipped" in checks_line
+
+    def test_normal_summary_without_guard_shows_not_recorded(self, tmp_path: Path):
+        """A successful run with no guard dict shows '(not recorded)' not 'skipped'."""
+        run_dir = _make_run_dir(tmp_path, "ab5")
+        summary = _make_summary("ab5")
+        summary.pop("guard", None)
+        # overall_status='success', agent_status present → was_aborted = False
+
+        output = format_run_show(summary, run_dir)
+
+        guard_line = next(l for l in output.splitlines() if l.startswith("Guard        "))
+        assert "not recorded" in guard_line
+        assert "skipped" not in guard_line
+
+    def test_abort_summary_shows_task(self, tmp_path: Path):
+        """Task is still shown for early-abort summaries."""
+        run_dir = _make_run_dir(tmp_path, "ab6")
+        summary = _make_abort_summary("ab6", task="implement the feature")
+
+        output = format_run_show(summary, run_dir)
+
+        assert "implement the feature" in output
+
+    def test_abort_summary_shows_timestamps(self, tmp_path: Path):
+        """started_at and finished_at are shown."""
+        run_dir = _make_run_dir(tmp_path, "ab7")
+        summary = _make_abort_summary("ab7")
+
+        output = format_run_show(summary, run_dir)
+
+        assert "2026-01-01T10:00:00" in output
+
+
+class TestEarlyAbortShowCLI:
+    """CLI tests: runs show on early-abort run artifacts."""
+
+    def test_show_abort_summary_exits_0(self, tmp_path: Path, capsys):
+        """runs show succeeds (exit 0) for an early-abort summary."""
+        sid = "abort-show-001"
+        run_dir = tmp_path / ".vibecode" / "runs" / sid
+        run_dir.mkdir(parents=True, exist_ok=True)
+        _write_summary(run_dir, _make_abort_summary(sid))
+
+        rc = main(["runs", "show", sid, "--repo", str(tmp_path)])
+        out = capsys.readouterr().out
+
+        assert rc == 0
+        assert sid in out
+        assert "error" in out
+
+    def test_show_abort_with_events_flag_shows_events(self, tmp_path: Path, capsys):
+        """runs show --events works for abort runs that have events.jsonl."""
+        sid = "abort-show-002"
+        run_dir = tmp_path / ".vibecode" / "runs" / sid
+        run_dir.mkdir(parents=True, exist_ok=True)
+        _write_summary(run_dir, _make_abort_summary(sid))
+
+        # Write an early-abort events.jsonl
+        ev1 = create_event(sid, "run.lifecycle", EventLevel.INFO, "Run started")
+        ev2 = create_event(sid, "run.lifecycle", EventLevel.ERROR, "Run aborted: no project.yaml")
+        _write_events_jsonl(run_dir, [ev1, ev2])
+
+        rc = main(["runs", "show", sid, "--repo", str(tmp_path), "--events"])
+        out = capsys.readouterr().out
+
+        assert rc == 0
+        assert "Run started" in out
+        assert "Run aborted" in out
+        assert "Events (2)" in out
+
+    def test_show_abort_without_events_jsonl_still_works(self, tmp_path: Path, capsys):
+        """runs show --events is graceful when events.jsonl absent for abort run."""
+        sid = "abort-show-003"
+        run_dir = tmp_path / ".vibecode" / "runs" / sid
+        run_dir.mkdir(parents=True, exist_ok=True)
+        _write_summary(run_dir, _make_abort_summary(sid))
+        # No events.jsonl
+
+        rc = main(["runs", "show", sid, "--repo", str(tmp_path), "--events"])
+        err = capsys.readouterr().err
+
+        assert rc == 0
+        assert "events.jsonl not found" in err
+
+    def test_show_abort_summary_shows_error_message(self, tmp_path: Path, capsys):
+        """The abort error message appears in the output."""
+        sid = "abort-show-004"
+        run_dir = tmp_path / ".vibecode" / "runs" / sid
+        run_dir.mkdir(parents=True, exist_ok=True)
+        _write_summary(
+            run_dir,
+            _make_abort_summary(sid, error="Run aborted: git working tree is dirty."),
+        )
+
+        main(["runs", "show", sid, "--repo", str(tmp_path)])
+        out = capsys.readouterr().out
+
+        assert "git working tree is dirty" in out

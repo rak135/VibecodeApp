@@ -505,12 +505,14 @@
     {
       "title": "P14.1 Make early-failure runs durable and replayable",
       "description": "Goal:\nEnsure every observable run attempt has durable per-run artifacts from the beginning of the run, including early aborts.\n\nWhy it matters:\nThe independent audit found that `RunController` attaches the session JSONL sink only after prerequisite checks. Missing project config, invalid profile, dirty repo preflight, missing OpenCode, and other early failures can emit in memory but leave no durable `events.jsonl` or `summary.json`. That violates the core invariant that every run attempt is replayable from `.vibecode/runs/<session_id>/`.\n\nLikely files/modules:\n- `vibecode/run.py`\n- `vibecode/session_log.py`\n- `vibecode/show_run.py`\n- `vibecode/guard.py` only if skipped guard report artifacts are added\n- `tests/test_vibecode_run_controller.py`\n- `tests/test_vibecode_session_log.py`\n- `tests/test_vibecode_show_run.py`\n- `tests/test_vibecode_guard_report.py` if guard report behavior changes\n\nRequired behavior:\n- Create `RunSession` and attach the session `JsonlEventSink` at the start of `RunController.execute()`, before prerequisite checks where practical.\n- Persist run-start and abort/failure events to `events.jsonl`.\n- Write `summary.json` for early aborts with honest fields: session id, start/end time, task, platform, profile, status, error, and available artifact paths.\n- Preserve `metadata.json` compatibility, but do not rely on metadata alone when a summary can be written.\n- Define consistent behavior for stdout/stderr artifacts when the agent never launches: either absent with honest replay output, or empty logs with explicit summary data.\n- For skipped guard/check/handoff phases, either write clear skipped artifacts or record enough structured summary/event data that `runs show` can state the phase was skipped.\n- `vibecode runs show <session_id> --events` must work for early-aborted runs without rerunning the agent.\n\nAcceptance criteria:\n- Missing `.vibecode/project.yaml`, invalid profile, dirty repo without `--allow-dirty`, missing OpenCode, OpenCode check failure, index failure, and context failure produce durable events and summary where practical.\n- Successful-run artifacts remain backward compatible.\n- Missing optional artifacts are displayed honestly, not treated as corrupt data.\n- Replay output distinguishes success, failure, skipped, missing, and not-run phases.\n\nTests required:\n- Integration tests for early abort artifact creation and replay.\n- JSONL assertions for ordered early failure events.\n- `runs show` tests for early-abort summaries and missing optional files.\n- Guard skipped/error report tests if skipped reports are introduced.\n\nValidation commands:\n- `python -m compileall vibecode -q`\n- `python -m pytest -p no:cacheprovider -q tests/test_vibecode_run_controller.py tests/test_vibecode_show_run.py tests/test_vibecode_session_log.py`\n- Add `tests/test_vibecode_guard_report.py` if guard report code changes.\n\nWhat not to change:\n- Do not change successful-run artifact filenames unless docs/tests are updated later.\n- Do not make advisory guard findings blocking.\n- Do not use old audit/dogfood reports as evidence.\n\nRisks:\n- Summaries written too early can look like success; use explicit error/aborted status fields.\n- Double-attaching sinks can duplicate events.\n- Replay must remain tolerant of old runs with only `metadata.json`.",
-      "completed": false,
-      "engine": "opencode",
-      "model": "deepseek/deepseek-v4-pro",
+      "completed": true,
+      "engine": "copilot",
+      "model": "claude-sonnet-4.6",
       "engine_args": [
-        "--variant",
-        "high"
+        "--reasoning-effort",
+        "high",
+        "--stream",
+        "off"
       ]
     },
     {
