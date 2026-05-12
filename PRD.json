@@ -599,7 +599,7 @@
     {
       "title": "P16.3 Apply monitor optional dependency review fixes",
       "description": "Read:\n`docs/audit/OBSERVABLE_RUN_MONITOR_P16_MONITOR_OPTIONAL_DEPS_REVIEW.md`\n\nApply only grounded actionable fixes from the review. Keep scope limited to monitor runtime behavior, optional dependency import boundaries, fake monitor smoke coverage, and CLI help/error behavior.\n\nDo not add PTY/ConPTY support. Do not change run controller semantics unless the review identifies a direct monitor integration regression. Do not make MCP a hard dependency for non-MCP commands.\n\nRun:\n- `python -m compileall vibecode -q`\n- `python -m pytest -p no:cacheprovider -q tests/test_vibecode_monitor.py tests/test_vibecode_cli.py`\n- `python -m vibecode.cli --help`\n- `python -m vibecode.cli monitor --help`\n\nIf no fixes are needed, write:\n`docs/audit/OBSERVABLE_RUN_MONITOR_P16_MONITOR_OPTIONAL_DEPS_FIX.md`",
-      "completed": false,
+      "completed": true,
       "engine": "opencode",
       "model": "deepseek/deepseek-v4-pro",
       "engine_args": [
