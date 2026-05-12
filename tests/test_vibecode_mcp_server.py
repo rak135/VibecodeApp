@@ -482,6 +482,88 @@ class TestCmdServe:
         assert kwargs["log_path"] == expected_log
         assert kwargs["session_id"] == "sess-42"
 
+    def test_cmd_serve_uses_vibecode_mcp_events_log_env(self, tmp_path, monkeypatch):
+        """When VIBECODE_MCP_EVENTS_LOG is set, cmd_serve passes it as log_path."""
+        from vibecode.mcp_server import cmd_serve
+
+        self._init_repo(tmp_path)
+        _write(tmp_path / ".vibecode" / "index" / "file_inventory.json", _make_inventory())
+        _write(tmp_path / ".vibecode" / "index" / "risk_report.json", _make_risk_report())
+
+        per_run_log = tmp_path / ".vibecode" / "runs" / "run-abc" / "mcp_events.jsonl"
+        monkeypatch.setenv("VIBECODE_MCP_EVENTS_LOG", str(per_run_log))
+        monkeypatch.delenv("VIBECODE_SESSION_ID", raising=False)
+
+        args = SimpleNamespace(repo_root=str(tmp_path))
+        with patch("vibecode.mcp_server.build_mcp_server") as mock_build:
+            mock_build.return_value = MagicMock()
+            cmd_serve(args)
+
+        kwargs = mock_build.call_args.kwargs
+        assert kwargs["log_path"] == per_run_log, (
+            f"Expected per-run log path, got: {kwargs['log_path']!r}"
+        )
+
+    def test_cmd_serve_falls_back_to_default_log_when_env_absent(self, tmp_path, monkeypatch):
+        """When VIBECODE_MCP_EVENTS_LOG is not set, cmd_serve uses the default log path."""
+        from vibecode.mcp_server import cmd_serve
+
+        self._init_repo(tmp_path)
+        _write(tmp_path / ".vibecode" / "index" / "file_inventory.json", _make_inventory())
+        _write(tmp_path / ".vibecode" / "index" / "risk_report.json", _make_risk_report())
+
+        monkeypatch.delenv("VIBECODE_MCP_EVENTS_LOG", raising=False)
+        monkeypatch.delenv("VIBECODE_SESSION_ID", raising=False)
+
+        args = SimpleNamespace(repo_root=str(tmp_path))
+        with patch("vibecode.mcp_server.build_mcp_server") as mock_build:
+            mock_build.return_value = MagicMock()
+            cmd_serve(args)
+
+        kwargs = mock_build.call_args.kwargs
+        expected_default = tmp_path / ".vibecode" / "logs" / "mcp_events.jsonl"
+        assert kwargs["log_path"] == expected_default, (
+            f"Expected default log path, got: {kwargs['log_path']!r}"
+        )
+
+    def test_cmd_serve_passes_session_id_from_env(self, tmp_path, monkeypatch):
+        """VIBECODE_SESSION_ID env var is forwarded as session_id to build_mcp_server."""
+        from vibecode.mcp_server import cmd_serve
+
+        self._init_repo(tmp_path)
+        _write(tmp_path / ".vibecode" / "index" / "file_inventory.json", _make_inventory())
+        _write(tmp_path / ".vibecode" / "index" / "risk_report.json", _make_risk_report())
+
+        monkeypatch.setenv("VIBECODE_SESSION_ID", "run-xyz-999")
+        monkeypatch.delenv("VIBECODE_MCP_EVENTS_LOG", raising=False)
+
+        args = SimpleNamespace(repo_root=str(tmp_path))
+        with patch("vibecode.mcp_server.build_mcp_server") as mock_build:
+            mock_build.return_value = MagicMock()
+            cmd_serve(args)
+
+        kwargs = mock_build.call_args.kwargs
+        assert kwargs["session_id"] == "run-xyz-999"
+
+    def test_cmd_serve_session_id_none_when_env_absent(self, tmp_path, monkeypatch):
+        """When VIBECODE_SESSION_ID is not set, session_id passed as None."""
+        from vibecode.mcp_server import cmd_serve
+
+        self._init_repo(tmp_path)
+        _write(tmp_path / ".vibecode" / "index" / "file_inventory.json", _make_inventory())
+        _write(tmp_path / ".vibecode" / "index" / "risk_report.json", _make_risk_report())
+
+        monkeypatch.delenv("VIBECODE_SESSION_ID", raising=False)
+        monkeypatch.delenv("VIBECODE_MCP_EVENTS_LOG", raising=False)
+
+        args = SimpleNamespace(repo_root=str(tmp_path))
+        with patch("vibecode.mcp_server.build_mcp_server") as mock_build:
+            mock_build.return_value = MagicMock()
+            cmd_serve(args)
+
+        kwargs = mock_build.call_args.kwargs
+        assert kwargs["session_id"] is None
+
 
 # ---------------------------------------------------------------------------
 # CLI parser – serve subcommand

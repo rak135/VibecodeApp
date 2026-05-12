@@ -898,6 +898,14 @@ class RunController:
             # run_streaming uses Popen + two reader threads so that stdout and
             # stderr are drained concurrently (deadlock-safe on Windows) and
             # live EVENT_AGENT_PROCESS events are emitted for each line.
+            #
+            # Propagate correlation env vars so any MCP server the agent spawns
+            # can write to the per-run artifact directory.  We start from a
+            # copy of the current environment so no user-configured vars are
+            # dropped; only the two vibecode-specific vars are injected.
+            child_env = {**os.environ}
+            child_env["VIBECODE_SESSION_ID"] = self.session_id
+            child_env["VIBECODE_MCP_EVENTS_LOG"] = str(session.mcp_events_jsonl)
             proc_result = run_streaming(
                 command,
                 stdin_content=prompt_content,
@@ -907,6 +915,7 @@ class RunController:
                 stdout_log=session.agent_stdout_log,
                 stderr_log=session.agent_stderr_log,
                 timeout=300.0,
+                env=child_env,
             )
             exit_code = proc_result.exit_code
             stdout = proc_result.stdout

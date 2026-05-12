@@ -30,6 +30,7 @@ from vibecode.events import (
     EVENT_CONTEXT,
     EVENT_GUARD,
     EVENT_GUARD_FINDING,
+    EVENT_MCP,
     EVENT_PROMPT,
     EVENT_RUN_LIFECYCLE,
 )
@@ -105,6 +106,40 @@ def format_vibecode_line(event: VibecodeEvent) -> str:
             parts.append(f"tests: {', '.join(tests[:3])}")
         detail = " | ".join(parts)
         return f"[{ts}] {event.level.name:7s} {event.type}: {detail}"
+
+    if event.type == EVENT_MCP:
+        # MCP tool events come from the agent's vibecode MCP server subprocess.
+        # Live cross-process streaming into the monitor is not implemented;
+        # these events arrive only if forwarded externally into the event sink
+        # (e.g. via test injection).  They are rendered compactly here.
+        tool = data.get("tool", "?")
+        if "McpToolCalled" in event.message:
+            detail = f"→ {tool}"
+            path_or_sym = data.get("path") or data.get("symbol")
+            if path_or_sym:
+                detail += f"({path_or_sym[:60]})"
+            return f"[{ts}] {event.level.name:7s} {event.type}: {detail}"
+        if "McpToolReturned" in event.message:
+            chars = data.get("result_chars", "")
+            extra = (
+                f"found={data['found']}" if "found" in data
+                else f"matches={data['match_count']}" if "match_count" in data
+                else f"risks={data['risk_count']}" if "risk_count" in data
+                else ""
+            )
+            detail = f"← {tool}"
+            if extra:
+                detail += f" {extra}"
+            if chars:
+                detail += f" ({chars}c)"
+            return f"[{ts}] {event.level.name:7s} {event.type}: {detail}"
+        if "McpToolFailed" in event.message:
+            err_type = data.get("error_type", "error")
+            err_msg = data.get("error", "")
+            detail = f"✗ {tool} [{err_type}]"
+            if err_msg:
+                detail += f": {err_msg[:80]}"
+            return f"[{ts}] {event.level.name:7s} {event.type}: {detail}"
 
     return f"[{ts}] {event.level.name:7s} {event.type}: {event.message}"
 

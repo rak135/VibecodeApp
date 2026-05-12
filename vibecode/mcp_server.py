@@ -330,9 +330,14 @@ def cmd_serve(args) -> int:
     Prints a ready-to-paste OpenCode MCP configuration snippet to *stderr*
     before entering the blocking server loop.
 
-    Tool events are written to ``<repo_root>/.vibecode/logs/mcp_events.jsonl``.
-    Set the ``VIBECODE_SESSION_ID`` environment variable to correlate events
-    with an enclosing run session.
+    Tool events are written to ``<repo_root>/.vibecode/logs/mcp_events.jsonl``
+    by default.  When the ``VIBECODE_MCP_EVENTS_LOG`` environment variable is
+    set, events are written to that path instead — this allows ``RunController``
+    to route MCP events into the per-run artifact directory by injecting the
+    variable into the agent child process environment.
+
+    Set ``VIBECODE_SESSION_ID`` to correlate events with an enclosing run
+    session.  ``RunController`` injects this variable automatically.
     """
     from vibecode.data_loader import load_project_data
     from vibecode.paths import normalise_root
@@ -365,7 +370,11 @@ def cmd_serve(args) -> int:
         file=sys.stderr,
     )
 
-    log_path = repo_root / ".vibecode" / "logs" / "mcp_events.jsonl"
+    log_path_env = os.environ.get("VIBECODE_MCP_EVENTS_LOG")
+    if log_path_env:
+        log_path = Path(log_path_env)
+    else:
+        log_path = repo_root / ".vibecode" / "logs" / "mcp_events.jsonl"
     session_id = os.environ.get("VIBECODE_SESSION_ID")
     mcp = build_mcp_server(inventory_path, risk_report_path, log_path=log_path, session_id=session_id)
     mcp.run(transport="stdio")

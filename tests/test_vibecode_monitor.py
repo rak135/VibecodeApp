@@ -24,6 +24,7 @@ from vibecode.events import (
     EVENT_GUARD,
     EVENT_GUARD_FINDING,
     EVENT_HANDOFF,
+    EVENT_MCP,
     EVENT_PROMPT,
     EVENT_RUN_LIFECYCLE,
     EVENT_SUMMARY,
@@ -82,6 +83,9 @@ class TestRouteEvent:
 
     def test_handoff_routes_to_event(self):
         assert route_event(_evt(EVENT_HANDOFF)) == "event"
+
+    def test_mcp_routes_to_event(self):
+        assert route_event(_evt(EVENT_MCP)) == "event"
 
 
 # ---------------------------------------------------------------------------
@@ -606,3 +610,157 @@ class TestMonitorCLIDispatch:
         fake = str(tmp_path / "does_not_exist")
         rc = main(["monitor", fake, "--task", "test"])
         assert rc == 1
+
+
+# ---------------------------------------------------------------------------
+# format_vibecode_line – MCP event formatting
+# ---------------------------------------------------------------------------
+
+
+class TestMcpEventFormatting:
+    """Tests for EVENT_MCP rendering in format_vibecode_line."""
+
+    def _mcp_evt(self, message: str, data: dict | None = None, level: EventLevel = EventLevel.INFO):
+        return _evt(EVENT_MCP, level=level, message=message, data=data)
+
+    def test_mcp_called_routes_to_event_pane(self):
+        """MCP events are routed to the event pane, not agent pane."""
+        evt = self._mcp_evt("McpToolCalled: get_file_card", data={"tool": "get_file_card"})
+        assert route_event(evt) == "event"
+
+    def test_mcp_called_formats_with_arrow(self):
+        """McpToolCalled renders as '→ toolname'."""
+        evt = self._mcp_evt(
+            "McpToolCalled: get_file_card",
+            data={"tool": "get_file_card"},
+        )
+        line = format_vibecode_line(evt)
+        assert "→ get_file_card" in line
+        assert EVENT_MCP in line
+
+    def test_mcp_called_includes_path_arg(self):
+        """McpToolCalled includes path argument when present."""
+        evt = self._mcp_evt(
+            "McpToolCalled: get_file_card",
+            data={"tool": "get_file_card", "path": "src/app.py"},
+        )
+        line = format_vibecode_line(evt)
+        assert "src/app.py" in line
+
+    def test_mcp_called_includes_symbol_arg(self):
+        """McpToolCalled includes symbol argument when present."""
+        evt = self._mcp_evt(
+            "McpToolCalled: find_symbol",
+            data={"tool": "find_symbol", "symbol": "run_controller"},
+        )
+        line = format_vibecode_line(evt)
+        assert "run_controller" in line
+
+    def test_mcp_called_no_arg_no_crash(self):
+        """McpToolCalled renders cleanly with no path or symbol."""
+        evt = self._mcp_evt(
+            "McpToolCalled: list_high_risk",
+            data={"tool": "list_high_risk"},
+        )
+        line = format_vibecode_line(evt)
+        assert "list_high_risk" in line
+
+    def test_mcp_returned_formats_with_left_arrow(self):
+        """McpToolReturned renders as '← toolname'."""
+        evt = self._mcp_evt(
+            "McpToolReturned: get_file_card",
+            data={"tool": "get_file_card", "result_chars": 1234, "found": True},
+        )
+        line = format_vibecode_line(evt)
+        assert "← get_file_card" in line
+        assert EVENT_MCP in line
+
+    def test_mcp_returned_shows_result_chars(self):
+        """McpToolReturned includes result character count."""
+        evt = self._mcp_evt(
+            "McpToolReturned: get_file_card",
+            data={"tool": "get_file_card", "result_chars": 5678},
+        )
+        line = format_vibecode_line(evt)
+        assert "5678" in line
+
+    def test_mcp_returned_shows_found_field(self):
+        """McpToolReturned includes 'found' field when present."""
+        evt = self._mcp_evt(
+            "McpToolReturned: get_file_card",
+            data={"tool": "get_file_card", "found": True, "result_chars": 100},
+        )
+        line = format_vibecode_line(evt)
+        assert "found=True" in line
+
+    def test_mcp_returned_shows_match_count(self):
+        """McpToolReturned includes 'match_count' field when present."""
+        evt = self._mcp_evt(
+            "McpToolReturned: find_symbol",
+            data={"tool": "find_symbol", "match_count": 3, "result_chars": 200},
+        )
+        line = format_vibecode_line(evt)
+        assert "matches=3" in line
+
+    def test_mcp_returned_shows_risk_count(self):
+        """McpToolReturned includes 'risk_count' field when present."""
+        evt = self._mcp_evt(
+            "McpToolReturned: list_high_risk",
+            data={"tool": "list_high_risk", "risk_count": 7, "result_chars": 500},
+        )
+        line = format_vibecode_line(evt)
+        assert "risks=7" in line
+
+    def test_mcp_failed_formats_with_cross(self):
+        """McpToolFailed renders as '✗ toolname [error_type]'."""
+        evt = self._mcp_evt(
+            "McpToolFailed: get_file_card",
+            data={"tool": "get_file_card", "error_type": "KeyError", "error": "key missing"},
+            level=EventLevel.ERROR,
+        )
+        line = format_vibecode_line(evt)
+        assert "✗ get_file_card" in line
+        assert "KeyError" in line
+        assert EVENT_MCP in line
+
+    def test_mcp_failed_includes_error_message(self):
+        """McpToolFailed includes the error message."""
+        evt = self._mcp_evt(
+            "McpToolFailed: find_symbol",
+            data={"tool": "find_symbol", "error_type": "ValueError", "error": "bad input"},
+        )
+        line = format_vibecode_line(evt)
+        assert "bad input" in line
+
+    def test_mcp_failed_no_error_field_no_crash(self):
+        """McpToolFailed renders cleanly even without 'error' field."""
+        evt = self._mcp_evt(
+            "McpToolFailed: list_high_risk",
+            data={"tool": "list_high_risk", "error_type": "RuntimeError"},
+        )
+        line = format_vibecode_line(evt)
+        assert "✗ list_high_risk" in line
+        assert "RuntimeError" in line
+
+    def test_mcp_unknown_variant_falls_back_to_default(self):
+        """Unknown MCP message variant falls back to default format without crash."""
+        evt = self._mcp_evt(
+            "McpToolSomethingElse: get_file_card",
+            data={"tool": "get_file_card"},
+        )
+        line = format_vibecode_line(evt)
+        # Should include event type and message without crashing
+        assert EVENT_MCP in line
+        assert "McpToolSomethingElse" in line
+
+    def test_mcp_event_includes_timestamp(self):
+        """MCP event line includes formatted timestamp."""
+        evt = self._mcp_evt("McpToolCalled: get_file_card", data={"tool": "get_file_card"})
+        line = format_vibecode_line(evt)
+        assert "12:00:00" in line
+
+    def test_mcp_no_data_no_crash(self):
+        """MCP event with no data dict does not crash."""
+        evt = _evt(EVENT_MCP, message="McpToolCalled: mystery", data=None)
+        line = format_vibecode_line(evt)
+        assert EVENT_MCP in line

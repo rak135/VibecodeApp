@@ -87,6 +87,7 @@ def run_streaming(
     stdout_log: Path | None = None,
     stderr_log: Path | None = None,
     timeout: float = 300.0,
+    env: dict[str, str] | None = None,
 ) -> ProcessResult:
     """Run *command* with concurrent streaming stdout/stderr capture.
 
@@ -117,6 +118,11 @@ def run_streaming(
         Optional path to write the accumulated stderr after the process exits.
     timeout:
         Seconds to wait for the process to finish before killing it.
+    env:
+        Optional environment for the subprocess.  When provided, replaces the
+        inherited environment entirely — callers should start from
+        ``os.environ.copy()`` and add variables on top.  When ``None`` (the
+        default) the subprocess inherits the current process environment.
     """
     effective_sink: EventSink = sink if sink is not None else NullEventSink()
 
@@ -130,6 +136,7 @@ def run_streaming(
         errors="replace",
         cwd=str(cwd),
         shell=True,
+        env=env,
     )
 
     stdout_lines: list[str] = []

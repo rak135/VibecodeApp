@@ -1650,3 +1650,112 @@ class TestUserSinkFanOut:
         durable_ids = [e.event_id for e in durable_events]
         memory_ids = [e.event_id for e in sink.events]
         assert durable_ids == memory_ids, "Event IDs differ between durable JSONL and memory sink"
+
+
+# ---------------------------------------------------------------------------
+# Tests: VIBECODE_SESSION_ID and VIBECODE_MCP_EVENTS_LOG propagated to child
+# ---------------------------------------------------------------------------
+
+
+class TestMcpEnvPropagation:
+    """Verify RunController injects correlation env vars into the agent process."""
+
+    def _make_env_capture_opencode(self, fake_dir: Path, capture_path: Path) -> None:
+        """Create a fake opencode that writes env vars to *capture_path* as JSON."""
+        py_script = fake_dir / "opencode.py"
+        py_script.write_text(
+            f"""#!{sys.executable}
+import json, os, sys
+argv = sys.argv[1:]
+if "--version" in argv:
+    sys.stdout.write("fake-opencode 1.0.0\\n")
+    sys.exit(0)
+sys.stdin.read()
+import pathlib
+data = {{
+    "VIBECODE_SESSION_ID": os.environ.get("VIBECODE_SESSION_ID", ""),
+    "VIBECODE_MCP_EVENTS_LOG": os.environ.get("VIBECODE_MCP_EVENTS_LOG", ""),
+}}
+pathlib.Path({str(capture_path)!r}).parent.mkdir(parents=True, exist_ok=True)
+pathlib.Path({str(capture_path)!r}).write_text(json.dumps(data), encoding="utf-8")
+sys.stdout.write("OK\\n")
+""",
+            encoding="utf-8",
+        )
+        (fake_dir / "opencode.cmd").write_text(
+            "@echo off\n" + '"' + sys.executable + '"' + ' "%~dp0opencode.py" %*\n',
+            encoding="utf-8",
+        )
+
+    def test_vibecode_session_id_in_child_env(self, repo: Path, fake_bin: Path, tmp_path: Path):
+        """RunController injects VIBECODE_SESSION_ID into the agent subprocess env."""
+        capture_path = tmp_path / "env_capture.json"
+        self._make_env_capture_opencode(fake_bin, capture_path)
+
+        controller = RunController(
+            root=repo,
+            task="env propagation test",
+            platform="opencode",
+            profile_name="safe",
+            allow_dirty=False,
+            no_index=True,
+            session_id="env-prop-001",
+        )
+        summary, exit_code = controller.execute()
+
+        assert exit_code == 0
+        assert capture_path.exists(), "fake opencode did not write env capture file"
+        captured = json.loads(capture_path.read_text(encoding="utf-8"))
+        assert captured["VIBECODE_SESSION_ID"] == "env-prop-001", (
+            f"Expected 'env-prop-001', got {captured['VIBECODE_SESSION_ID']!r}"
+        )
+
+    def test_vibecode_mcp_events_log_in_child_env(self, repo: Path, fake_bin: Path, tmp_path: Path):
+        """RunController injects VIBECODE_MCP_EVENTS_LOG pointing to per-run mcp_events.jsonl."""
+        capture_path = tmp_path / "env_capture2.json"
+        self._make_env_capture_opencode(fake_bin, capture_path)
+
+        controller = RunController(
+            root=repo,
+            task="mcp log env propagation",
+            platform="opencode",
+            profile_name="safe",
+            allow_dirty=False,
+            no_index=True,
+            session_id="env-prop-002",
+        )
+        controller.execute()
+
+        assert capture_path.exists()
+        captured = json.loads(capture_path.read_text(encoding="utf-8"))
+        mcp_log = captured["VIBECODE_MCP_EVENTS_LOG"]
+        assert mcp_log, "VIBECODE_MCP_EVENTS_LOG should be non-empty"
+        assert "env-prop-002" in mcp_log, (
+            f"Expected session id in MCP log path, got: {mcp_log!r}"
+        )
+        assert "mcp_events.jsonl" in mcp_log, (
+            f"Expected mcp_events.jsonl in path, got: {mcp_log!r}"
+        )
+
+    def test_mcp_events_log_path_is_under_run_dir(self, repo: Path, fake_bin: Path, tmp_path: Path):
+        """VIBECODE_MCP_EVENTS_LOG is inside .vibecode/runs/<session_id>/."""
+        capture_path = tmp_path / "env_capture3.json"
+        self._make_env_capture_opencode(fake_bin, capture_path)
+
+        controller = RunController(
+            root=repo,
+            task="mcp log location test",
+            platform="opencode",
+            profile_name="safe",
+            allow_dirty=False,
+            no_index=True,
+            session_id="env-prop-003",
+        )
+        controller.execute()
+
+        captured = json.loads(capture_path.read_text(encoding="utf-8"))
+        mcp_log = captured["VIBECODE_MCP_EVENTS_LOG"]
+        expected_run_dir = str(repo / ".vibecode" / "runs" / "env-prop-003")
+        assert mcp_log.startswith(expected_run_dir) or mcp_log.replace("\\", "/").startswith(
+            expected_run_dir.replace("\\", "/")
+        ), f"MCP log not under run dir. Got: {mcp_log!r}, expected under: {expected_run_dir!r}"

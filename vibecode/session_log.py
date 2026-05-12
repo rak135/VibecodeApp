@@ -121,6 +121,11 @@ class RunSession:
         """Path for the agent process standard-error log."""
         return self.run_dir / "agent_stderr.log"
 
+    @property
+    def mcp_events_jsonl(self) -> Path:
+        """Path for the per-run MCP tool event log (JSONL)."""
+        return self.run_dir / "mcp_events.jsonl"
+
     # ── Helpers ──────────────────────────────────────────────────────────
 
     def create_event_sink(self) -> JsonlEventSink:
