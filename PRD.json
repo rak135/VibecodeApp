@@ -553,7 +553,7 @@
     {
       "title": "P15.2 Review MCP session correlation and monitor MCP truth",
       "description": "Review the P15.1 implementation.\n\nWrite review output to:\n`docs/audit/OBSERVABLE_RUN_MONITOR_P15_MCP_CORRELATION_REVIEW.md`\n\nCheck:\n- Environment propagation from run controller to agent process.\n- MCP server use of `VIBECODE_SESSION_ID` and any per-run log env var.\n- Fallback behavior when no run session exists.\n- Monitor rendering/routing of MCP events or explicit tested limitation.\n- Optional dependency boundaries for MCP.\n\nRequire evidence:\n- Tests proving child process receives the run session id.\n- JSONL MCP event examples or parsed assertions with compact payloads.\n- Tests proving non-MCP commands do not fail without MCP installed.\n- Clear docs/test assertions if live MCP-in-monitor streaming remains best-effort.\n\nWatch for:\n- Full MCP result blobs in event data.\n- Session id correlation that only works in direct unit tests.\n- Base CLI importing `mcp` at module import time.\n- Monitor claims it shows live MCP calls but only reads stale side logs.\n- MCP changes that alter functional tool responses rather than wrapping observability.\n\nDo not modify implementation files. Only write the review document.",
-      "completed": false,
+      "completed": true,
       "engine": "codex",
       "model": "gpt-5.5",
       "engine_args": [
