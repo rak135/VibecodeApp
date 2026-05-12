@@ -518,7 +518,7 @@
     {
       "title": "P14.2 Review durable early-failure run artifacts",
       "description": "Review the P14.1 implementation.\n\nWrite review output to:\n`docs/audit/OBSERVABLE_RUN_MONITOR_P14_DURABLE_FAILURES_REVIEW.md`\n\nCheck:\n- `RunController.execute()` setup order for `RunSession`, JSONL sink, and start events.\n- Summary writing for missing project config, invalid profile, dirty preflight, index/context failures, missing OpenCode, OpenCode check failure, and agent launch exceptions.\n- `runs show` behavior for early aborted runs and missing optional artifacts.\n- Tests proving event persistence and replay without real OpenCode.\n\nRequire evidence:\n- Exact artifact paths asserted in tests.\n- JSONL lines parsed as `VibecodeEvent` objects.\n- Summary status/error fields for early aborts.\n- CLI replay or formatter output for an aborted run.\n\nWatch for:\n- Events emitted before JSONL sink attachment.\n- Duplicate events from sink fan-out mistakes.\n- Summaries claiming success when the run aborted.\n- Empty optional files being mistaken for guard/check/handoff success.\n- Backward compatibility breakage for existing run artifacts.\n\nDo not modify implementation files. Only write the review document.",
-      "completed": false,
+      "completed": true,
       "engine": "codex",
       "model": "gpt-5.5",
       "engine_args": [
