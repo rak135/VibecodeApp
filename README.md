@@ -393,9 +393,11 @@ vibecode runs show <session_id> --repo C:\path\to\repo --events
 
 ### MCP observability
 
-When `vibecode serve` is running, each tool call emits structured events to `.vibecode/logs/mcp_events.jsonl`. Set the `VIBECODE_SESSION_ID` environment variable to correlate MCP tool calls with a specific `vibecode run` or `vibecode monitor` session.
+When `vibecode serve` is running, each tool call emits structured events. By default they go to `.vibecode/logs/mcp_events.jsonl`. Agents launched via `vibecode run` or `vibecode monitor` inherit `VIBECODE_MCP_EVENTS_LOG` pointing to the per-run session directory (`.vibecode/runs/<session_id>/mcp_events.jsonl`), so MCP events land alongside the other run artifacts.
 
-> **Limitation:** MCP tool events are appended to a single log file (not written into the per-run session directory). No streaming of MCP events into the monitor TUI is currently implemented.
+Set the `VIBECODE_SESSION_ID` environment variable to correlate standalone MCP server tool calls with a specific `vibecode run` session.
+
+> **Limitation:** Live streaming of MCP events from the agent's side process into the monitor TUI is not implemented. The monitor renders `run.mcp` events delivered to its event sink only.
 
 <p align="right">(<a href="#readme-top">back to top</a>)</p>
 

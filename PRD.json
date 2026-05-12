@@ -564,7 +564,7 @@
     {
       "title": "P15.3 Apply MCP correlation review fixes",
       "description": "Read:\n`docs/audit/OBSERVABLE_RUN_MONITOR_P15_MCP_CORRELATION_REVIEW.md`\n\nApply only grounded actionable fixes from the review. Keep scope limited to MCP session correlation, compact MCP event payloads, optional dependency safety, and monitor/replay visibility of correlated MCP events.\n\nDo not redesign MCP tools or change their functional responses except to add observability wrappers. Do not require the optional MCP package for non-MCP commands.\n\nRun:\n- `python -m compileall vibecode -q`\n- `python -m pytest -p no:cacheprovider -q tests/test_vibecode_mcp_server.py tests/test_vibecode_run_controller.py tests/test_vibecode_monitor.py`\n- affected replay/docs tests if artifact paths changed\n\nIf no fixes are needed, write:\n`docs/audit/OBSERVABLE_RUN_MONITOR_P15_MCP_CORRELATION_FIX.md`",
-      "completed": false,
+      "completed": true,
       "engine": "opencode",
       "model": "deepseek/deepseek-v4-pro",
       "engine_args": [

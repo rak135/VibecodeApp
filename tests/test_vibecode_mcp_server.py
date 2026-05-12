@@ -1109,17 +1109,46 @@ class TestMcpToolLogging:
                     raise ImportError(f"Simulated missing package: {fullname}")
                 return None
 
+        class _BlockMCP_DirectImport:
+            def find_spec(self, fullname, path, target=None):
+                if fullname == "mcp" or fullname.startswith("mcp."):
+                    raise ImportError(f"Simulated missing package: {fullname}")
+                if fullname == "vibecode.mcp_server":
+                    raise ImportError(f"Simulated missing package: {fullname}")
+                return None
+
+        self._clear_mcp_modules()
         try:
             sys.meta_path.insert(0, _BlockMCP())
-            for mod in list(sys.modules):
-                if mod == "vibecode.mcp_server" or mod.startswith("mcp"):
-                    del sys.modules[mod]
-
             from vibecode.cli import create_parser
+
             parser = create_parser()
             args = parser.parse_args(["validate", str(tmp_path)])
             assert args.command == "validate"
         finally:
-            if _BlockMCP in [type(h) for h in sys.meta_path]:
-                sys.meta_path = [h for h in sys.meta_path if not isinstance(h, _BlockMCP)]
-            import vibecode.mcp_server  # noqa: F401
+            self._remove_blocker(_BlockMCP)
+
+        self._clear_mcp_modules()
+        try:
+            sys.meta_path.insert(0, _BlockMCP_DirectImport())
+
+            from vibecode.cli import main
+
+            exit_code = main(["validate", str(tmp_path)])
+            # validate reports errors on an uninitialised tmp_path (exit 1),
+            # but must not raise ImportError from the blocked MCP package.
+            assert exit_code in (0, 1)
+        except ImportError:
+            self.fail("Non-MCP command failed with ImportError when MCP is not installed")
+        finally:
+            self._remove_blocker(_BlockMCP_DirectImport)
+
+    def _clear_mcp_modules(self):
+        for mod in list(sys.modules):
+            if mod == "vibecode.mcp_server" or mod.startswith("mcp"):
+                del sys.modules[mod]
+
+    def _remove_blocker(self, blocker_class):
+        if blocker_class in [type(h) for h in sys.meta_path]:
+            sys.meta_path = [h for h in sys.meta_path if not isinstance(h, blocker_class)]
+        import vibecode.mcp_server  # noqa: F401

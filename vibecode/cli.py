@@ -339,10 +339,13 @@ def create_parser() -> argparse.ArgumentParser:
             "Run 'vibecode inventory' first to generate those files.\n\n"
             "When the server starts, it prints a ready-to-paste JSON snippet to stderr\n"
             "showing how to add it to your OpenCode MCP configuration.\n\n"
-            "MCP tool events are written to .vibecode/logs/mcp_events.jsonl. Set the\n"
+            "MCP tool events are written to the path set by VIBECODE_MCP_EVENTS_LOG,\n"
+            "falling back to .vibecode/logs/mcp_events.jsonl. Set the\n"
             "VIBECODE_SESSION_ID environment variable to correlate events with an\n"
             "enclosing vibecode run session. Without it, the session defaults to\n"
-            "\"mcp-server\".\n\n"
+            "\"mcp-server\".\n"
+            "vibecode run and vibecode monitor set both environment variables\n"
+            "automatically for per-run MCP correlation.\n\n"
             "Example OpenCode setup (~/.config/opencode/config.json or opencode.json):\n"
             '  { "mcpServers": { "vibecode": { "command": "vibecode",\n'
             '      "args": ["serve", "/path/to/repo"] } } }'
