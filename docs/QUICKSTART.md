@@ -31,7 +31,7 @@ The following behaviors are **explicitly out of scope**:
 
 - No custom coding agent runtime bundled with Vibecode — the `run` command invokes an external tool (e.g. OpenCode) that must be installed separately
 - No LLM or AI API calls from Vibecode itself — all inference happens in the external tool
-- No auto-commit or auto-approve — every agent edit is reviewed through guard checks before and after the run
+- No auto-commit or auto-approve — every agent edit is reviewed through guard checks after the run
 - No GUI — CLI-first by design
 
 ---
@@ -415,6 +415,7 @@ Every `vibecode run` / `vibecode monitor` creates a session directory under `.vi
 .vibecode/runs/<session_id>/
   summary.json          ← task, status, exit code, guard/check/handoff counts
   events.jsonl          ← structured event log (one JSON object per line)
+  metadata.json         ← platform metadata (fallback artifact, may be absent)
   guard_report.json     ← guard findings with severity, category, evidence
   guard_report.md       ← human-readable grouped guard report
   checks_report.json    ← required-check results
@@ -430,7 +431,7 @@ Use `vibecode runs` to browse and inspect sessions without opening the files man
 
 ```powershell
 # List all recorded sessions (most recent first)
-python -m vibecode.cli runs list C:\path\to\example-repo
+python -m vibecode.cli runs list --repo C:\path\to\example-repo
 
 # Show summary for a specific session
 python -m vibecode.cli runs show <session_id> --repo C:\path\to\example-repo
@@ -601,7 +602,7 @@ After a `vibecode run` or `vibecode monitor`, session artifacts are written unde
 
 ```powershell
 # List sessions (most recent first)
-python -m vibecode.cli runs list C:\path\to\example-repo
+python -m vibecode.cli runs list --repo C:\path\to\example-repo
 
 # Show summary for the most-recent session
 python -m vibecode.cli runs show <session_id> --repo C:\path\to\example-repo
@@ -613,7 +614,7 @@ Or browse the raw files directly:
 Get-ChildItem C:\path\to\example-repo\.vibecode\runs\ -Directory | Sort-Object LastWriteTime -Descending | Select-Object -First 1
 ```
 
-The session directory contains `summary.json`, `events.jsonl`, `guard_report.*`, `checks_report.json`, `handoff_report.*`, `agent_stdout.log`, `agent_stderr.log`, `opencode_prompt.md`, and `context_pack.md`.
+The session directory contains `summary.json`, `events.jsonl`, `metadata.json` (fallback artifact), `guard_report.*`, `checks_report.json`, `handoff_report.*`, `agent_stdout.log`, `agent_stderr.log`, `opencode_prompt.md`, and `context_pack.md`.
 
 ---
 
@@ -666,6 +667,7 @@ The session directory contains `summary.json`, `events.jsonl`, `guard_report.*`,
 │   └── <session_id>/
 │       ├── summary.json
 │       ├── events.jsonl
+│       ├── metadata.json
 │       ├── guard_report.json / guard_report.md
 │       ├── checks_report.json
 │       ├── handoff_report.json / handoff_report.md

@@ -336,7 +336,7 @@ Flags mirror `vibecode run`:
 
 | Flag | Default | Purpose |
 |---|---|---|
-| `--task` | (required) | Task description |
+| `--task` | (optional at CLI) | Task description (recommended) |
 | `--profile` | safe | Advisory permission profile |
 | `--guard-mode` | advisory | `advisory` or `strict` (see below) |
 | `--allow-dirty` | off | Allow uncommitted changes |
@@ -359,6 +359,7 @@ Every `vibecode run` / `vibecode monitor` creates a session directory:
 .vibecode/runs/<session_id>/
   summary.json          ← task, platform, profile, status, exit code, guard/check/handoff counts
   events.jsonl          ← structured event log (one JSON object per line)
+  metadata.json         ← platform metadata (fallback artifact, may be absent)
   guard_report.json     ← guard findings with severity, category, title, evidence
   guard_report.md       ← human-readable grouped guard report
   checks_report.json    ← required-check results
@@ -376,7 +377,7 @@ These files are runtime artifacts — add `.vibecode/runs/` to `.gitignore` and 
 
 ```powershell
 # List all recorded run sessions (most recent first)
-vibecode runs list C:\path\to\repo
+vibecode runs list --repo C:\path\to\repo
 
 # Show summary for a specific run
 vibecode runs show <session_id> --repo C:\path\to\repo
