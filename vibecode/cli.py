@@ -345,7 +345,8 @@ def create_parser() -> argparse.ArgumentParser:
             "enclosing vibecode run session. Without it, the session defaults to\n"
             "\"mcp-server\".\n"
             "vibecode run and vibecode monitor set both environment variables\n"
-            "automatically for per-run MCP correlation.\n\n"
+            "in the agent process; per-run MCP correlation depends on OpenCode\n"
+            "propagating them to the MCP server subprocess.\n\n"
             "Example OpenCode setup (~/.config/opencode/config.json or opencode.json):\n"
             '  { "mcpServers": { "vibecode": { "command": "vibecode",\n'
             '      "args": ["serve", "/path/to/repo"] } } }'
@@ -465,8 +466,8 @@ def create_parser() -> argparse.ArgumentParser:
             "  list [--repo REPO]                    — list recent run session IDs\n"
             "  show <session_id> [--repo REPO]        — show summary for a run\n"
             "                   [--events]            — also replay events in order\n\n"
-            "Each run directory contains: summary.json, events.jsonl, guard_report.*,\n"
-            "checks_report.json, handoff_report.*, agent_stdout.log, agent_stderr.log."
+            "Each run directory contains: summary.json, events.jsonl, guard_report.json,\n"
+            "checks_report.json, handoff_report.json, agent_stdout.log, agent_stderr.log."
         ),
     )
     runs_sub = runs_parser.add_subparsers(dest="runs_subcommand", metavar="SUBCOMMAND")

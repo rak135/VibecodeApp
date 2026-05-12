@@ -634,7 +634,7 @@
     {
       "title": "P17.3 Apply docs truth review fixes",
       "description": "Read:\n`docs/audit/OBSERVABLE_RUN_MONITOR_P17_DOCS_TRUTH_REVIEW.md`\n\nApply only grounded actionable documentation/generator fixes from the review. Keep scope limited to docs truth, generated AGENTS block truth, optional dependency install guidance, artifact lists, MCP limitations, monitor limitations, and guard semantics.\n\nDo not change runtime behavior unless the review identifies a tiny generated-doc source mismatch in `vibecode/context/agents_export.py`. Do not add new product promises. Do not rely on old audit docs.\n\nRun:\n- `python -m compileall vibecode -q` if Python source changed\n- `python -m pytest -p no:cacheprovider -q tests/test_vibecode_quickstart.py tests/test_vibecode_agents_export.py`\n- CLI help commands for run/monitor/runs if docs reference help behavior\n\nIf no fixes are needed, write:\n`docs/audit/OBSERVABLE_RUN_MONITOR_P17_DOCS_TRUTH_FIX.md`",
-      "completed": false,
+      "completed": true,
       "engine": "opencode",
       "model": "deepseek/deepseek-v4-pro",
       "engine_args": [

@@ -414,13 +414,12 @@ python -m vibecode.cli handoff-check C:\path\to\example-repo [--json]
 
 ### Step 9b — inspect a previous run
 
-Every `vibecode run` / `vibecode monitor` creates a session directory under `.vibecode/runs/`:
+Every `vibecode run` / `vibecode monitor` creates a session directory under `.vibecode/runs/`. `events.jsonl` and `summary.json` are always written; other artifacts appear as their corresponding phases complete.
 
 ```
 .vibecode/runs/<session_id>/
-  summary.json          ← task, status, exit code, guard/check/handoff counts
-  events.jsonl          ← structured event log (one JSON object per line)
-  metadata.json         ← platform metadata (fallback artifact, may be absent)
+  summary.json          ← task, status, exit code (always written)
+  events.jsonl          ← structured event log (always written)
   guard_report.json     ← guard findings with severity, category, evidence
   guard_report.md       ← human-readable grouped guard report
   checks_report.json    ← required-check results
@@ -430,6 +429,8 @@ Every `vibecode run` / `vibecode monitor` creates a session directory under `.vi
   agent_stdout.log      ← captured agent stdout
   agent_stderr.log      ← captured agent stderr
 ```
+
+> Files not produced during a run are absent; an early abort only leaves `events.jsonl` and `summary.json`.
 
 Use `vibecode runs` to browse and inspect sessions without opening the files manually:
 

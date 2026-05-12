@@ -362,13 +362,12 @@ Both `vibecode run` and `vibecode monitor` accept `--guard-mode {advisory,strict
 
 ### Where run artifacts are written
 
-Every `vibecode run` / `vibecode monitor` creates a session directory:
+Every `vibecode run` / `vibecode monitor` creates a session directory. `events.jsonl` and `summary.json` are always written; other artifacts appear as their corresponding phases complete.
 
 ```
 .vibecode/runs/<session_id>/
-  summary.json          ← task, platform, profile, status, exit code, guard/check/handoff counts
-  events.jsonl          ← structured event log (one JSON object per line)
-  metadata.json         ← platform metadata (fallback artifact, may be absent)
+  summary.json          ← task, platform, profile, status, exit code (always written)
+  events.jsonl          ← structured event log (always written)
   guard_report.json     ← guard findings with severity, category, title, evidence
   guard_report.md       ← human-readable grouped guard report
   checks_report.json    ← required-check results
@@ -378,6 +377,8 @@ Every `vibecode run` / `vibecode monitor` creates a session directory:
   agent_stdout.log      ← captured agent stdout
   agent_stderr.log      ← captured agent stderr
 ```
+
+> Additional artifacts (e.g. `metadata.json`) may be present. Files not produced during a run are absent; an early abort only leaves `events.jsonl` and `summary.json`.
 
 These files are runtime artifacts — add `.vibecode/runs/` to `.gitignore` and do not commit them.
 
