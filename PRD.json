@@ -413,7 +413,7 @@
     {
       "title": "P11.2 Review documentation truthfulness",
       "description": "Review updated documentation and AGENTS guidance.\n\nWrite review output to:\ndocs/audit/OBSERVABLE_RUN_MONITOR_P11_DOCS_REVIEW.md\n\nCheck:\n- Docs describe actual implemented behavior, not future vision.\n- Advisory guard semantics are clear.\n- TUI monitor limitations are honest.\n- Run artifact paths are accurate.\n- Existing README/Quickstart claims are not contradictory.\n- AGENTS.md tells future agents how to use monitor/run artifacts safely.\n- No marketing fluff that hides limitations.\n\nDo not modify docs except the review document.",
-      "completed": false,
+      "completed": true,
       "engine": "codex",
       "model": "gpt-5.5",
       "engine_args": [
