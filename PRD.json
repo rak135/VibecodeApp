@@ -448,7 +448,7 @@
     {
       "title": "P12.2 Final independent review",
       "description": "Perform final independent review of the observable monitor implementation and dogfood report.\n\nWrite:\ndocs/audit/OBSERVABLE_RUN_MONITOR_FINAL_REVIEW.md\n\nCheck:\n- Product goal is actually met or honestly reported as partial.\n- Event spine is used across run/TUI/MCP paths where claimed.\n- Guard is advisory by default.\n- Run artifacts are durable and replayable.\n- Prompt/context truth is preserved per run.\n- Two-pane monitor works at MVP level or limitations are explicit.\n- Tests are credible.\n- There are no obvious architecture violations or hidden brittle shortcuts.\n\nDo not modify implementation files. Only write the final review.",
-      "completed": false,
+      "completed": true,
       "engine": "codex",
       "model": "gpt-5.5",
       "engine_args": [
