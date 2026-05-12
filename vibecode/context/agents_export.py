@@ -63,7 +63,8 @@ def render_agents_block() -> str:
         " `--guard-mode strict`\n"
         "- `vibecode monitor` \u2014 two-pane TUI that runs an OpenCode session and streams"
         " output live (streaming text mode, not a PTY); left pane agent stdout/stderr,"
-        " right pane Vibecode event spine\n"
+        " right pane Vibecode event spine"
+        " (requires `[tui]` extra: `pip install -e \".[tui]\"`)\n"
         "- `vibecode runs list` \u2014 list recent run session IDs from `.vibecode/runs/`\n"
         "- `vibecode runs show <session_id> [--events]` \u2014 show summary for a previous"
         " run; `--events` replays all events in order\n"
@@ -72,9 +73,11 @@ def render_agents_block() -> str:
         "- `vibecode project` \u2014 manage the local project registry outside the repo\n"
         "- `vibecode export-agents` \u2014 write/update root AGENTS.md\n"
         "- `vibecode dashboard` \u2014 open an interactive TUI showing context cards,"
-        " symbols, facts, and heuristics\n"
+        " symbols, facts, and heuristics"
+        " (requires `[tui]` extra: `pip install -e \".[tui]\"`)\n"
         "- `vibecode serve` \u2014 start an MCP stdio server exposing `get_file_card`,"
-        " `find_symbol`, and `list_high_risk` for OpenCode\n"
+        " `find_symbol`, and `list_high_risk` for OpenCode"
+        " (requires `[mcp]` extra: `pip install -e \".[mcp]\"`)\n"
     )
 
 

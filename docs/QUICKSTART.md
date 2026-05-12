@@ -370,6 +370,8 @@ Flags:
 
 ### Step 8b — monitor (TUI alternative)
 
+> **Requires the `tui` extra:** `pip install -e ".[tui]"` (or `".[all]"`).
+
 `vibecode monitor` runs the same pipeline as `run` but inside a split-pane TUI:
 
 ```powershell
@@ -423,7 +425,6 @@ Every `vibecode run` / `vibecode monitor` creates a session directory under `.vi
   guard_report.md       ← human-readable grouped guard report
   checks_report.json    ← required-check results
   handoff_report.json   ← handoff validation results
-  handoff_report.md     ← human-readable handoff report
   opencode_prompt.md    ← snapshot of the prompt sent to the agent
   context_pack.md       ← snapshot of the context pack used
   agent_stdout.log      ← captured agent stdout
@@ -484,6 +485,8 @@ Re-run `inventory` after adding, removing, or significantly changing Python file
 
 ### Step B — dashboard (visual check)
 
+> **Requires the `tui` extra:** `pip install -e ".[tui]"` (or `".[all]"`).
+
 Inspect context cards interactively:
 
 ```powershell
@@ -501,6 +504,8 @@ The footer shows total files, card count, and high-risk item count.
 | Q | Quit |
 
 ### Step C — serve (OpenCode MCP integration)
+
+> **Requires the `mcp` extra:** `pip install -e ".[mcp]"` (or `".[all]"`).
 
 Start the MCP server:
 
@@ -617,7 +622,7 @@ Or browse the raw files directly:
 Get-ChildItem C:\path\to\example-repo\.vibecode\runs\ -Directory | Sort-Object LastWriteTime -Descending | Select-Object -First 1
 ```
 
-The session directory contains `summary.json`, `events.jsonl`, `metadata.json` (fallback artifact), `guard_report.*`, `checks_report.json`, `handoff_report.*`, `agent_stdout.log`, `agent_stderr.log`, `opencode_prompt.md`, and `context_pack.md`.
+The session directory contains `summary.json`, `events.jsonl`, `metadata.json` (fallback artifact), `guard_report.*`, `checks_report.json`, `handoff_report.json`, `agent_stdout.log`, `agent_stderr.log`, `opencode_prompt.md`, and `context_pack.md`.
 
 ---
 
@@ -673,7 +678,7 @@ The session directory contains `summary.json`, `events.jsonl`, `metadata.json` (
 │       ├── metadata.json
 │       ├── guard_report.json / guard_report.md
 │       ├── checks_report.json
-│       ├── handoff_report.json / handoff_report.md
+│       ├── handoff_report.json
 │       ├── opencode_prompt.md
 │       ├── context_pack.md
 │       ├── agent_stdout.log

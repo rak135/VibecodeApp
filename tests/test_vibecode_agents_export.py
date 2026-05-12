@@ -128,11 +128,34 @@ def test_render_agents_block_command_order_matches_top_level_help():
     assert positions == sorted(positions)
 
 
-def test_render_agents_block_does_not_describe_implemented_commands_as_pending():
-    block = render_agents_block().lower()
-    assert "planned" not in block
-    assert "not wired" not in block
-    assert "not started" not in block
+def test_render_agents_block_monitor_notes_tui_extra():
+    block = render_agents_block()
+    assert "monitor" in block
+    # monitor requires the tui extra — agents must know this
+    idx = block.index("`vibecode monitor`")
+    monitor_line = block[idx : block.index("\n", idx)]
+    assert "[tui]" in monitor_line, "monitor command description must mention [tui] extra"
+
+
+def test_render_agents_block_dashboard_notes_tui_extra():
+    block = render_agents_block()
+    idx = block.index("`vibecode dashboard`")
+    dashboard_line = block[idx : block.index("\n", idx)]
+    assert "[tui]" in dashboard_line, "dashboard command description must mention [tui] extra"
+
+
+def test_render_agents_block_serve_notes_mcp_extra():
+    block = render_agents_block()
+    idx = block.index("`vibecode serve`")
+    serve_line = block[idx : block.index("\n", idx)]
+    assert "[mcp]" in serve_line, "serve command description must mention [mcp] extra"
+
+
+def test_render_agents_block_does_not_claim_handoff_report_md_always_present():
+    block = render_agents_block()
+    # handoff_report.md is not written by the run controller; the block must not list it
+    assert "handoff_report.md" not in block
+
 
 
 def test_render_agents_block_is_short():

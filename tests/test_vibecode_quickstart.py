@@ -426,3 +426,35 @@ class TestQuickstartDocumentationExists:
         assert r"C:\path\to\example-repo" in content, (
             "QUICKSTART.md must use C:\\path\\to\\example-repo as the path placeholder"
         )
+
+    def test_run_artifacts_do_not_list_handoff_report_md(self) -> None:
+        """handoff_report.md is not written by run.py; docs must not claim it is always present."""
+        root = Path(__file__).parent.parent
+        for name in ("README.md", "docs/QUICKSTART.md"):
+            content = (root / name).read_text(encoding="utf-8")
+            assert "handoff_report.md" not in content, (
+                f"{name} must not list handoff_report.md as a run artifact "
+                "(it is not written by the current run controller)"
+            )
+
+    def test_docs_document_monitor_tui_extra(self) -> None:
+        """vibecode monitor requires the [tui] extra; docs must say so."""
+        root = Path(__file__).parent.parent
+        combined = "\n".join([
+            (root / "README.md").read_text(encoding="utf-8"),
+            (root / "docs" / "QUICKSTART.md").read_text(encoding="utf-8"),
+        ])
+        assert "[tui]" in combined, (
+            "Docs must mention the [tui] extra requirement for vibecode monitor/dashboard"
+        )
+
+    def test_docs_document_serve_mcp_extra(self) -> None:
+        """vibecode serve requires the [mcp] extra; docs must say so."""
+        root = Path(__file__).parent.parent
+        combined = "\n".join([
+            (root / "README.md").read_text(encoding="utf-8"),
+            (root / "docs" / "QUICKSTART.md").read_text(encoding="utf-8"),
+        ])
+        assert "[mcp]" in combined, (
+            "Docs must mention the [mcp] extra requirement for vibecode serve"
+        )

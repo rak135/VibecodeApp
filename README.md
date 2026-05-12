@@ -238,6 +238,8 @@ Re-run `inventory` whenever you add, remove, or significantly change files.
 
 ### 2 — Launch the dashboard (optional visual check)
 
+> **Requires the `tui` extra:** `pip install -e ".[tui]"` (or `".[all]"`).
+
 ```powershell
 vibecode dashboard C:\path\to\repo
 ```
@@ -251,6 +253,8 @@ A terminal UI opens showing all indexed files. The footer shows total files, car
 | Escape / Q | Go back or quit |
 
 ### 3 — Start the MCP server
+
+> **Requires the `mcp` extra:** `pip install -e ".[mcp]"` (or `".[all]"`).
 
 ```powershell
 vibecode serve C:\path\to\repo
@@ -319,6 +323,8 @@ Architecture docs and check configs (`.vibecode/architecture/*.md`, `.vibecode/c
 
 ### Running with the live monitor
 
+> **Requires the `tui` extra:** `pip install -e ".[tui]"` (or `".[all]"`).
+
 `vibecode monitor` is a two-pane TUI that runs an OpenCode session and streams output live:
 
 ```powershell
@@ -367,7 +373,6 @@ Every `vibecode run` / `vibecode monitor` creates a session directory:
   guard_report.md       ← human-readable grouped guard report
   checks_report.json    ← required-check results
   handoff_report.json   ← handoff validation results
-  handoff_report.md     ← human-readable handoff report
   opencode_prompt.md    ← snapshot of the prompt sent to the agent
   context_pack.md       ← snapshot of the context pack used
   agent_stdout.log      ← captured agent stdout
@@ -393,9 +398,7 @@ vibecode runs show <session_id> --repo C:\path\to\repo --events
 
 ### MCP observability
 
-When `vibecode serve` is running, each tool call emits structured events. By default they go to `.vibecode/logs/mcp_events.jsonl`. Agents launched via `vibecode run` or `vibecode monitor` inherit `VIBECODE_MCP_EVENTS_LOG` pointing to the per-run session directory (`.vibecode/runs/<session_id>/mcp_events.jsonl`), so MCP events land alongside the other run artifacts.
-
-Set the `VIBECODE_SESSION_ID` environment variable to correlate standalone MCP server tool calls with a specific `vibecode run` session.
+When `vibecode serve` is running, each tool call emits structured events. By default they go to `.vibecode/logs/mcp_events.jsonl`. `vibecode run` and `vibecode monitor` set `VIBECODE_SESSION_ID` and `VIBECODE_MCP_EVENTS_LOG` in the agent (OpenCode) process environment; if OpenCode propagates those variables when launching `vibecode serve` as an MCP server subprocess, tool-call events land in the per-run session directory (`.vibecode/runs/<session_id>/mcp_events.jsonl`) automatically. For a standalone `vibecode serve` started outside of a run, set `VIBECODE_SESSION_ID` manually to route its events to a specific session log.
 
 > **Limitation:** Live streaming of MCP events from the agent's side process into the monitor TUI is not implemented. The monitor renders `run.mcp` events delivered to its event sink only.
 

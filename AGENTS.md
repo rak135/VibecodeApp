@@ -43,13 +43,13 @@ Treat source code, tests, `PRD.json`, and human-maintained docs (`.vibecode/arch
 - `vibecode check` — run required checks from `.vibecode/checks/required_checks.yaml`
 - `vibecode handoff-check` — validate handoff file quality
 - `vibecode run` — explicitly orchestrate an external OpenCode run and then run guard/check/handoff; use `--guard-mode advisory` (default) or `--guard-mode strict`
-- `vibecode monitor` — two-pane TUI that runs an OpenCode session and streams output live (streaming text mode, not a PTY); left pane agent stdout/stderr, right pane Vibecode event spine
+- `vibecode monitor` — two-pane TUI that runs an OpenCode session and streams output live (streaming text mode, not a PTY); left pane agent stdout/stderr, right pane Vibecode event spine (requires `[tui]` extra: `pip install -e ".[tui]"`)
 - `vibecode runs list` — list recent run session IDs from `.vibecode/runs/`
 - `vibecode runs show <session_id> [--events]` — show summary for a previous run; `--events` replays all events in order
 - `vibecode run-plan` — assemble an agent run plan without launching it
 - `vibecode history` — manage durable history summaries
 - `vibecode project` — manage the local project registry outside the repo
 - `vibecode export-agents` — write/update root AGENTS.md
-- `vibecode dashboard` — open an interactive TUI showing context cards, symbols, facts, and heuristics
-- `vibecode serve` — start an MCP stdio server exposing `get_file_card`, `find_symbol`, and `list_high_risk` for OpenCode
+- `vibecode dashboard` — open an interactive TUI showing context cards, symbols, facts, and heuristics (requires `[tui]` extra: `pip install -e ".[tui]"`)
+- `vibecode serve` — start an MCP stdio server exposing `get_file_card`, `find_symbol`, and `list_high_risk` for OpenCode (requires `[mcp]` extra: `pip install -e ".[mcp]"`)
 <!-- vibecode:agents:end -->
