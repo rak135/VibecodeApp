@@ -551,16 +551,6 @@ def _render_architecture_orientation(
         lines.append("")
 
     # --- Generated / runtime state ---
-    present_ignored = [
-        (subdir, label)
-        for subdir, label in _VIBECODE_IGNORED_SUBDIRS
-        if any(
-            rec.path.startswith(f".vibecode/{subdir}/") or
-            rec.path == f".vibecode/{subdir}"
-            for rec in records
-        )
-        or subdir in {"index", "current", "logs"}  # always show these if .vibecode exists
-    ]
     if any(rec.path.startswith(".vibecode/") for rec in records):
         lines.append("### Generated and runtime state")
         lines.append("")

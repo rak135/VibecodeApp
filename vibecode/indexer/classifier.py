@@ -101,7 +101,6 @@ def _is_test(posix: str) -> bool:
 
 def _is_doc(posix: str) -> bool:
     """Return True if *posix* looks like a documentation file."""
-    name = PurePosixPath(posix).name
     parts = posix.split("/")
     # docs/** directory
     if "docs" in parts[:-1]:
@@ -132,7 +131,6 @@ def guess_role(posix: str) -> str:
     Heuristics are applied from most-specific to most-general so that
     config filenames, tests, and docs are never mis-classified as API/engine.
     """
-    name = PurePosixPath(posix).name
     parts = posix.split("/")
     suffix = PurePosixPath(posix).suffix.lower()
 

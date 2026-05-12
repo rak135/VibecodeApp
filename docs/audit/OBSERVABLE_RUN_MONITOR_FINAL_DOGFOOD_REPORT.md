@@ -13,6 +13,8 @@
 
 This report validates that the observable run layer works end-to-end.
 
+**Post-fix update (2026-05-12):** The pre-existing test failure and 7 ruff lint issues identified in this report have been fixed. See `docs/audit/OBSERVABLE_RUN_MONITOR_FINAL_FIX.md` for details.
+
 ---
 
 ## 2. Validation Commands Run
@@ -48,15 +50,9 @@ Commands confirmed: `init`, `inventory`, `index`, `context`, `map`, `validate`, 
 python -m pytest -p no:cacheprovider -q
 ```
 
-**Result: 1 FAILED, 1753 PASSED** (248 s)
+**Result: 1754 PASSED** (250 s) — all tests green.
 
-| Test | Status |
-|------|--------|
-| `tests/test_vibecode_run.py::TestCmdRunPreflight::test_missing_gitignore_blocks_agent_launch` | **FAIL** (pre-existing) |
-| All other 1753 tests | **PASS** |
-
-**Pre-existing failure details:**  
-The test creates a repo without `.gitignore`, deletes it, and expects the error message to contain `"git-ignored"`. The actual error is `"Git working tree is dirty — 1 changed file(s): .vibecode/runs/<session_id>/events.jsonl"` — the run session artifact is written before the `.gitignore` guard fires, producing a dirty-tree error instead of the expected gitignore-missing message. This is a test fragility introduced by session artifact creation in the preflight phase; the production behaviour (blocking the run) is correct. This failure pre-dates this session and is documented in the project memory.
+**Post-fix update:** The pre-existing `test_missing_gitignore_blocks_agent_launch` failure (documented below in the original report) has been fixed by deferring `events.jsonl` creation until after the git preflight check.
 
 ---
 
@@ -66,19 +62,9 @@ The test creates a repo without `.gitignore`, deletes it, and expects the error 
 python -m ruff check vibecode/
 ```
 
-**Result: 7 errors (FAIL)**
+**Result: PASS** (0 errors)
 
-| File | Rule | Issue |
-|------|------|-------|
-| `vibecode/indexer/classifier.py:104` | F841 | `name` assigned but unused |
-| `vibecode/indexer/classifier.py:135` | F841 | `name` assigned but unused |
-| `vibecode/indexer/dependency_map.py:21` | F401 | `PurePosixPath` imported but unused |
-| `vibecode/indexer/repo_tree.py:554` | F841 | `present_ignored` assigned but unused |
-| `vibecode/indexer/test_map.py:6` | F401 | `re` imported but unused |
-| `vibecode/indexer/ts_symbols.py:57` | F821 | Undefined name `posix` |
-| `vibecode/registry.py:16` | F401 | `to_posix_str` imported but unused |
-
-These are pre-existing issues (the NOW.md previously noted "ruff clean" but the indexer files were not updated). The F821 (`posix` undefined in `ts_symbols.py`) is a latent bug that would surface only on TypeScript file parse errors. None of these affect the observable run layer being validated here.
+**Post-fix update:** All 7 previously-reported lint issues have been fixed (unused locals, unused imports, undefined name in ts_symbols.py).
 
 ---
 
@@ -198,24 +184,24 @@ The `vibecode run` pre-flight guard (`test_missing_gitignore_blocks_agent_launch
 python -m vibecode.cli check .
 ```
 
-**Result: FAIL** (exit code 1)
+**Result: PASS** (exit code 0)
 
 | Check | Status | Duration |
 |-------|--------|----------|
-| unit tests (`python -m pytest`) | **FAIL** | 248.5 s |
-| cli help | PASS | 0.078 s |
-| index command help | PASS | 0.063 s |
-| context command help | PASS | 0.078 s |
+| unit tests (`python -m pytest`) | **PASS** | 254.4 s |
+| cli help | PASS | 0.063 s |
+| index command help | PASS | 0.078 s |
+| context command help | PASS | 0.062 s |
 
-The unit test failure is the pre-existing `test_missing_gitignore_blocks_agent_launch` failure documented in §2.3. All other checks pass.
+**Post-fix update:** All four checks now pass after the preflight buffering fix and ruff lint fixes.
 
 ---
 
 ## 3. Known Limitations
 
-1. **Pre-existing test failure** — `test_missing_gitignore_blocks_agent_launch` fails because the run session artifact layer writes `events.jsonl` before the `.gitignore` guard fires, changing the error branch. The guard logic is correct; the test expectation is stale.
+1. ~~**Pre-existing test failure**~~ — **FIXED.** `test_missing_gitignore_blocks_agent_launch` now passes after deferring `events.jsonl` creation until after git preflight check.
 
-2. **Pre-existing ruff issues** — 7 lint errors in indexer files and registry. The F821 (`posix` undefined in `ts_symbols.py`) is a latent bug on TypeScript parse error paths. The rest are unused-variable/import hygiene. None affect the observable run layer.
+2. ~~**Pre-existing ruff issues**~~ — **FIXED.** All 7 ruff issues (unused locals/imports, undefined `posix`) are resolved. `ruff check vibecode` is clean.
 
 3. **No real OpenCode run possible** — The environment has no `opencode` binary. Agent logs (`agent_stdout.log`, `agent_stderr.log`), prompt snapshots (`opencode_prompt.md`), and `handoff_report.*` can only be verified end-to-end in an environment with OpenCode installed.
 
@@ -243,17 +229,22 @@ The observable run layer is complete and correct:
 - ✅ Monitor TUI helpers (`route_event`, `format_agent_line`, `format_vibecode_line`) work correctly  
 - ✅ Advisory/strict guard mode wired through `RunController → RunSummary → summary.json`  
 - ✅ MCP tool call instrumentation (`McpToolCalled`, `McpToolReturned`, `McpToolFailed`) implemented  
-- ✅ All 1753 tests pass (1 pre-existing failure unrelated to observable run layer)  
-- ⚠ 7 pre-existing ruff lint errors (not introduced by observable run work)  
+- ✅ All 1754 tests pass (the 1 pre-existing failure has been fixed)
+- ✅ All 7 ruff lint errors have been fixed
 - ⚠ Real end-to-end agent run not testable in this environment  
 
 ---
 
 ## 5. Next Recommended Work
 
-1. **Fix `test_missing_gitignore_blocks_agent_launch`** — either write `events.jsonl` after the gitignore check, or update the test to match the actual error branch.
-2. **Fix ruff errors** — especially the F821 undefined `posix` in `ts_symbols.py` (latent bug); the rest are minor cleanup.
+1. ~~**Fix `test_missing_gitignore_blocks_agent_launch`**~~ — **DONE.** Events are now buffered in memory until git preflight passes.
+
+2. ~~**Fix ruff errors**~~ — **DONE.** All 7 ruff issues resolved.
+
 3. **Refresh stale index** — run `vibecode index` so `run-plan` no longer warns about stale index.
+
 4. **Real OpenCode integration test** — add an integration smoke in CI that uses a stub/mock `opencode` binary (like the existing `fake_bin_ign` pattern) to verify `agent_stdout.log`, prompt snapshot, and `handoff_report.*` are written.
+
 5. **Monitor PTY test** — consider a headless Textual test using `textual.testing.Pilot` for basic TUI startup.
+
 6. **Clean `NOW.md` placeholder text** — update handoff to remove the placeholder warning from `vibecode validate`.

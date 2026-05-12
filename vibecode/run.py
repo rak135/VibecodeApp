@@ -56,6 +56,7 @@ from vibecode.diff_summary import DiffSummary, diff_summarise
 from vibecode.events import (
     EventLevel,
     EventSink,
+    InMemoryEventSink,
     MultiEventSink,
     NullEventSink,
     create_event,
@@ -483,8 +484,8 @@ class RunController:
         root = self.root
         vibecode_dir = root / ".vibecode"
         session = RunSession(root, self.session_id)
-        jsonl_sink = session.create_event_sink()
-        sinks: list[EventSink] = [jsonl_sink]
+        buffer_sink = InMemoryEventSink()
+        sinks: list[EventSink] = [buffer_sink]
         if not isinstance(self.sink, NullEventSink):
             sinks.append(self.sink)
         self.sink = MultiEventSink(sinks)
@@ -532,6 +533,11 @@ class RunController:
                        data={"phase": "warning", "blocking": False})
         self._emit(EVENT_GIT_PREFLIGHT, EventLevel.INFO, "Git preflight completed",
                    data={"phase": "completed", "passed": True, "dirty": bool(messages)})
+
+        jsonl_sink = session.create_event_sink()
+        for event in buffer_sink.events:
+            jsonl_sink.emit(event)
+        self.sink.add_sink(jsonl_sink)
 
         initial_git_state = None
         try:

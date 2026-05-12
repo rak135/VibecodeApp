@@ -13,7 +13,7 @@ from typing import Any, Optional
 
 import yaml
 
-from vibecode.paths import strip_to_posix, to_posix_str
+from vibecode.paths import strip_to_posix
 
 # ---------------------------------------------------------------------------
 # Public data structures

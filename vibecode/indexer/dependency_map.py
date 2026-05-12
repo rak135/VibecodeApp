@@ -18,7 +18,7 @@ import posixpath
 import re
 import warnings
 from datetime import datetime, timezone
-from pathlib import Path, PurePosixPath
+from pathlib import Path
 
 from vibecode.indexer.classifier import detect_language
 from vibecode.indexer.scanner import IndexedFile
