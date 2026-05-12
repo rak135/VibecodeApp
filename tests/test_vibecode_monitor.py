@@ -764,3 +764,237 @@ class TestMcpEventFormatting:
         evt = _evt(EVENT_MCP, message="McpToolCalled: mystery", data=None)
         line = format_vibecode_line(evt)
         assert EVENT_MCP in line
+
+
+# ---------------------------------------------------------------------------
+# Missing Textual optional dependency
+# ---------------------------------------------------------------------------
+
+
+class TestMissingTextual:
+    """Verify graceful behaviour when Textual is not installed."""
+
+    def test_cmd_monitor_returns_one_when_textual_unavailable(self, tmp_path, capsys):
+        import vibecode.monitor_app as mod
+
+        original = mod._TEXTUAL_AVAILABLE
+        try:
+            mod._TEXTUAL_AVAILABLE = False
+            args = SimpleNamespace(
+                repo_root=str(tmp_path),
+                task="test",
+                platform="opencode",
+                profile="safe",
+                allow_dirty=False,
+                no_index=True,
+                guard_mode="advisory",
+            )
+            rc = mod.cmd_monitor(args)
+        finally:
+            mod._TEXTUAL_AVAILABLE = original
+
+        assert rc == 1
+
+    def test_cmd_monitor_prints_install_hint_when_textual_unavailable(self, tmp_path, capsys):
+        import vibecode.monitor_app as mod
+
+        original = mod._TEXTUAL_AVAILABLE
+        try:
+            mod._TEXTUAL_AVAILABLE = False
+            args = SimpleNamespace(
+                repo_root=str(tmp_path),
+                task="test",
+                platform="opencode",
+                profile="safe",
+                allow_dirty=False,
+                no_index=True,
+                guard_mode="advisory",
+            )
+            mod.cmd_monitor(args)
+        finally:
+            mod._TEXTUAL_AVAILABLE = original
+
+        err = capsys.readouterr().err
+        assert "textual" in err.lower()
+        assert "pip install" in err
+
+    def test_missing_textual_message_mentions_install_extra(self):
+        from vibecode.monitor_app import _missing_textual_message
+
+        msg = _missing_textual_message("monitor")
+        assert "vibecode[tui]" in msg
+        assert "pip install" in msg
+
+    def test_monitor_app_module_importable_without_textual(self):
+        """format_agent_line, route_event etc. are importable even without Textual."""
+        from vibecode.monitor_app import (  # noqa: F401
+            TUIEventSink,
+            format_agent_line,
+            format_vibecode_line,
+            route_event,
+        )
+
+    def test_monitor_app_flag_is_bool(self):
+        import vibecode.monitor_app as mod
+
+        assert isinstance(mod._TEXTUAL_AVAILABLE, bool)
+
+    def test_cmd_dashboard_returns_one_when_textual_unavailable(self, tmp_path, capsys):
+        import vibecode.tui_app as mod
+
+        original = mod._TEXTUAL_AVAILABLE
+        try:
+            mod._TEXTUAL_AVAILABLE = False
+            args = SimpleNamespace(repo_root=tmp_path)
+            rc = mod.cmd_dashboard(args)
+        finally:
+            mod._TEXTUAL_AVAILABLE = original
+
+        assert rc == 1
+
+    def test_cmd_dashboard_prints_install_hint_when_textual_unavailable(self, tmp_path, capsys):
+        import vibecode.tui_app as mod
+
+        original = mod._TEXTUAL_AVAILABLE
+        try:
+            mod._TEXTUAL_AVAILABLE = False
+            args = SimpleNamespace(repo_root=tmp_path)
+            mod.cmd_dashboard(args)
+        finally:
+            mod._TEXTUAL_AVAILABLE = original
+
+        err = capsys.readouterr().err
+        assert "textual" in err.lower()
+        assert "pip install" in err
+
+
+# ---------------------------------------------------------------------------
+# Monitor event pump smoke tests (no real Textual or OpenCode)
+# ---------------------------------------------------------------------------
+
+
+class TestMonitorEventPumpSmoke:
+    """End-to-end event routing via TUIEventSink without running Textual or OpenCode.
+
+    Proves the monitor consumes the Vibecode event spine (TUIEventSink →
+    call_from_thread → route_event → format_*) rather than scraped printed text.
+    Running agents or TUI widgets are never involved.
+    """
+
+    def _build_pipeline(self):
+        """Return (sink, agent_log, event_log) using a FakeApp."""
+        agent_log: list[str] = []
+        event_log: list[str] = []
+
+        class FakeApp:
+            """Simulates MonitorApp's threading bridge and pane dispatch."""
+
+            def call_from_thread(self, fn, *args):
+                fn(*args)
+
+            def handle_vibecode_event(self, event):
+                pane = route_event(event)
+                if pane == "agent":
+                    agent_log.append(format_agent_line(event))
+                else:
+                    event_log.append(format_vibecode_line(event))
+
+        sink = TUIEventSink(FakeApp())
+        return sink, agent_log, event_log
+
+    def test_agent_stdout_lands_in_agent_log_not_event_log(self):
+        sink, agent_log, event_log = self._build_pipeline()
+        sink.emit(_evt(EVENT_AGENT_PROCESS, message="stdout from agent"))
+        assert len(agent_log) == 1
+        assert "stdout from agent" in agent_log[0]
+        assert len(event_log) == 0
+
+    def test_stderr_agent_event_lands_in_agent_log(self):
+        sink, agent_log, event_log = self._build_pipeline()
+        sink.emit(_evt(EVENT_AGENT_PROCESS, message="error line", data={"phase": "stderr"}))
+        assert len(agent_log) == 1
+        assert "[stderr]" in agent_log[0]
+        assert len(event_log) == 0
+
+    def test_lifecycle_event_lands_in_event_log_not_agent_log(self):
+        sink, agent_log, event_log = self._build_pipeline()
+        sink.emit(_evt(EVENT_RUN_LIFECYCLE, message="Run started"))
+        assert len(event_log) == 1
+        assert EVENT_RUN_LIFECYCLE in event_log[0]
+        assert len(agent_log) == 0
+
+    def test_guard_event_lands_in_event_log(self):
+        sink, agent_log, event_log = self._build_pipeline()
+        sink.emit(_evt(EVENT_GUARD, message="Guard completed"))
+        assert len(event_log) == 1
+        assert EVENT_GUARD in event_log[0]
+        assert len(agent_log) == 0
+
+    def test_check_event_lands_in_event_log(self):
+        sink, agent_log, event_log = self._build_pipeline()
+        sink.emit(_evt(EVENT_CHECK, message="Checks passed"))
+        assert len(event_log) == 1
+        assert EVENT_CHECK in event_log[0]
+        assert len(agent_log) == 0
+
+    def test_guard_finding_lands_in_event_log(self):
+        sink, agent_log, event_log = self._build_pipeline()
+        sink.emit(_evt(
+            EVENT_GUARD_FINDING,
+            message="finding",
+            data={
+                "severity": "warning",
+                "category": "test-balance",
+                "path": "src/x.py",
+                "title": "Some finding",
+            },
+        ))
+        assert len(event_log) == 1
+        assert "Some finding" in event_log[0]
+        assert len(agent_log) == 0
+
+    def test_mcp_event_lands_in_event_log(self):
+        sink, agent_log, event_log = self._build_pipeline()
+        sink.emit(_evt(
+            EVENT_MCP,
+            message="McpToolCalled: get_file_card",
+            data={"tool": "get_file_card"},
+        ))
+        assert len(event_log) == 1
+        assert len(agent_log) == 0
+
+    def test_mixed_event_types_route_to_correct_panes(self):
+        sink, agent_log, event_log = self._build_pipeline()
+        events = [
+            _evt(EVENT_AGENT_PROCESS, message="agent line 1"),
+            _evt(EVENT_RUN_LIFECYCLE, message="Run started"),
+            _evt(EVENT_AGENT_PROCESS, message="agent line 2"),
+            _evt(EVENT_GUARD, message="Guard done"),
+            _evt(EVENT_AGENT_PROCESS, message="agent line 3"),
+            _evt(EVENT_CHECK, message="Checks done"),
+        ]
+        for e in events:
+            sink.emit(e)
+
+        assert len(agent_log) == 3
+        assert len(event_log) == 3
+        assert "agent line 1" in agent_log[0]
+        assert "agent line 2" in agent_log[1]
+        assert "agent line 3" in agent_log[2]
+
+    def test_events_preserved_in_emission_order(self):
+        sink, agent_log, _ = self._build_pipeline()
+        for i in range(5):
+            sink.emit(_evt(EVENT_AGENT_PROCESS, message=f"line {i}"))
+        assert agent_log == [f"line {i}" for i in range(5)]
+
+    def test_event_log_includes_timestamp_from_event(self):
+        sink, _, event_log = self._build_pipeline()
+        sink.emit(_evt(EVENT_GUARD, message="guard done"))
+        assert "12:00:00" in event_log[0]
+
+    def test_agent_log_strips_trailing_newline(self):
+        sink, agent_log, _ = self._build_pipeline()
+        sink.emit(_evt(EVENT_AGENT_PROCESS, message="line\n"))
+        assert not agent_log[0].endswith("\n")
+

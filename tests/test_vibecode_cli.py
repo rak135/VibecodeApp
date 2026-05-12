@@ -115,6 +115,18 @@ def test_export_agents_help_exits_zero():
     assert exc_info.value.code == 0
 
 
+def test_monitor_help_exits_zero():
+    with pytest.raises(SystemExit) as exc_info:
+        main(["monitor", "--help"])
+    assert exc_info.value.code == 0
+
+
+def test_dashboard_help_exits_zero():
+    with pytest.raises(SystemExit) as exc_info:
+        main(["dashboard", "--help"])
+    assert exc_info.value.code == 0
+
+
 def test_no_command_returns_zero():
     assert main([]) == 0
 
@@ -122,6 +134,47 @@ def test_no_command_returns_zero():
 def test_import_vibecode():
     import vibecode
     assert vibecode.__version__ == "0.1.0"
+
+
+# ---------------------------------------------------------------------------
+# Optional Textual dependency — CLI guard tests
+# ---------------------------------------------------------------------------
+
+
+def test_base_cli_help_works_when_textual_unavailable():
+    """Top-level --help must not import Textual."""
+    import vibecode.monitor_app as mon_mod
+    import vibecode.tui_app as tui_mod
+
+    original_mon = mon_mod._TEXTUAL_AVAILABLE
+    original_tui = tui_mod._TEXTUAL_AVAILABLE
+    try:
+        mon_mod._TEXTUAL_AVAILABLE = False
+        tui_mod._TEXTUAL_AVAILABLE = False
+        with pytest.raises(SystemExit) as exc_info:
+            main(["--help"])
+        assert exc_info.value.code == 0
+    finally:
+        mon_mod._TEXTUAL_AVAILABLE = original_mon
+        tui_mod._TEXTUAL_AVAILABLE = original_tui
+
+
+def test_non_monitor_command_works_when_textual_unavailable():
+    """Non-TUI commands must work when Textual is absent."""
+    import vibecode.monitor_app as mon_mod
+    import vibecode.tui_app as tui_mod
+
+    original_mon = mon_mod._TEXTUAL_AVAILABLE
+    original_tui = tui_mod._TEXTUAL_AVAILABLE
+    try:
+        mon_mod._TEXTUAL_AVAILABLE = False
+        tui_mod._TEXTUAL_AVAILABLE = False
+        with pytest.raises(SystemExit) as exc_info:
+            main(["guard", "--help"])
+        assert exc_info.value.code == 0
+    finally:
+        mon_mod._TEXTUAL_AVAILABLE = original_mon
+        tui_mod._TEXTUAL_AVAILABLE = original_tui
 
 
 # ---------------------------------------------------------------------------

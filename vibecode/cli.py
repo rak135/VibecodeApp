@@ -661,9 +661,8 @@ def _dispatch(args, parser) -> int:
                 "Hint: index files are missing. Run 'vibecode inventory' to generate them.",
                 file=sys.stderr,
             )
-        from vibecode.tui_app import VibecodeTUI
-        VibecodeTUI(repo_root=args.repo_root).run()
-        return 0
+        from vibecode.tui_app import cmd_dashboard
+        return cmd_dashboard(args)
 
     if args.command == "monitor":
         args.repo_root = _resolve_repo_root(args)
