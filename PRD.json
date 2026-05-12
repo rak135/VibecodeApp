@@ -483,7 +483,7 @@
     {
       "title": "P13.2 Review OpenCode command and clean validation fix",
       "description": "Review the P13.1 implementation.\n\nWrite review output to:\n`docs/audit/OBSERVABLE_RUN_MONITOR_P13_COMMAND_BASELINE_REVIEW.md`\n\nReview scope:\n- `vibecode/adapters/opencode.py` command resolution and availability checks.\n- Any narrow changes to `vibecode/run.py` or `vibecode/process_runner.py`.\n- Fake OpenCode default discovery.\n- Explicit `OPENCODE_COMMAND` behavior.\n- Compound command parsing.\n- Missing command errors.\n- stdout/stderr streaming.\n- exit code preservation.\n- prompt snapshot stdin equality.\n- advisory guard and strict guard behavior.\n- `.gitignore`, tracked temp artifact removals, and test/temp hygiene.\n\nRequire evidence:\n- Exact validation commands and pass/fail status.\n- Proof that the independent-audit targeted subset now passes.\n- Before/after `git status --short` explanation showing validation does not create tracked temp churn.\n- Test evidence that command discovery resolves executable and arguments separately.\n\nWatch for:\n- `shutil.which()` still being called with `opencode run` as one string.\n- Availability checks accidentally launching an agent session.\n- Windows fake `.cmd` runner regressions.\n- Advisory guard errors becoming hard failures by default.\n- Tests passing only because `OPENCODE_COMMAND` is set.\n\nDo not modify implementation files. Only write the review document.",
-      "completed": false,
+      "completed": true,
       "engine": "codex",
       "model": "gpt-5.5",
       "engine_args": [
