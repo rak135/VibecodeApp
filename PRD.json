@@ -588,7 +588,7 @@
     {
       "title": "P16.2 Review monitor runtime and optional dependency behavior",
       "description": "Review the P16.1 implementation.\n\nWrite review output to:\n`docs/audit/OBSERVABLE_RUN_MONITOR_P16_MONITOR_OPTIONAL_DEPS_REVIEW.md`\n\nCheck:\n- `pyproject.toml` dependency/extras contract.\n- `vibecode/cli.py` and `vibecode/monitor_app.py` import boundaries.\n- Monitor fake-run/event-spine smoke tests.\n- CLI behavior when Textual is missing, if Textual remains optional.\n- Dashboard import behavior if dependency handling changed.\n\nRequire evidence:\n- Exact test names and command results.\n- Proof monitor uses `VibecodeEvent`/event sinks, not scraped stdout text.\n- Clear user-facing error or install guidance for missing optional Textual.\n- Confirmation that monitor still states it is not a PTY.\n\nWatch for:\n- Base CLI broken because `textual` is imported too early.\n- Monitor tests only mocking `MonitorApp.run()`.\n- Packaging says Textual optional but docs/tests assume it is always installed.\n- Dashboard regressions.\n\nDo not modify implementation files. Only write the review document.",
-      "completed": false,
+      "completed": true,
       "engine": "codex",
       "model": "gpt-5.5",
       "engine_args": [
