@@ -623,7 +623,7 @@
     {
       "title": "P17.2 Review docs and AGENTS truth alignment",
       "description": "Review the P17.1 documentation update.\n\nWrite review output to:\n`docs/audit/OBSERVABLE_RUN_MONITOR_P17_DOCS_TRUTH_REVIEW.md`\n\nCheck:\n- README, Quickstart, AGENTS, and `vibecode/context/agents_export.py`.\n- Actual CLI help for run/monitor/runs/serve.\n- Actual `pyproject.toml` dependency/extras state.\n- Actual artifact paths written by run/session code.\n\nRequire evidence:\n- Source file paths and exact sections inspected.\n- Comparison of docs claims against code/CLI help, not old audit reports.\n- Tests run and pass/fail status.\n\nWatch for:\n- Plain install docs implying monitor/serve work when extras are required.\n- Artifact lists claiming files are always written when optional or not implemented.\n- MCP observability described as live per-run monitor truth when only side-log/best-effort.\n- Advisory guard docs implying severity is reduced or findings are hidden.\n- AGENTS.md and generated AGENTS template disagreeing.\n\nDo not modify docs or implementation files. Only write the review document.",
-      "completed": false,
+      "completed": true,
       "engine": "codex",
       "model": "gpt-5.5",
       "engine_args": [
