@@ -435,7 +435,7 @@
     {
       "title": "P12.1 Final validation and dogfood report",
       "description": "Run final validation and write an end-to-end dogfood report.\n\nRequired validation:\n- python -m compileall vibecode\n- full pytest if practical; otherwise explain why not and run the broadest safe subset\n- a fake/safe monitor run if possible without requiring paid/real OpenCode\n- a real OpenCode smoke run only if available and safe in the environment\n- show-run/replay command smoke if implemented\n- verify run folder contains:\n  - events.jsonl\n  - summary.json\n  - prompt/context snapshots when generated\n  - agent logs when an agent run happened\n  - guard report when guard ran\n\nWrite:\ndocs/audit/OBSERVABLE_RUN_MONITOR_FINAL_DOGFOOD_REPORT.md\n\nReport must include:\n- exact commands run,\n- pass/fail results,\n- known limitations,\n- any skipped checks and why,\n- whether the product goal is met,\n- next recommended work.\n\nDo not hide failures. If something is broken, say exactly what.",
-      "completed": false,
+      "completed": true,
       "engine": "copilot",
       "model": "claude-sonnet-4.6",
       "engine_args": [
