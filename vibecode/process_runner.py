@@ -11,6 +11,7 @@ Full interactive PTY/ConPTY support is out of scope for this module.
 
 from __future__ import annotations
 
+import os
 import subprocess
 import threading
 from dataclasses import dataclass
@@ -27,6 +28,23 @@ class ProcessResult:
     exit_code: int
     stdout: str
     stderr: str
+
+
+def _kill_process_tree(proc: subprocess.Popen[str]) -> None:
+    """Best-effort termination of the shell and child process tree."""
+    if os.name == "nt":
+        try:
+            subprocess.run(
+                ["taskkill", "/PID", str(proc.pid), "/T", "/F"],
+                stdout=subprocess.DEVNULL,
+                stderr=subprocess.DEVNULL,
+                check=False,
+                timeout=10,
+            )
+            return
+        except (OSError, subprocess.TimeoutExpired):
+            pass
+    proc.kill()
 
 
 def _read_stream(
@@ -148,11 +166,15 @@ def run_streaming(
         proc.wait(timeout=timeout)
     except subprocess.TimeoutExpired:
         timed_out = True
-        proc.kill()
+        _kill_process_tree(proc)
         try:
             proc.wait(timeout=10)
         except subprocess.TimeoutExpired:
-            pass
+            proc.kill()
+            try:
+                proc.wait(timeout=5)
+            except subprocess.TimeoutExpired:
+                pass
 
     stdout_thread.join(timeout=10)
     stderr_thread.join(timeout=10)

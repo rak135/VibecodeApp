@@ -170,11 +170,45 @@ All helpers import and execute correctly:
 
 ### 2.10 Real OpenCode Smoke Run
 
-**SKIPPED** — No `opencode` binary is available in the environment. A real smoke run would require:
-- A valid OpenCode installation and a paid API key.
-- A live terminal session for the TUI.
+**Result: EXECUTED.** The previous "skipped" claim was wrong for this
+environment. `opencode` is installed and responds:
 
-The `vibecode run` pre-flight guard (`test_missing_gitignore_blocks_agent_launch` and companion tests) and post-run guard/check/handoff pipeline are fully covered by the existing test suite.
+```text
+Get-Command opencode -ErrorAction SilentlyContinue
+Path: C:\Users\Martin\AppData\Roaming\npm\opencode.ps1
+
+opencode --version
+1.14.48
+```
+
+Successful real smoke command:
+
+```powershell
+$env:OPENCODE_COMMAND='opencode run'
+python -m vibecode.cli run . --platform opencode --guard-mode advisory --allow-dirty --task "REAL OPENCODE SMOKE TEST ONLY. Do not modify any files. Inspect the VibecodeApp observable run prompt/context and print a concise confirmation that the agent process executed. Include the marker VIBECODE_REAL_OPENCODE_SMOKE_OK in your final output."
+```
+
+Session: `20260512T051751673320Z`
+
+The OpenCode process executed, exited 0, and wrote
+`VIBECODE_REAL_OPENCODE_SMOKE_OK` to `agent_stdout.log`. Vibecode wrote
+`events.jsonl`, `summary.json`, `opencode_prompt.md`, `context_pack.md`,
+`agent_stdout.log`, `agent_stderr.log`, `guard_report.json`,
+`guard_report.md`, and `handoff_report.json`.
+
+The overall status was `incomplete`, not `success`, because handoff validation
+flagged a pre-existing false-positive placeholder issue in
+`.vibecode/handoff/NOW.md`. That validator was fixed after the smoke.
+
+After fixing default command construction, a second no-env smoke used the same
+`python -m vibecode.cli run ...` command and launched `opencode run` directly
+(session `20260512T052734396950Z`). That run failed honestly with
+`exit_code=-1` because OpenCode exceeded Vibecode's 300 second agent timeout
+after doing extra inspection/test commands. Artifacts were still written and
+`vibecode runs show --events` can replay the session.
+
+Detailed evidence is in
+`docs/audit/OBSERVABLE_RUN_MONITOR_REAL_OPENCODE_SMOKE.md`.
 
 ---
 
@@ -203,7 +237,7 @@ python -m vibecode.cli check .
 
 2. ~~**Pre-existing ruff issues**~~ — **FIXED.** All 7 ruff issues (unused locals/imports, undefined `posix`) are resolved. `ruff check vibecode` is clean.
 
-3. **No real OpenCode run possible** — The environment has no `opencode` binary. Agent logs (`agent_stdout.log`, `agent_stderr.log`), prompt snapshots (`opencode_prompt.md`), and `handoff_report.*` can only be verified end-to-end in an environment with OpenCode installed.
+3. ~~**No real OpenCode run possible**~~ — **CORRECTED.** OpenCode is available (`opencode --version` -> `1.14.48`) and real smoke sessions were executed. The first real smoke proved successful agent execution; the second proved the default command path now launches `opencode run` but can still time out if the agent keeps working past Vibecode's 300 second timeout.
 
 4. **Monitor TUI non-interactive** — `vibecode monitor` requires an interactive terminal with full Textual rendering; it cannot be smoke-tested in a non-PTY CI/scripted environment. Validated via unit tests and helper-function smoke only.
 
@@ -243,7 +277,7 @@ The observable run layer is complete and correct:
 
 3. **Refresh stale index** — run `vibecode index` so `run-plan` no longer warns about stale index.
 
-4. **Real OpenCode integration test** — add an integration smoke in CI that uses a stub/mock `opencode` binary (like the existing `fake_bin_ign` pattern) to verify `agent_stdout.log`, prompt snapshot, and `handoff_report.*` are written.
+4. ~~**Real OpenCode integration test**~~ — **DONE as a fake CI regression.** A fake `opencode` path now verifies launch, stdout/stderr logs, prompt/context snapshots, summary, agent events, and advisory guard behavior without requiring a paid model/API. Real OpenCode smoke remains a manual/local validation because credentials and model behavior are environment-specific.
 
 5. **Monitor PTY test** — consider a headless Textual test using `textual.testing.Pilot` for basic TUI startup.
 

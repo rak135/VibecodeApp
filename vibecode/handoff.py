@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import json
+import re
 import sys
 from dataclasses import dataclass, field
 from pathlib import Path
@@ -41,12 +42,11 @@ class HandoffResult:
 
 
 # Placeholder phrases that indicate the file was never filled in.
-_PLACEHOLDER_PATTERNS: tuple[str, ...] = (
-    "TODO",
-    "TBD",
-    "placeholder",
-    "<!--",
+_TODO_TBD_PLACEHOLDER_RE = re.compile(
+    r"^\s*(?:[-*]\s*)?(?:TODO|TBD)\b(?:\s*:|\s*$)",
+    re.IGNORECASE | re.MULTILINE,
 )
+_PLACEHOLDER_WORD_RE = re.compile(r"\bplaceholder\b", re.IGNORECASE)
 
 
 def _read_handoff_file(root: Path, rel_path: str) -> str | None:
@@ -62,8 +62,11 @@ def _lines_of(content: str) -> list[str]:
 
 
 def _has_placeholder(content: str) -> bool:
-    upper = content.upper()
-    return any(pat.upper() in upper for pat in _PLACEHOLDER_PATTERNS)
+    return (
+        "<!--" in content
+        or _TODO_TBD_PLACEHOLDER_RE.search(content) is not None
+        or _PLACEHOLDER_WORD_RE.search(content) is not None
+    )
 
 
 def _has_empty_bullets(content: str) -> bool:

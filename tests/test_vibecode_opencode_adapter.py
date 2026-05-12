@@ -11,6 +11,7 @@ from vibecode.adapters.opencode import (
     OpenCodeStatus,
     _default_command,
     check_opencode,
+    resolve_opencode_command,
 )
 
 
@@ -20,8 +21,8 @@ from vibecode.adapters.opencode import (
 
 
 class TestDefaultCommand:
-    def test_returns_opencode(self):
-        assert _default_command() == "opencode"
+    def test_returns_non_interactive_opencode_run(self):
+        assert _default_command() == "opencode run"
 
 
 # ---------------------------------------------------------------------------
@@ -170,3 +171,63 @@ class TestOpenCodeStatus:
 
         status = OpenCodeStatus(available=False, command="opencode", message="missing")
         assert bool(status) is False
+
+
+# ---------------------------------------------------------------------------
+# resolve_opencode_command — env override and PATH discovery
+# ---------------------------------------------------------------------------
+
+
+class TestResolveOpencodeCommand:
+    def test_env_override_simple_binary(self):
+        """OPENCODE_COMMAND with a simple binary is returned as-is."""
+        result = resolve_opencode_command({"OPENCODE_COMMAND": "/usr/local/bin/opencode"})
+        assert result == "/usr/local/bin/opencode"
+
+    def test_env_override_compound_command(self):
+        """OPENCODE_COMMAND with a compound value (binary + args) is returned as-is."""
+        result = resolve_opencode_command({"OPENCODE_COMMAND": "python /path/to/opencode.py"})
+        assert result == "python /path/to/opencode.py"
+
+    def test_env_override_with_space_in_value(self):
+        """OPENCODE_COMMAND='opencode run' override is honoured without PATH lookup."""
+        result = resolve_opencode_command({"OPENCODE_COMMAND": "opencode run"})
+        assert result == "opencode run"
+
+    @patch("vibecode.adapters.opencode.shutil.which", return_value="/usr/bin/opencode")
+    def test_default_returns_opencode_run_when_binary_found(self, _which):
+        """Without OPENCODE_COMMAND, returns 'opencode run' when opencode is on PATH."""
+        result = resolve_opencode_command({})
+        assert result == "opencode run"
+
+    @patch("vibecode.adapters.opencode.shutil.which", return_value=None)
+    def test_default_returns_none_when_binary_missing(self, _which):
+        """Without OPENCODE_COMMAND, returns None when opencode is not on PATH."""
+        result = resolve_opencode_command({})
+        assert result is None
+
+    @patch("vibecode.adapters.opencode.shutil.which")
+    def test_default_checks_only_executable_not_compound_string(self, mock_which):
+        """The default binary lookup must call which('opencode'), NOT which('opencode run').
+
+        Regression test: resolving the default command must split 'opencode run' and
+        check only the executable part so shutil.which is never given a string with a
+        space (which would always return None on most platforms).
+        """
+        mock_which.return_value = None
+        resolve_opencode_command({})
+
+        # which() must have been called at most once, and never with a string
+        # that contains a space (i.e. never with the whole "opencode run" string).
+        for call in mock_which.call_args_list:
+            arg = call.args[0] if call.args else call.kwargs.get("name", "")
+            assert " " not in arg, (
+                f"shutil.which called with compound string {arg!r}; "
+                "only the executable part ('opencode') should be checked."
+            )
+
+    def test_env_override_wins_over_missing_path(self):
+        """OPENCODE_COMMAND is returned even when the binary is absent from PATH."""
+        # No PATH mocking needed: env_cmd takes priority before any PATH lookup.
+        result = resolve_opencode_command({"OPENCODE_COMMAND": "my-custom-opencode"})
+        assert result == "my-custom-opencode"

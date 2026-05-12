@@ -421,6 +421,84 @@ class TestRunControllerSummaryWritten:
         assert summary.task == "my task"
         assert summary.stdout == "agent output\n"
 
+    def test_fake_opencode_orchestration_writes_artifacts_and_preserves_advisory_guard(
+        self, repo: Path, fake_bin: Path
+    ):
+        """CI regression for the OpenCode launch path without a real model/API."""
+        _write(repo / "README.md", "# Test Project\n")
+        _git(repo, "add", "README.md")
+        _git(repo, "commit", "-m", "add readme")
+
+        argv_capture = repo / ".vibecode" / "tmp" / "fake_opencode_argv.json"
+        stdin_capture = repo / ".vibecode" / "tmp" / "fake_opencode_stdin.md"
+        script = fake_bin / "opencode.py"
+        script.write_text(
+            "import json\n"
+            "import sys\n"
+            "from pathlib import Path\n"
+            "argv = sys.argv[1:]\n"
+            "if '--version' in argv:\n"
+            "    sys.stdout.write('fake-opencode 1.0.0\\n')\n"
+            "    raise SystemExit(0)\n"
+            "stdin_text = sys.stdin.read()\n"
+            f"Path({str(argv_capture)!r}).parent.mkdir(parents=True, exist_ok=True)\n"
+            f"Path({str(argv_capture)!r}).write_text(json.dumps(argv), encoding='utf-8')\n"
+            f"Path({str(stdin_capture)!r}).write_text(stdin_text, encoding='utf-8')\n"
+            f"Path({str(repo / 'README.md')!r}).write_text('# Changed by fake OpenCode\\n', encoding='utf-8')\n"
+            "sys.stdout.write('FAKE_OPENCODE_STDOUT\\n')\n"
+            "sys.stderr.write('FAKE_OPENCODE_STDERR\\n')\n",
+            encoding="utf-8",
+        )
+        (fake_bin / "opencode.cmd").write_text(
+            "@echo off\n" + '"' + sys.executable + '"' + ' "%~dp0opencode.py" %*\n',
+            encoding="utf-8",
+        )
+
+        controller = RunController(
+            root=repo,
+            task="fake opencode regression",
+            platform="opencode",
+            profile_name="safe",
+            allow_dirty=False,
+            no_index=True,
+            session_id="fake-opencode-regression",
+        )
+
+        summary, exit_code = controller.execute()
+
+        assert exit_code == 0
+        assert summary is not None
+        assert summary.command == "opencode run"
+        assert summary.guard_mode == "advisory"
+        assert summary.guard is not None
+        assert summary.guard.passed is False
+        assert summary.overall_status == "needs_review"
+        assert argv_capture.exists()
+        assert json.loads(argv_capture.read_text(encoding="utf-8")) == ["run"]
+        assert stdin_capture.exists()
+        assert "fake opencode regression" in stdin_capture.read_text(encoding="utf-8")
+
+        session_dir = repo / ".vibecode" / "runs" / "fake-opencode-regression"
+        assert (session_dir / "agent_stdout.log").read_text(encoding="utf-8") == "FAKE_OPENCODE_STDOUT\n"
+        assert (session_dir / "agent_stderr.log").read_text(encoding="utf-8") == "FAKE_OPENCODE_STDERR\n"
+        assert (session_dir / "opencode_prompt.md").stat().st_size > 0
+        assert (session_dir / "context_pack.md").stat().st_size > 0
+        assert (session_dir / "summary.json").exists()
+
+        events = [
+            json.loads(line)
+            for line in (session_dir / "events.jsonl").read_text(encoding="utf-8").splitlines()
+        ]
+        agent_phases = [
+            event["data"].get("phase")
+            for event in events
+            if event["type"] == EVENT_AGENT_PROCESS and event.get("data")
+        ]
+        assert "started" in agent_phases
+        assert "stdout" in agent_phases
+        assert "stderr" in agent_phases
+        assert "finished" in agent_phases
+
 
 # ---------------------------------------------------------------------------
 # Tests: failure events

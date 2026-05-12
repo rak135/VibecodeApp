@@ -291,7 +291,7 @@ class TestFormatRunList:
         long_task = "a" * 100
         runs = [{"session_id": "s", "task": long_task, "platform": "opencode"}]
         output = format_run_list(runs)
-        assert "…" in output
+        assert "..." in output
 
 
 class TestFormatRunShow:

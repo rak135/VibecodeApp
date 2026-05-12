@@ -17,7 +17,13 @@ _BUILTIN_EXCLUDE_DIRS: frozenset[str] = frozenset({
     "dist",
     "build",
     ".pytest_cache",
+    ".pytest-tmp",
+    ".pytest-local-check",
+    ".check-tmp",
     ".mypy_cache",
+    ".ruff_cache",
+    "tmp",
+    "temp",
 })
 
 DEFAULT_SIZE_LIMIT = 10 * 1024 * 1024  # 10 MiB

@@ -135,6 +135,11 @@ def _artifact_paths(run_dir: Path) -> list[tuple[str, Path]]:
     return [(label, run_dir / name) for label, name in candidates if (run_dir / name).exists()]
 
 
+def _console_safe(text: str) -> str:
+    """Return text that is safe for legacy Windows console encodings."""
+    return text.encode("ascii", errors="backslashreplace").decode("ascii")
+
+
 def format_run_list(runs: list[dict[str, Any]]) -> str:
     """Return a human-readable listing of available runs."""
     if not runs:
@@ -143,13 +148,13 @@ def format_run_list(runs: list[dict[str, Any]]) -> str:
     lines: list[str] = []
     for run in runs:
         sid = run["session_id"]
-        status = run.get("overall_status", "—")
+        status = run.get("overall_status", "-")
         task = (run.get("task") or "").strip()
-        task_snippet = (task[:60] + "…") if len(task) > 60 else task
-        platform = run.get("platform", "—")
-        started = run.get("started_at", "—")
+        task_snippet = (task[:60] + "...") if len(task) > 60 else task
+        platform = run.get("platform", "-")
+        started = run.get("started_at", "-")
         line = f"  {sid}  [{status}]  {platform}"
-        if started != "—":
+        if started != "-":
             line += f"  started={started}"
         if task_snippet:
             line += f"  task={task_snippet!r}"
@@ -168,7 +173,7 @@ def format_run_show(
 ) -> str:
     """Return a human-readable summary for a single run."""
     lines: list[str] = []
-    sep = "─" * 60
+    sep = "-" * 60
 
     lines.append(sep)
     lines.append(f"Run: {summary.get('session_id', run_dir.name)}")
@@ -177,19 +182,19 @@ def format_run_show(
     # Core metadata
     task = (summary.get("task") or "").strip()
     lines.append(f"Task         : {task or '(none)'}")
-    lines.append(f"Platform     : {summary.get('platform', '—')}")
-    lines.append(f"Profile      : {summary.get('profile', '—')}")
-    lines.append(f"Started      : {summary.get('started_at', '—')}")
-    lines.append(f"Finished     : {summary.get('finished_at', '—')}")
-    lines.append(f"Exit code    : {summary.get('exit_code', '—')}")
-    lines.append(f"Agent status : {summary.get('agent_status', '—')}")
-    lines.append(f"Guard mode   : {summary.get('guard_mode', '—')}")
-    lines.append(f"Overall      : {summary.get('overall_status', '—')}")
+    lines.append(f"Platform     : {summary.get('platform', '-')}")
+    lines.append(f"Profile      : {summary.get('profile', '-')}")
+    lines.append(f"Started      : {summary.get('started_at', '-')}")
+    lines.append(f"Finished     : {summary.get('finished_at', '-')}")
+    lines.append(f"Exit code    : {summary.get('exit_code', '-')}")
+    lines.append(f"Agent status : {summary.get('agent_status', '-')}")
+    lines.append(f"Guard mode   : {summary.get('guard_mode', '-')}")
+    lines.append(f"Overall      : {summary.get('overall_status', '-')}")
 
     # Guard counts
     guard = summary.get("guard")
     if isinstance(guard, dict):
-        passed_g = guard.get("passed", "—")
+        passed_g = guard.get("passed", "-")
         counts = guard.get("counts_by_severity", {})
         errors_c = counts.get("error", 0)
         warnings_c = counts.get("warning", 0)
@@ -232,7 +237,7 @@ def format_run_show(
     # Handoff
     handoff = summary.get("handoff")
     if isinstance(handoff, dict):
-        status_h = handoff.get("status", "—")
+        status_h = handoff.get("status", "-")
         passed_h = status_h == "ok"
         lines.append(f"Handoff      : {'passed' if passed_h else 'failed'}")
         if not passed_h:
@@ -317,7 +322,7 @@ def _cmd_runs_list(args: Any) -> int:
     if not runs:
         print(f"No runs found under {runs_dir}.")
     else:
-        print(format_run_list(runs))
+        print(_console_safe(format_run_list(runs)))
     return 0
 
 
@@ -338,7 +343,7 @@ def _cmd_runs_show(args: Any) -> int:
             print(
                 "Available session IDs (most recent first): "
                 + ", ".join(ids)
-                + ("…" if len(available) > 5 else ""),
+                + ("..." if len(available) > 5 else ""),
                 file=sys.stderr,
             )
         return 1
@@ -385,5 +390,5 @@ def _cmd_runs_show(args: Any) -> int:
         event_errors=event_errors,
         show_events=show_events,
     )
-    print(output)
+    print(_console_safe(output))
     return 0

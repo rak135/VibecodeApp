@@ -31,23 +31,23 @@ class OpenCodeStatus:
 
 
 def _default_command() -> str:
-    """Return the default OpenCode command name."""
-    return "opencode"
+    """Return the default non-interactive OpenCode command."""
+    return "opencode run"
 
 
 def resolve_opencode_command(env: Mapping[str, str] | None = None) -> str | None:
     """Resolve the OpenCode command used by run and run-plan.
 
     ``OPENCODE_COMMAND`` wins even when the default ``opencode`` binary is not
-    on PATH.  If no explicit command is configured, return the default command
-    only when it can be found on PATH.
+    on PATH.  If no explicit command is configured, return the default
+    non-interactive command only when its binary can be found on PATH.
     """
     source = env if env is not None else os.environ
     env_cmd = source.get("OPENCODE_COMMAND")
     if env_cmd:
         return env_cmd
     default_cmd = _default_command()
-    if shutil.which(default_cmd):
+    if shutil.which(default_cmd.split()[0]):
         return default_cmd
     return None
 
@@ -87,11 +87,10 @@ def check_opencode(command: str | None = None) -> OpenCodeStatus:
             ),
         )
 
-    # 2. Verify it responds to --version without launching a session.
-    #    Only do a direct --version check for simple (non-compound) commands,
-    #    since compound commands (e.g. "python wrapper.cmd") may not support
-    #    --version or may need shell execution to work properly.
-    if not extra_args:
+    # 2. Verify the real OpenCode binary responds to --version without
+    #    launching a session.  Skip this for arbitrary compound commands
+    #    (e.g. "python wrapper.py"), because they may not support --version.
+    if not extra_args or binary.lower() == "opencode":
         try:
             result = subprocess.run(
                 [binary_path, "--version"],

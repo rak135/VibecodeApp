@@ -466,6 +466,216 @@
         "--variant",
         "high"
       ]
+    },
+    {
+      "title": "P13.1 Fix OpenCode command resolution and clean validation baseline",
+      "description": "Goal:\nRestore the observable run path so `vibecode run` and `vibecode monitor` can launch the default fake or real OpenCode command reliably, and restore a clean validation baseline.\n\nWhy it matters:\nThe independent PRD audit found a critical regression: the default OpenCode invocation was changed to `opencode run`, but command discovery treated that whole string as the executable. That makes fake/default `vibecode run` paths fail with `OpenCode command not found` unless `OPENCODE_COMMAND` is set. This blocks run orchestration, streaming stdout/stderr, prompt-to-agent verification, advisory guard dogfooding, and monitor validation.\n\nRoot cause to fix:\n- `opencode run` is a command plus argument, not one binary.\n- Availability checks must resolve only the executable part, for example `opencode`.\n- Runtime invocation must preserve the intended default args, for example `run`.\n- Env override values such as `OPENCODE_COMMAND=\"opencode run\"` must still work.\n\nLikely files/modules:\n- `vibecode/adapters/opencode.py`\n- `vibecode/run.py` only if command invocation needs a narrow integration change\n- `vibecode/process_runner.py` only if command/env handling must be adjusted\n- `tests/test_vibecode_opencode_adapter.py`\n- `tests/test_vibecode_run.py`\n- `tests/test_vibecode_run_controller.py`\n- `.gitignore` and tracked temp fixture hygiene if `.pytest-tmp` artifacts are still tracked\n\nRequired behavior:\n- Represent default OpenCode as executable plus arguments. For default non-interactive OpenCode, resolve `opencode` and pass `run` as an argument.\n- Never call `shutil.which(\"opencode run\")` or equivalent whole-command binary lookup.\n- `OPENCODE_COMMAND` must override the default and support both simple binaries and documented compound commands.\n- `check_opencode()` must verify availability without launching a coding session.\n- Fake `opencode`, `opencode.cmd`, or equivalent test scripts on PATH must launch without requiring `OPENCODE_COMMAND`.\n- Windows `.cmd`, `.ps1`, and normal executable discovery must be handled intentionally.\n- Preserve streaming stdout/stderr, log writes, exit-code truth, prompt snapshot stdin equality, advisory guard default, and strict guard mode.\n- Validation must not leave tracked `.pytest-tmp` or generated temp-state changes in the repository.\n\nAcceptance criteria:\n- The previously failing targeted run-controller/run subset passes.\n- Tests prove default executable-plus-args discovery, explicit env override, missing binary errors, and compound command behavior.\n- A regression test fails if command discovery ever again tries to resolve `opencode run` as one executable.\n- `git status --short` is documented before and after validation.\n- No advisory/strict guard semantics are changed.\n\nTests required:\n- Adapter tests for default `opencode run` style resolution.\n- Adapter tests for `OPENCODE_COMMAND` simple and compound overrides.\n- Adapter tests for missing command errors.\n- Run-controller tests proving fake OpenCode launches with no `OPENCODE_COMMAND`.\n- Existing fake stdout/stderr, exit code, summary, events, prompt snapshot, advisory guard, and strict guard tests remain green.\n\nValidation commands:\n- `git status --short`\n- `python -m compileall vibecode -q`\n- `python -m pytest -p no:cacheprovider -q tests/test_vibecode_opencode_adapter.py tests/test_vibecode_run_controller.py tests/test_vibecode_run.py::TestCmdRunEndToEnd tests/test_vibecode_run.py::TestCmdRunPreflight::test_safe_gitignore_allows_agent_launch`\n- `python -m pytest -p no:cacheprovider -q` if practical after the targeted suite is green.\n\nWhat not to change:\n- Do not refactor the whole run controller.\n- Do not weaken guard findings or required checks.\n- Do not require real OpenCode for regression tests.\n- Do not start MCP, monitor UI, or early-failure artifact redesign in this phase.\n\nRisks:\n- Windows `.cmd` behavior and shell quoting can regress.\n- Over-cleaning can remove user work; only remove generated/tracked temp artifacts when clearly temp fixtures.",
+      "completed": true,
+      "engine": "copilot",
+      "model": "claude-sonnet-4.6",
+      "engine_args": [
+        "--reasoning-effort",
+        "high",
+        "--stream",
+        "off"
+      ]
+    },
+    {
+      "title": "P13.2 Review OpenCode command and clean validation fix",
+      "description": "Review the P13.1 implementation.\n\nWrite review output to:\n`docs/audit/OBSERVABLE_RUN_MONITOR_P13_COMMAND_BASELINE_REVIEW.md`\n\nReview scope:\n- `vibecode/adapters/opencode.py` command resolution and availability checks.\n- Any narrow changes to `vibecode/run.py` or `vibecode/process_runner.py`.\n- Fake OpenCode default discovery.\n- Explicit `OPENCODE_COMMAND` behavior.\n- Compound command parsing.\n- Missing command errors.\n- stdout/stderr streaming.\n- exit code preservation.\n- prompt snapshot stdin equality.\n- advisory guard and strict guard behavior.\n- `.gitignore`, tracked temp artifact removals, and test/temp hygiene.\n\nRequire evidence:\n- Exact validation commands and pass/fail status.\n- Proof that the independent-audit targeted subset now passes.\n- Before/after `git status --short` explanation showing validation does not create tracked temp churn.\n- Test evidence that command discovery resolves executable and arguments separately.\n\nWatch for:\n- `shutil.which()` still being called with `opencode run` as one string.\n- Availability checks accidentally launching an agent session.\n- Windows fake `.cmd` runner regressions.\n- Advisory guard errors becoming hard failures by default.\n- Tests passing only because `OPENCODE_COMMAND` is set.\n\nDo not modify implementation files. Only write the review document.",
+      "completed": false,
+      "engine": "codex",
+      "model": "gpt-5.5",
+      "engine_args": [
+        "-c",
+        "model_reasoning_effort=\"high\""
+      ]
+    },
+    {
+      "title": "P13.3 Apply OpenCode command review fixes",
+      "description": "Read:\n`docs/audit/OBSERVABLE_RUN_MONITOR_P13_COMMAND_BASELINE_REVIEW.md`\n\nApply only grounded actionable fixes from the review. Keep scope limited to command resolution, fake/default OpenCode validation, and repo hygiene issues identified in P13.2.\n\nAllowed fixes:\n- command parsing/resolution fixes,\n- fake runner regression fixes,\n- targeted test fixes,\n- tracked temp artifact cleanup,\n- `.gitignore` or test temp hygiene fixes.\n\nDo not expand into:\n- run artifact redesign,\n- MCP correlation,\n- monitor UI work,\n- docs cleanup,\n- guard semantics changes,\n- broad run-controller refactors.\n\nRun:\n- `python -m compileall vibecode -q`\n- `python -m pytest -p no:cacheprovider -q tests/test_vibecode_opencode_adapter.py tests/test_vibecode_run_controller.py tests/test_vibecode_run.py::TestCmdRunEndToEnd tests/test_vibecode_run.py::TestCmdRunPreflight::test_safe_gitignore_allows_agent_launch`\n- `python -m pytest -p no:cacheprovider -q` if practical\n- `git status --short`\n\nIf no fixes are needed, write:\n`docs/audit/OBSERVABLE_RUN_MONITOR_P13_COMMAND_BASELINE_FIX.md`",
+      "completed": false,
+      "engine": "opencode",
+      "model": "deepseek/deepseek-v4-pro",
+      "engine_args": [
+        "--variant",
+        "high"
+      ]
+    },
+    {
+      "title": "P14.1 Make early-failure runs durable and replayable",
+      "description": "Goal:\nEnsure every observable run attempt has durable per-run artifacts from the beginning of the run, including early aborts.\n\nWhy it matters:\nThe independent audit found that `RunController` attaches the session JSONL sink only after prerequisite checks. Missing project config, invalid profile, dirty repo preflight, missing OpenCode, and other early failures can emit in memory but leave no durable `events.jsonl` or `summary.json`. That violates the core invariant that every run attempt is replayable from `.vibecode/runs/<session_id>/`.\n\nLikely files/modules:\n- `vibecode/run.py`\n- `vibecode/session_log.py`\n- `vibecode/show_run.py`\n- `vibecode/guard.py` only if skipped guard report artifacts are added\n- `tests/test_vibecode_run_controller.py`\n- `tests/test_vibecode_session_log.py`\n- `tests/test_vibecode_show_run.py`\n- `tests/test_vibecode_guard_report.py` if guard report behavior changes\n\nRequired behavior:\n- Create `RunSession` and attach the session `JsonlEventSink` at the start of `RunController.execute()`, before prerequisite checks where practical.\n- Persist run-start and abort/failure events to `events.jsonl`.\n- Write `summary.json` for early aborts with honest fields: session id, start/end time, task, platform, profile, status, error, and available artifact paths.\n- Preserve `metadata.json` compatibility, but do not rely on metadata alone when a summary can be written.\n- Define consistent behavior for stdout/stderr artifacts when the agent never launches: either absent with honest replay output, or empty logs with explicit summary data.\n- For skipped guard/check/handoff phases, either write clear skipped artifacts or record enough structured summary/event data that `runs show` can state the phase was skipped.\n- `vibecode runs show <session_id> --events` must work for early-aborted runs without rerunning the agent.\n\nAcceptance criteria:\n- Missing `.vibecode/project.yaml`, invalid profile, dirty repo without `--allow-dirty`, missing OpenCode, OpenCode check failure, index failure, and context failure produce durable events and summary where practical.\n- Successful-run artifacts remain backward compatible.\n- Missing optional artifacts are displayed honestly, not treated as corrupt data.\n- Replay output distinguishes success, failure, skipped, missing, and not-run phases.\n\nTests required:\n- Integration tests for early abort artifact creation and replay.\n- JSONL assertions for ordered early failure events.\n- `runs show` tests for early-abort summaries and missing optional files.\n- Guard skipped/error report tests if skipped reports are introduced.\n\nValidation commands:\n- `python -m compileall vibecode -q`\n- `python -m pytest -p no:cacheprovider -q tests/test_vibecode_run_controller.py tests/test_vibecode_show_run.py tests/test_vibecode_session_log.py`\n- Add `tests/test_vibecode_guard_report.py` if guard report code changes.\n\nWhat not to change:\n- Do not change successful-run artifact filenames unless docs/tests are updated later.\n- Do not make advisory guard findings blocking.\n- Do not use old audit/dogfood reports as evidence.\n\nRisks:\n- Summaries written too early can look like success; use explicit error/aborted status fields.\n- Double-attaching sinks can duplicate events.\n- Replay must remain tolerant of old runs with only `metadata.json`.",
+      "completed": false,
+      "engine": "copilot",
+      "model": "claude-sonnet-4.6",
+      "engine_args": [
+        "--reasoning-effort",
+        "high",
+        "--stream",
+        "off"
+      ]
+    },
+    {
+      "title": "P14.2 Review durable early-failure run artifacts",
+      "description": "Review the P14.1 implementation.\n\nWrite review output to:\n`docs/audit/OBSERVABLE_RUN_MONITOR_P14_DURABLE_FAILURES_REVIEW.md`\n\nCheck:\n- `RunController.execute()` setup order for `RunSession`, JSONL sink, and start events.\n- Summary writing for missing project config, invalid profile, dirty preflight, index/context failures, missing OpenCode, OpenCode check failure, and agent launch exceptions.\n- `runs show` behavior for early aborted runs and missing optional artifacts.\n- Tests proving event persistence and replay without real OpenCode.\n\nRequire evidence:\n- Exact artifact paths asserted in tests.\n- JSONL lines parsed as `VibecodeEvent` objects.\n- Summary status/error fields for early aborts.\n- CLI replay or formatter output for an aborted run.\n\nWatch for:\n- Events emitted before JSONL sink attachment.\n- Duplicate events from sink fan-out mistakes.\n- Summaries claiming success when the run aborted.\n- Empty optional files being mistaken for guard/check/handoff success.\n- Backward compatibility breakage for existing run artifacts.\n\nDo not modify implementation files. Only write the review document.",
+      "completed": false,
+      "engine": "codex",
+      "model": "gpt-5.5",
+      "engine_args": [
+        "-c",
+        "model_reasoning_effort=\"high\""
+      ]
+    },
+    {
+      "title": "P14.3 Apply durable artifact review fixes",
+      "description": "Read:\n`docs/audit/OBSERVABLE_RUN_MONITOR_P14_DURABLE_FAILURES_REVIEW.md`\n\nApply only grounded actionable fixes from the review. Keep scope limited to durable early-failure artifacts, event persistence, replay/show behavior for aborted runs, and skipped guard/report truth.\n\nDo not redesign the event spine or TUI. Do not change command-resolution behavior unless the review identifies a direct P14 regression. Do not remove backward compatibility for existing run artifacts.\n\nRun:\n- `python -m compileall vibecode -q`\n- `python -m pytest -p no:cacheprovider -q tests/test_vibecode_run_controller.py tests/test_vibecode_show_run.py tests/test_vibecode_session_log.py`\n- any additional affected guard/report tests\n\nIf no fixes are needed, write:\n`docs/audit/OBSERVABLE_RUN_MONITOR_P14_DURABLE_FAILURES_FIX.md`",
+      "completed": false,
+      "engine": "opencode",
+      "model": "deepseek/deepseek-v4-pro",
+      "engine_args": [
+        "--variant",
+        "high"
+      ]
+    },
+    {
+      "title": "P15.1 Add MCP session correlation and monitor-visible MCP truth",
+      "description": "Goal:\nTurn MCP observability from best-effort side logging into clearly correlated run truth when a Vibecode run or monitor launches an agent that may call Vibecode MCP tools.\n\nWhy it matters:\nThe audit found MCP tool calls are logged, but correlation is manual through `VIBECODE_SESSION_ID`; events are written to `.vibecode/logs/mcp_events.jsonl`, not the per-run session; and the monitor does not show MCP tool activity. The product goal says operators should see what the agent asked VibecodeApp via MCP.\n\nLikely files/modules:\n- `vibecode/run.py`\n- `vibecode/process_runner.py` if subprocess environment needs to be passed\n- `vibecode/mcp_server.py`\n- `vibecode/session_log.py` if a per-run MCP event path is added\n- `vibecode/monitor_app.py`\n- `vibecode/show_run.py` if replay should display per-run MCP artifacts\n- `tests/test_vibecode_mcp_server.py`\n- `tests/test_vibecode_run_controller.py`\n- `tests/test_vibecode_monitor.py`\n\nRequired behavior:\n- When `RunController` launches the external agent, pass `VIBECODE_SESSION_ID=<session_id>` to the child process.\n- If a per-run MCP log is implemented, pass a narrow env var such as `VIBECODE_MCP_EVENTS_LOG` and have `cmd_serve()` honor it safely.\n- Preserve fallback `.vibecode/logs/mcp_events.jsonl` behavior when no session/run path exists.\n- Keep MCP event payloads compact: tool name, sanitized args summary, result summary counts/chars, error type/message, timestamp/session id.\n- The monitor must render correlated MCP events in the Vibecode events pane when they arrive through the event spine or a safe bridge.\n- If live cross-process MCP streaming into monitor is not implemented, document and test the limitation honestly.\n- Non-MCP CLI commands must still work when the optional `mcp` package is absent.\n\nAcceptance criteria:\n- Tests prove `RunController` passes session id into the child process environment.\n- Tests prove `cmd_serve()` uses explicit session/log env values when present and falls back when absent.\n- Tests prove MCP success/failure events stay compact and JSONL serializable.\n- Tests prove monitor formatting/routes MCP events or explicitly exposes the limitation without crashing.\n- No full MCP response bodies are dumped into live events or monitor lines.\n\nValidation commands:\n- `python -m compileall vibecode -q`\n- `python -m pytest -p no:cacheprovider -q tests/test_vibecode_mcp_server.py tests/test_vibecode_run_controller.py tests/test_vibecode_monitor.py`\n- `python -m vibecode.cli serve --help` if safe.\n\nWhat not to change:\n- Do not require MCP for normal CLI operation.\n- Do not make live OpenCode or MCP network/tool calls in tests.\n- Do not dump full MCP result bodies into events or monitor lines.\n\nRisks:\n- Live cross-process streaming may remain difficult; if so, the limitation must be explicit and tested.\n- Environment propagation can leak if too broad; keep it scoped to the agent process.",
+      "completed": false,
+      "engine": "copilot",
+      "model": "claude-sonnet-4.6",
+      "engine_args": [
+        "--reasoning-effort",
+        "high",
+        "--stream",
+        "off"
+      ]
+    },
+    {
+      "title": "P15.2 Review MCP session correlation and monitor MCP truth",
+      "description": "Review the P15.1 implementation.\n\nWrite review output to:\n`docs/audit/OBSERVABLE_RUN_MONITOR_P15_MCP_CORRELATION_REVIEW.md`\n\nCheck:\n- Environment propagation from run controller to agent process.\n- MCP server use of `VIBECODE_SESSION_ID` and any per-run log env var.\n- Fallback behavior when no run session exists.\n- Monitor rendering/routing of MCP events or explicit tested limitation.\n- Optional dependency boundaries for MCP.\n\nRequire evidence:\n- Tests proving child process receives the run session id.\n- JSONL MCP event examples or parsed assertions with compact payloads.\n- Tests proving non-MCP commands do not fail without MCP installed.\n- Clear docs/test assertions if live MCP-in-monitor streaming remains best-effort.\n\nWatch for:\n- Full MCP result blobs in event data.\n- Session id correlation that only works in direct unit tests.\n- Base CLI importing `mcp` at module import time.\n- Monitor claims it shows live MCP calls but only reads stale side logs.\n- MCP changes that alter functional tool responses rather than wrapping observability.\n\nDo not modify implementation files. Only write the review document.",
+      "completed": false,
+      "engine": "codex",
+      "model": "gpt-5.5",
+      "engine_args": [
+        "-c",
+        "model_reasoning_effort=\"high\""
+      ]
+    },
+    {
+      "title": "P15.3 Apply MCP correlation review fixes",
+      "description": "Read:\n`docs/audit/OBSERVABLE_RUN_MONITOR_P15_MCP_CORRELATION_REVIEW.md`\n\nApply only grounded actionable fixes from the review. Keep scope limited to MCP session correlation, compact MCP event payloads, optional dependency safety, and monitor/replay visibility of correlated MCP events.\n\nDo not redesign MCP tools or change their functional responses except to add observability wrappers. Do not require the optional MCP package for non-MCP commands.\n\nRun:\n- `python -m compileall vibecode -q`\n- `python -m pytest -p no:cacheprovider -q tests/test_vibecode_mcp_server.py tests/test_vibecode_run_controller.py tests/test_vibecode_monitor.py`\n- affected replay/docs tests if artifact paths changed\n\nIf no fixes are needed, write:\n`docs/audit/OBSERVABLE_RUN_MONITOR_P15_MCP_CORRELATION_FIX.md`",
+      "completed": false,
+      "engine": "opencode",
+      "model": "deepseek/deepseek-v4-pro",
+      "engine_args": [
+        "--variant",
+        "high"
+      ]
+    },
+    {
+      "title": "P16.1 Harden monitor runtime and optional dependency behavior",
+      "description": "Goal:\nMake the two-pane monitor dogfoodable in a clean install and make optional Textual/MCP dependency behavior explicit, tested, and user-friendly.\n\nWhy it matters:\nThe audit found the monitor is real but covered mostly by formatting/import/mocked smoke tests. It depends on Textual while `pyproject.toml` currently makes Textual optional, and invoking monitor without Textual may fail as a raw import error.\n\nLikely files/modules:\n- `pyproject.toml`\n- `vibecode/cli.py`\n- `vibecode/monitor_app.py`\n- `vibecode/tui_theme.tcss` only if needed for smoke stability\n- `tests/test_vibecode_monitor.py`\n- `tests/test_vibecode_cli.py`\n\nRequired behavior:\n- Decide and implement the packaging contract: either Textual is a base dependency because `monitor` is first-class, or Textual remains optional and `vibecode monitor` gives a clear install-extra message when Textual is absent.\n- If Textual remains optional, move Textual imports behind the monitor command boundary so CLI help and non-monitor commands work in a base install.\n- Preserve non-MCP command behavior when MCP is absent.\n- Add a fake/non-interactive monitor smoke test that exercises event sink/routing enough to prove the monitor consumes the event spine rather than scraped printed text.\n- Keep agent output separate from Vibecode lifecycle/guard/check/handoff/MCP events.\n- Keep the limitation honest: streaming text monitor, not PTY/ConPTY.\n- If quit behavior during an active agent remains unmanaged, keep that limitation documented and tested where appropriate.\n\nAcceptance criteria:\n- Base CLI help works without Textual installed if Textual is optional.\n- `vibecode monitor --help` is clear about any missing optional dependency or install extra.\n- Fake monitor smoke proves event routing/status update behavior without real OpenCode.\n- Existing dashboard behavior is not broken.\n- Optional dependency behavior is tested rather than only documented.\n\nTests required:\n- Missing Textual optional dependency test if Textual remains optional.\n- Monitor fake-run or event-pump smoke test.\n- Existing formatting/routing tests.\n- CLI help tests for monitor and non-monitor commands.\n\nValidation commands:\n- `python -m compileall vibecode -q`\n- `python -m pytest -p no:cacheprovider -q tests/test_vibecode_monitor.py tests/test_vibecode_cli.py`\n- `python -m vibecode.cli monitor --help`\n- `python -m vibecode.cli --help`\n\nWhat not to change:\n- Do not implement full interactive PTY/ConPTY.\n- Do not require real OpenCode in monitor tests.\n- Do not redesign dashboard unless a tiny shared import fix is required.",
+      "completed": false,
+      "engine": "copilot",
+      "model": "claude-sonnet-4.6",
+      "engine_args": [
+        "--reasoning-effort",
+        "high",
+        "--stream",
+        "off"
+      ]
+    },
+    {
+      "title": "P16.2 Review monitor runtime and optional dependency behavior",
+      "description": "Review the P16.1 implementation.\n\nWrite review output to:\n`docs/audit/OBSERVABLE_RUN_MONITOR_P16_MONITOR_OPTIONAL_DEPS_REVIEW.md`\n\nCheck:\n- `pyproject.toml` dependency/extras contract.\n- `vibecode/cli.py` and `vibecode/monitor_app.py` import boundaries.\n- Monitor fake-run/event-spine smoke tests.\n- CLI behavior when Textual is missing, if Textual remains optional.\n- Dashboard import behavior if dependency handling changed.\n\nRequire evidence:\n- Exact test names and command results.\n- Proof monitor uses `VibecodeEvent`/event sinks, not scraped stdout text.\n- Clear user-facing error or install guidance for missing optional Textual.\n- Confirmation that monitor still states it is not a PTY.\n\nWatch for:\n- Base CLI broken because `textual` is imported too early.\n- Monitor tests only mocking `MonitorApp.run()`.\n- Packaging says Textual optional but docs/tests assume it is always installed.\n- Dashboard regressions.\n\nDo not modify implementation files. Only write the review document.",
+      "completed": false,
+      "engine": "codex",
+      "model": "gpt-5.5",
+      "engine_args": [
+        "-c",
+        "model_reasoning_effort=\"high\""
+      ]
+    },
+    {
+      "title": "P16.3 Apply monitor optional dependency review fixes",
+      "description": "Read:\n`docs/audit/OBSERVABLE_RUN_MONITOR_P16_MONITOR_OPTIONAL_DEPS_REVIEW.md`\n\nApply only grounded actionable fixes from the review. Keep scope limited to monitor runtime behavior, optional dependency import boundaries, fake monitor smoke coverage, and CLI help/error behavior.\n\nDo not add PTY/ConPTY support. Do not change run controller semantics unless the review identifies a direct monitor integration regression. Do not make MCP a hard dependency for non-MCP commands.\n\nRun:\n- `python -m compileall vibecode -q`\n- `python -m pytest -p no:cacheprovider -q tests/test_vibecode_monitor.py tests/test_vibecode_cli.py`\n- `python -m vibecode.cli --help`\n- `python -m vibecode.cli monitor --help`\n\nIf no fixes are needed, write:\n`docs/audit/OBSERVABLE_RUN_MONITOR_P16_MONITOR_OPTIONAL_DEPS_FIX.md`",
+      "completed": false,
+      "engine": "opencode",
+      "model": "deepseek/deepseek-v4-pro",
+      "engine_args": [
+        "--variant",
+        "high"
+      ]
+    },
+    {
+      "title": "P17.1 Align docs, AGENTS guidance, and artifact truth",
+      "description": "Goal:\nUpdate user-facing and agent-facing docs so they match the post-audit observable monitor reality exactly, including optional extras, run artifact truth, MCP limitations/correlation, monitor limitations, and advisory/strict guard semantics.\n\nWhy it matters:\nThe audit found docs mostly describe implemented features, but under-document optional install extras for Textual/MCP, overstate `handoff_report.md` generation, and leave AGENTS guidance thin on MCP observability limitations.\n\nLikely files/modules:\n- `README.md`\n- `docs/QUICKSTART.md`\n- `AGENTS.md`\n- `vibecode/context/agents_export.py`\n- `tests/test_vibecode_quickstart.py`\n- `tests/test_vibecode_agents_export.py`\n- `pyproject.toml` only to confirm dependency/extras names\n\nRequired behavior:\n- Document correct install commands for base CLI and optional TUI/MCP/all extras if they remain optional.\n- Document whether `vibecode monitor` and `vibecode serve` require extras.\n- Correct run artifact lists to include only artifacts actually written, or explicitly label optional/defined-but-not-always-written artifacts.\n- Fix any claim that `handoff_report.md` is always generated if code only writes JSON. If Markdown handoff reports are implemented before this phase, document that truth instead.\n- Document MCP correlation honestly: automatic session correlation if P15 implemented it; otherwise manual `VIBECODE_SESSION_ID` and side-log limitations.\n- Keep advisory guard semantics clear: advisory default preserves severity and returns needs-review without hard blocking solely due to guard findings; strict mode is explicit.\n- Keep monitor limitation clear: streaming text output, not PTY/ConPTY.\n- Update generated AGENTS block source so future `export-agents` output stays truthful.\n\nAcceptance criteria:\n- README, Quickstart, AGENTS, and generated AGENTS block agree on monitor/serve install requirements.\n- Artifact lists match code and tests.\n- MCP limitations/correlation are not oversold.\n- Advisory/strict guard docs match CLI help and `RunSummary` semantics.\n- Stale claims from previous dogfood or future-scope docs are removed or clearly marked as historical.\n\nTests required:\n- Update docs tests that assert command names or artifact lists.\n- Add or update AGENTS export tests for monitor/run/replay and MCP limitation wording if appropriate.\n- Add a lightweight assertion preventing stale `handoff_report.md` always-present claims if practical.\n\nValidation commands:\n- `python -m compileall vibecode -q` if Python source changed\n- `python -m pytest -p no:cacheprovider -q tests/test_vibecode_quickstart.py tests/test_vibecode_agents_export.py`\n- CLI help commands for run, monitor, and runs.\n\nWhat not to change:\n- Do not alter runtime behavior in this docs phase except generated AGENTS source.\n- Do not read or rely on old audit/review/dogfood/follow-up reports.\n- Do not add product promises as if implemented.",
+      "completed": false,
+      "engine": "copilot",
+      "model": "claude-sonnet-4.6",
+      "engine_args": [
+        "--reasoning-effort",
+        "high",
+        "--stream",
+        "off"
+      ]
+    },
+    {
+      "title": "P17.2 Review docs and AGENTS truth alignment",
+      "description": "Review the P17.1 documentation update.\n\nWrite review output to:\n`docs/audit/OBSERVABLE_RUN_MONITOR_P17_DOCS_TRUTH_REVIEW.md`\n\nCheck:\n- README, Quickstart, AGENTS, and `vibecode/context/agents_export.py`.\n- Actual CLI help for run/monitor/runs/serve.\n- Actual `pyproject.toml` dependency/extras state.\n- Actual artifact paths written by run/session code.\n\nRequire evidence:\n- Source file paths and exact sections inspected.\n- Comparison of docs claims against code/CLI help, not old audit reports.\n- Tests run and pass/fail status.\n\nWatch for:\n- Plain install docs implying monitor/serve work when extras are required.\n- Artifact lists claiming files are always written when optional or not implemented.\n- MCP observability described as live per-run monitor truth when only side-log/best-effort.\n- Advisory guard docs implying severity is reduced or findings are hidden.\n- AGENTS.md and generated AGENTS template disagreeing.\n\nDo not modify docs or implementation files. Only write the review document.",
+      "completed": false,
+      "engine": "codex",
+      "model": "gpt-5.5",
+      "engine_args": [
+        "-c",
+        "model_reasoning_effort=\"high\""
+      ]
+    },
+    {
+      "title": "P17.3 Apply docs truth review fixes",
+      "description": "Read:\n`docs/audit/OBSERVABLE_RUN_MONITOR_P17_DOCS_TRUTH_REVIEW.md`\n\nApply only grounded actionable documentation/generator fixes from the review. Keep scope limited to docs truth, generated AGENTS block truth, optional dependency install guidance, artifact lists, MCP limitations, monitor limitations, and guard semantics.\n\nDo not change runtime behavior unless the review identifies a tiny generated-doc source mismatch in `vibecode/context/agents_export.py`. Do not add new product promises. Do not rely on old audit docs.\n\nRun:\n- `python -m compileall vibecode -q` if Python source changed\n- `python -m pytest -p no:cacheprovider -q tests/test_vibecode_quickstart.py tests/test_vibecode_agents_export.py`\n- CLI help commands for run/monitor/runs if docs reference help behavior\n\nIf no fixes are needed, write:\n`docs/audit/OBSERVABLE_RUN_MONITOR_P17_DOCS_TRUTH_FIX.md`",
+      "completed": false,
+      "engine": "opencode",
+      "model": "deepseek/deepseek-v4-pro",
+      "engine_args": [
+        "--variant",
+        "high"
+      ]
+    },
+    {
+      "title": "P18.1 Run final follow-up validation and dogfood capability check",
+      "description": "Goal:\nAfter P13-P17 are complete, run a fresh final validation pass that proves the observable run monitor is ready or honestly not ready for supervised dogfooding.\n\nWhy it matters:\nThe independent audit marked final validation FAIL. Full pytest initially passed, but the current tree later failed targeted fake OpenCode run-controller tests and became dirty. A final validation task must establish a clean, credible baseline after follow-up fixes without relying on old dogfood reports.\n\nSuggested validation report:\n`docs/PRD_OBSERVABLE_RUN_MONITOR_FOLLOWUP_VALIDATION.md`\n\nRequired behavior:\n- Start with `git status --short`. If dirty from unrelated user work, record it and avoid reverting it.\n- Run compile, full pytest if practical, and the targeted previously failing run-controller/run subset.\n- Run CLI discovery: `python -m vibecode.cli --help`, `run --help`, `monitor --help`, `runs --help`, and `serve --help` if safe.\n- Run a fake/safe `vibecode run` using fake OpenCode and verify the run folder contains expected artifacts: `events.jsonl`, `summary.json`, prompt/context snapshots, agent stdout/stderr logs, and guard/check/handoff reports when those phases ran.\n- Run a fake early-failure scenario and verify `runs show <session_id> --events` can inspect it without rerunning the agent.\n- Run a fake/safe monitor smoke path if P16 made one available. If real TUI cannot be safely run, use the non-interactive smoke and state the limitation.\n- Run real OpenCode only if available and safe; otherwise skip with reason.\n- Verify advisory guard with fake agent findings: advisory returns needs-review/exit 0; strict returns failure/non-zero.\n- Verify MCP correlation if P15 implemented it.\n- Finish with `git status --short` and explain any remaining changes.\n\nAcceptance criteria:\n- Validation report contains exact commands, pass/fail status, skipped checks with reasons, artifact paths inspected, known limitations, and final dogfood verdict.\n- Full pytest passes or the broadest safe subset is justified.\n- Targeted regression subset passes.\n- Fake run/replay and fake monitor smoke are demonstrated or honestly skipped.\n- Real OpenCode status is documented honestly, not guessed from old reports.\n\nRequired commands:\n- `git status --short`\n- `python -m compileall vibecode -q`\n- `python -m pytest -p no:cacheprovider -q tests/test_vibecode_opencode_adapter.py tests/test_vibecode_run_controller.py tests/test_vibecode_run.py::TestCmdRunEndToEnd tests/test_vibecode_run.py::TestCmdRunPreflight::test_safe_gitignore_allows_agent_launch`\n- `python -m pytest -p no:cacheprovider -q` if practical\n- CLI help commands listed above\n\nWhat not to change:\n- Do not implement broad fixes in this validation task. If validation reveals substantial bugs, record them as follow-up tasks.\n- Do not rely on existing dogfood/audit/review/follow-up reports.\n- Do not run real OpenCode if unsafe, unavailable, costly, or likely to modify important user work.",
+      "completed": false,
+      "engine": "copilot",
+      "model": "claude-sonnet-4.6",
+      "engine_args": [
+        "--reasoning-effort",
+        "high",
+        "--stream",
+        "off"
+      ]
+    },
+    {
+      "title": "P18.2 Review final follow-up validation and dogfood evidence",
+      "description": "Review the P18.1 validation report and current code/tests.\n\nWrite review output to:\n`docs/audit/OBSERVABLE_RUN_MONITOR_P18_FINAL_VALIDATION_REVIEW.md`\n\nCheck:\n- `docs/PRD_OBSERVABLE_RUN_MONITOR_FOLLOWUP_VALIDATION.md`\n- Current code/tests only where needed to verify validation claims.\n- CLI help output and artifact samples referenced by the validation report.\n\nRequire evidence:\n- Exact command outputs or summarized pass/fail evidence.\n- Proof that targeted fake OpenCode regression tests pass.\n- Proof that successful and early-failure run artifacts are replayable.\n- Proof or honest skip reason for fake monitor smoke and real OpenCode smoke.\n- Proof that final `git status --short` is clean or remaining dirt is unrelated and documented.\n\nWatch for:\n- Readiness claims while targeted run tests fail.\n- Dogfood report relying on old audit/dogfood documents.\n- Fake OpenCode tests not actually launching the fake command.\n- Monitor smoke only testing parser registration.\n- MCP/session correlation claims without event/log evidence.\n- Advisory guard findings hidden or strict mode untested.\n\nDo not modify implementation files. Only write the review document.",
+      "completed": false,
+      "engine": "codex",
+      "model": "gpt-5.5",
+      "engine_args": [
+        "-c",
+        "model_reasoning_effort=\"high\""
+      ]
+    },
+    {
+      "title": "P18.3 Apply final validation review fixes or record follow-ups",
+      "description": "Read:\n`docs/audit/OBSERVABLE_RUN_MONITOR_P18_FINAL_VALIDATION_REVIEW.md`\n\nApply only concrete, safe, validation-report fixes from the review. If the review identifies substantial product or architecture work, do not start it here; append new PRD tasks or document future follow-up according to the repository process.\n\nKeep this phase focused on validation evidence, small test/report corrections, and final status truth. Do not perform broad refactors. Do not hide failing validation. Do not rely on old dogfood reports.\n\nRun if any source or tests changed:\n- `python -m compileall vibecode -q`\n- affected tests\n- the targeted fake OpenCode regression subset\n- full `python -m pytest -p no:cacheprovider -q` if practical\n- `git status --short`\n\nIf no fixes are needed, write:\n`docs/audit/OBSERVABLE_RUN_MONITOR_P18_FINAL_VALIDATION_FIX.md`\n\nIf fixes change validation outcome, update:\n`docs/PRD_OBSERVABLE_RUN_MONITOR_FOLLOWUP_VALIDATION.md`",
+      "completed": false,
+      "engine": "opencode",
+      "model": "deepseek/deepseek-v4-pro",
+      "engine_args": [
+        "--variant",
+        "high"
+      ]
     }
   ]
 }

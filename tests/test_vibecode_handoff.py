@@ -131,6 +131,19 @@ def test_todo_placeholder_fails(tmp_path):
     assert any("placeholder" in i.message.lower() for i in now_issues)
 
 
+def test_describing_todo_markers_is_not_placeholder(tmp_path):
+    _write(
+        _handoff_dir(tmp_path) / "NOW.md",
+        "# Now\n\nRisk analysis records TODO/FIXME facts from source comments.\n",
+    )
+    _write(_handoff_dir(tmp_path) / "NEXT.md", "# Next\n\nKeep validating handoff state.\n")
+    _write(_handoff_dir(tmp_path) / "BLOCKERS.md", "# Blockers\n\nNo hard blocker.\n")
+
+    result = validate_handoff_files(tmp_path)
+
+    assert result.passed is True
+
+
 def test_tbd_placeholder_fails(tmp_path):
     _write(_handoff_dir(tmp_path) / "NOW.md", "# Now\n\nTBD\n")
     _write(_handoff_dir(tmp_path) / "NEXT.md", "# Next\n\nDo stuff.\n")

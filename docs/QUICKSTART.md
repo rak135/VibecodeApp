@@ -47,8 +47,11 @@ The following behaviors are **explicitly out of scope**:
 
 ```powershell
 # From the VibecodeApp repository root
-python -m pip install -e .
+python -m pip install -e ".[all]"
 ```
+
+Use `".[tui]"` for only the Textual dashboard/monitor, `".[mcp]"` for only the
+MCP server, or plain `-e .` for the core CLI without optional runtime surfaces.
 
 ### Verify
 
@@ -320,7 +323,7 @@ python -m vibecode.cli run-plan C:\path\to\example-repo --task "Add rate limitin
 - Git working tree status (clean or dirty)
 - Project config exists and is valid
 - Index freshness (warns if stale or missing)
-- OpenCode availability via `OPENCODE_COMMAND` or the default `opencode` on PATH
+- OpenCode availability via `OPENCODE_COMMAND` or the default `opencode run` command on PATH
 - Permission profile resolution
 
 It writes `.vibecode\current\run_plan.json` and prints a human-readable summary.

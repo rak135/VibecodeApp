@@ -67,8 +67,11 @@ See `docs/ARCHITECTURE_MAP_PRD.md` for desired behavior and `docs/ARCHITECTURE_M
 From the repository root:
 
 ```powershell
-python -m pip install -e .
+python -m pip install -e ".[all]"
 ```
+
+Use `".[tui]"` for the Textual dashboard/monitor only, `".[mcp]"` for the MCP
+server only, or plain `-e .` for non-TUI, non-MCP CLI commands.
 
 Verify the CLI:
 

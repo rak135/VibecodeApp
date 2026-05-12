@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import json
+import threading
 from datetime import datetime, timezone
 from pathlib import Path
 
@@ -248,6 +249,28 @@ def test_jsonl_sink_line_is_valid_json(tmp_path: Path):
     line = path.read_text(encoding="utf-8").strip()
     obj = json.loads(line)
     assert obj["data"] == {"list": [1, 2, 3], "nested": {"a": True}}
+
+
+def test_jsonl_sink_concurrent_writes_are_valid_lines(tmp_path: Path):
+    path = tmp_path / "events.jsonl"
+    sink = JsonlEventSink(path)
+
+    def emit_many(prefix: str) -> None:
+        for i in range(50):
+            sink.emit(_make_event(event_id=f"{prefix}-{i}", message=f"{prefix} {i}"))
+
+    threads = [threading.Thread(target=emit_many, args=(f"t{idx}",)) for idx in range(4)]
+    for thread in threads:
+        thread.start()
+    for thread in threads:
+        thread.join()
+
+    lines = path.read_text(encoding="utf-8").splitlines()
+    assert len(lines) == 200
+    parsed = [json.loads(line) for line in lines]
+    assert {event["event_id"] for event in parsed} == {
+        f"t{idx}-{i}" for idx in range(4) for i in range(50)
+    }
 
 
 # ── ConsoleEventSink ─────────────────────────────────────────────────

@@ -26,7 +26,7 @@ permission objects).
 Trust model
 -----------
 The platform command (resolved from the ``OPENCODE_COMMAND`` environment
-variable, or the default ``opencode`` binary name) is a **trusted local
+variable, or the default ``opencode run`` command) is a **trusted local
 shell command** configured by the user.  It runs through the system shell
 (``shell=True``) because on Windows ``.cmd`` and ``.bat`` wrappers require
 shell execution, and user-configured commands may include compound syntax
@@ -781,7 +781,7 @@ class RunController:
 
         try:
             # shell=True: the command is a trusted local executable configured
-            # by the user via OPENCODE_COMMAND (or the default 'opencode').
+            # by the user via OPENCODE_COMMAND (or the default 'opencode run').
             # Windows .cmd/.bat wrappers and compound commands require shell
             # execution.  See the module-level trust-model documentation.
             # run_streaming uses Popen + two reader threads so that stdout and

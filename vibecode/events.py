@@ -11,6 +11,7 @@ from __future__ import annotations
 
 import json
 import os
+import threading
 import uuid
 from dataclasses import dataclass
 from datetime import datetime, timezone
@@ -155,6 +156,7 @@ class JsonlEventSink:
     def __init__(self, file_path: str | Path) -> None:
         self._path = Path(file_path)
         self._path.parent.mkdir(parents=True, exist_ok=True)
+        self._lock = threading.Lock()
 
     @property
     def path(self) -> Path:
@@ -162,8 +164,9 @@ class JsonlEventSink:
 
     def emit(self, event: VibecodeEvent) -> None:
         line = event.as_json()
-        with self._path.open("a", encoding="utf-8") as f:
-            f.write(line + "\n")
+        with self._lock:
+            with self._path.open("a", encoding="utf-8") as f:
+                f.write(line + "\n")
 
 
 class ConsoleEventSink:

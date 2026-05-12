@@ -3,6 +3,9 @@ __pycache__/
 *.py[cod]
 *$py.class
 .pytest_cache/
+.pytest-tmp/
+.pytest-local-check/
+.check-tmp/
 .mypy_cache/
 .ruff_cache/
 .coverage
@@ -38,6 +41,8 @@ Thumbs.db
 *.log
 tmp/
 temp/
+codex_pytest*_tmp/
+codex_pytest_tmp_session/
 
 # Local Ralph/Ralphy runtime state
 .ralph/

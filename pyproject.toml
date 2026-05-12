@@ -7,7 +7,12 @@ name = "vibecode"
 version = "0.1.0"
 description = "Local repository architecture map and context-pack CLI."
 requires-python = ">=3.10"
-dependencies = ["pyyaml>=6.0", "textual>=0.47"]
+dependencies = ["pyyaml>=6.0"]
+
+[project.optional-dependencies]
+tui = ["textual>=0.47"]
+mcp = ["mcp>=1.0"]
+all = ["textual>=0.47", "mcp>=1.0"]
 
 [project.scripts]
 vibecode = "vibecode.cli:main"
