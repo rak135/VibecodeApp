@@ -669,7 +669,7 @@
     {
       "title": "P18.3 Apply final validation review fixes or record follow-ups",
       "description": "Read:\n`docs/audit/OBSERVABLE_RUN_MONITOR_P18_FINAL_VALIDATION_REVIEW.md`\n\nApply only concrete, safe, validation-report fixes from the review. If the review identifies substantial product or architecture work, do not start it here; append new PRD tasks or document future follow-up according to the repository process.\n\nKeep this phase focused on validation evidence, small test/report corrections, and final status truth. Do not perform broad refactors. Do not hide failing validation. Do not rely on old dogfood reports.\n\nRun if any source or tests changed:\n- `python -m compileall vibecode -q`\n- affected tests\n- the targeted fake OpenCode regression subset\n- full `python -m pytest -p no:cacheprovider -q` if practical\n- `git status --short`\n\nIf no fixes are needed, write:\n`docs/audit/OBSERVABLE_RUN_MONITOR_P18_FINAL_VALIDATION_FIX.md`\n\nIf fixes change validation outcome, update:\n`docs/PRD_OBSERVABLE_RUN_MONITOR_FOLLOWUP_VALIDATION.md`",
-      "completed": false,
+      "completed": true,
       "engine": "opencode",
       "model": "deepseek/deepseek-v4-pro",
       "engine_args": [
