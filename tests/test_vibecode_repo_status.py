@@ -376,6 +376,20 @@ class TestRepoStatusIndexFreshness:
         status = svc.get_status(tmp_path)
         assert status.index_freshness == "stale"
 
+    def test_freshness_unknown_when_check_raises(self, tmp_path, monkeypatch):
+        li = tmp_path / ".vibecode" / "current" / "last_index.json"
+        li.parent.mkdir(parents=True, exist_ok=True)
+        li.write_text("{}", encoding="utf-8")
+        fi = tmp_path / ".vibecode" / "index" / "file_inventory.json"
+        fi.parent.mkdir(parents=True, exist_ok=True)
+        fi.write_text("{}", encoding="utf-8")
+        import vibecode.indexer as idx
+
+        monkeypatch.setattr(idx, "check_index_freshness", lambda root: (_ for _ in ()).throw(RuntimeError("boom")))
+        svc = RepoStatusService()
+        status = svc.get_status(tmp_path)
+        assert status.index_freshness == "unknown"
+
 
 # ---------------------------------------------------------------------------
 # RepoStatus model invariants

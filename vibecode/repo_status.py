@@ -13,7 +13,7 @@ from pathlib import Path
 from typing import Literal
 
 GitStateStr = Literal["clean", "dirty", "unknown"]
-IndexFreshnessStr = Literal["fresh", "stale", "missing"]
+IndexFreshnessStr = Literal["fresh", "stale", "missing", "unknown"]
 
 _MANUAL_TRUTH_FILES: tuple[str, ...] = (
     ".vibecode/project.yaml",
@@ -118,5 +118,4 @@ class RepoStatusService:
             is_fresh, _ = check_index_freshness(repo_path)
             return "fresh" if is_fresh else "stale"
         except Exception:
-            # Best-effort: if freshness cannot be determined, assume fresh.
-            return "fresh"
+            return "unknown"
