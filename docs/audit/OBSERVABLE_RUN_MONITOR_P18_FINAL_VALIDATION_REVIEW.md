@@ -1,171 +1,244 @@
 # Observable Run Monitor P18.1 Final Validation Review
 
-Date: 2026-05-13
-Scope: review `docs/PRD_OBSERVABLE_RUN_MONITOR_FOLLOWUP_VALIDATION.md`, current code/tests where needed, CLI help, and available run artifacts.
+**Date:** 2026-05-15
+**Scope:** Review `docs/PRD_OBSERVABLE_RUN_MONITOR_FOLLOWUP_VALIDATION.md`, current code/tests where needed, CLI help output, and preserved run artifacts.
 
 ## Verdict
 
-CONDITIONAL PASS.
+**PASS WITH CORRECTIONS.**
 
-The validation report is broadly credible for supervised dogfooding readiness, but I cannot independently reproduce the full targeted/full pytest evidence in the current workspace because pytest temp-root setup now fails with Windows `PermissionError`. The report's readiness claim should be treated as supported by its captured output plus current code/test structure, not by a clean fresh rerun from this review session.
+The core readiness claim is supported by fresh evidence in the current workspace:
 
-No implementation files were modified.
+- targeted fake-OpenCode regression coverage passes,
+- full pytest passes at **1852 passed, 35 warnings**,
+- monitor and MCP suites pass,
+- CLI help output matches the documented surface,
+- preserved successful and failure run artifacts replay through `vibecode runs show --events`.
 
-## Key Findings
+I found one material report mismatch: section 9 of the validation report says `tests/test_vibecode_run_post.py` produced **112 passed**. A fresh rerun in the current tree produced **52 passed in 41.66s**. That is a documentation/evidence error, not a product failure, but the report should not present `112 passed` as current proof.
 
-1. Targeted fake OpenCode regression coverage is real, not just parser registration.
-   - `tests/test_vibecode_run_controller.py` contains `test_fake_opencode_orchestration_writes_artifacts_and_preserves_advisory_guard`, which creates `opencode.cmd`, captures argv/stdin, asserts `["run"]`, checks fake stdout/stderr logs, prompt/context snapshots, `summary.json`, and lifecycle event phases.
-   - `tests/test_vibecode_run.py::TestCmdRunEndToEnd` also uses fake OpenCode and exercises CLI `run` outcomes.
-   - Fresh full targeted rerun was blocked by environment, not by a Vibecode assertion:
-     ```
-     python -m pytest -p no:cacheprovider -q tests/test_vibecode_opencode_adapter.py tests/test_vibecode_run_controller.py "tests/test_vibecode_run.py::TestCmdRunEndToEnd" "tests/test_vibecode_run.py::TestCmdRunPreflight::test_safe_gitignore_allows_agent_launch"
-     -> 26 passed, 69 errors
-     -> repeated setup error: PermissionError: [WinError 5] Access denied: C:\Users\Martin\AppData\Local\Temp\pytest-of-Martin
-     ```
-   - A focused non-temp target passes:
-     ```
-     python -m pytest -p no:cacheprovider -q tests/test_vibecode_opencode_adapter.py
-     26 passed in 0.06s
-     ```
+I also found one operational gap outside the report text itself: `python -m vibecode.cli check .` currently fails because the required `python -m pytest` step times out after **300 seconds**, while the full suite now needs **334.88 seconds**. The product code under review still passes the explicit full-suite audit run; the failure is in the required-check wrapper budget.
 
-2. Successful run artifacts are replayable.
-   - Available artifact sample: `.vibecode/runs/20260512T051751673320Z/`.
-   - Replay command:
-     ```
-     python -m vibecode.cli runs show 20260512T051751673320Z --repo . --events
-     ```
-   - Evidence: output lists 11 artifacts, including `summary.json`, `metadata.json`, `events.jsonl`, guard/check/handoff JSON reports, agent stdout/stderr logs, `context_pack.md`, and `opencode_prompt.md`.
-   - Replay loaded 22 events, including:
-     ```
-     Run started
-     Git preflight started/completed
-     Index check started/completed
-     Context pack written
-     Prompt written
-     Agent started: opencode run
-     VIBECODE_REAL_OPENCODE_SMOKE_OK
-     Agent finished (exit_code=0)
-     Guard completed
-     Checks completed
-     Handoff completed
-     Run summary written
-     Run finished: incomplete
-     ```
-   - Note: this is a real OpenCode smoke artifact, not the fake-run temp artifact described in the validation report. It still proves replayability for a completed agent launch.
+No implementation files were modified in this review.
 
-3. Early-failure replay is evidenced by the validation report, but not independently reproduced here.
-   - The report includes a no-index early abort with `events.jsonl`, `summary.json`, and `runs show <session_id> --events` replaying six events through `Run aborted: no index`.
-   - Current code has early-abort tests in `TestEarlyAbortArtifacts` and `TestEarlyAbortShowCLI`, but a fresh run of `tests/test_vibecode_run_controller.py` is blocked by the same pytest temp-root permission failure.
-   - Review status: accepted from report output plus test presence, not freshly reproduced.
+## Findings
 
-4. Monitor smoke is more than parser registration.
-   - Focused event-pump and MCP formatting smoke passed:
-     ```
-     python -m pytest -p no:cacheprovider -q tests/test_vibecode_monitor.py::TestMonitorEventPumpSmoke tests/test_vibecode_monitor.py::TestMcpEventFormatting
-     27 passed in 0.25s
-     ```
-   - Full monitor suite did not complete in this environment:
-     ```
-     python -m pytest -p no:cacheprovider -q tests/test_vibecode_monitor.py
-     78 passed, 10 errors
-     ```
-   - The 10 errors are all pytest `tmp_path` setup failures from `C:\Users\Martin\AppData\Local\Temp\pytest-of-Martin`, not monitor assertions.
-   - Real TUI smoke remains honestly skipped; the validation report's reason is acceptable: it needs `[tui]` and an interactive terminal.
+### 1. Targeted fake OpenCode regression proof is real
 
-5. Advisory and strict guard behavior is freshly verified.
-   ```
-   python -m pytest -p no:cacheprovider -q tests/test_vibecode_run_post.py::TestAdvisoryGuardMode
-   9 passed in 0.10s
-   ```
-   This covers advisory non-blocking behavior and strict-mode non-zero failures.
+Fresh command:
 
-6. MCP/session correlation is plausible in code/tests, but full fresh test proof is blocked here.
-   - Code check: `RunController.execute()` sets `VIBECODE_SESSION_ID` and `VIBECODE_MCP_EVENTS_LOG` in the child environment; `cmd_serve()` reads `VIBECODE_MCP_EVENTS_LOG` first and falls back to `.vibecode/logs/mcp_events.jsonl`.
-   - Test check: `TestMcpEnvPropagation` fake OpenCode captures both env vars; `tests/test_vibecode_mcp_server.py` covers log path/session id behavior.
-   - Fresh command blocked:
-     ```
-     python -m pytest -p no:cacheprovider -q tests/test_vibecode_mcp_server.py -k "env"
-     5 errors, all pytest tmp_path setup PermissionError
-     ```
-
-7. CLI discovery claims are current.
-   - `python -m vibecode.cli --help` lists `init`, `inventory`, `index`, `context`, `map`, `validate`, `guard`, `check`, `handoff-check`, `run`, `run-plan`, `history`, `project`, `serve`, `dashboard`, `monitor`, `export-agents`, `runs`.
-   - `python -m vibecode.cli run --help` shows `--guard-mode {advisory,strict}`.
-   - `python -m vibecode.cli monitor --help` states split-pane TUI and streaming-output, not PTY.
-   - `python -m vibecode.cli runs show --help` shows `--events`.
-   - `python -m vibecode.cli serve --help` documents `VIBECODE_MCP_EVENTS_LOG`, `VIBECODE_SESSION_ID`, and the OpenCode MCP snippet.
-
-8. Required checks did not pass during this review because pytest temp setup is broken.
-   ```
-   python -m vibecode.cli check
-   FAIL: unit tests (exit code 1, 191.359s)
-   PASS: cli help
-   PASS: index command help
-   PASS: context command help
-   ```
-   `.vibecode/current/check_results.json` shows 1850 collected tests and widespread setup errors rooted in:
-   ```
-   PermissionError: [WinError 5] Access denied: C:\Users\Martin\AppData\Local\Temp\pytest-of-Martin
-   ```
-   Collection itself works:
-   ```
-   python -m pytest --collect-only -q
-   1850 tests collected in 0.63s
-   ```
-
-9. Compile and lint evidence.
-   ```
-   python -m compileall vibecode -q
-   exit code 0, no output
-   ```
-   ```
-   python -m ruff check vibecode
-   All checks passed!
-   warning: Failed to write cache file ... .ruff_cache ... Access denied
-   ```
-   Full `ruff check vibecode tests` fails with 43 pre-existing test lint findings, so source lint is clean but repository-wide lint is not currently clean.
-
-10. Real OpenCode smoke status is mixed.
-   - The validation report says real OpenCode was installed but skipped for cost/safety. That is an honest skip reason.
-   - Available run artifacts also show a prior real OpenCode smoke run with `VIBECODE_REAL_OPENCODE_SMOKE_OK` and replayable events. This strengthens replayability evidence, but it is separate from the validation report's stated skip.
-
-## Git Status Evidence
-
-Final status is not clean.
-
-Command:
-```
-git status --short
-```
-
-Output visible in this environment:
-```
-?? docs/audit/OBSERVABLE_RUN_MONITOR_P18_FINAL_VALIDATION_REVIEW.md
-warning: could not open directory '.pytest-tmp-p16-review/target-cli/': Permission denied
-warning: could not open directory '.pytest-tmp-p16-review/target-dashboard/': Permission denied
-warning: could not open directory '.pytest-tmp-p16-review/target-monitor/': Permission denied
-warning: could not open directory '.pytest-tmp-p17-docs-review-fresh-001/': Permission denied
-warning: could not open directory '.pytest-vibecode-p181-targeted-local/': Permission denied
-warning: could not open directory 'pytest-tmp-p15-focused/': Permission denied
-warning: could not open directory 'pytest_tmp_p17_docs_review_fresh_002/': Permission denied
-warning: could not open directory 'pytest_tmp_p17_docs_review_fresh_003/': Permission denied
-warning: could not open directory 'pytest_tmp_p17_docs_review_fresh_004/': Permission denied
-```
-
-Remaining dirt:
-- Expected from this task: `docs/audit/OBSERVABLE_RUN_MONITOR_P18_FINAL_VALIDATION_REVIEW.md` is untracked.
-- `docs/PRD_OBSERVABLE_RUN_MONITOR_FOLLOWUP_VALIDATION.md` exists and is tracked.
-- Unexpected review-attempt artifact: `.pytest-vibecode-p181-targeted-local/` was created by a failed pytest `--basetemp` attempt and is inaccessible to this process. Removal was attempted but blocked by the command policy/permissions.
-- Other inaccessible pytest temp directories appear pre-existing and unrelated to this review.
-
-## Recommendation
-
-Keep the P18.1 readiness verdict as "ready for supervised dogfooding with limitations", but do not present the current workspace as clean or freshly fully verified. Before final handoff, clear or fix the inaccessible pytest temp/cache directories and rerun:
-
-```
+```text
 python -m pytest -p no:cacheprovider -q tests/test_vibecode_opencode_adapter.py tests/test_vibecode_run_controller.py "tests/test_vibecode_run.py::TestCmdRunEndToEnd" "tests/test_vibecode_run.py::TestCmdRunPreflight::test_safe_gitignore_allows_agent_launch"
-python -m pytest -p no:cacheprovider -q tests/test_vibecode_monitor.py
-python -m pytest -p no:cacheprovider -q tests/test_vibecode_mcp_server.py
-python -m vibecode.cli check
-git status --short
+95 passed in 133.50s (0:02:13)
 ```
+
+Current test code confirms this is not parser-only coverage:
+
+- `tests/test_vibecode_run_controller.py:465-542` writes a fake `opencode.cmd`, captures argv/stdin, edits a file, and asserts `agent_stdout.log`, `agent_stderr.log`, `summary.json`, `context_pack.md`, `opencode_prompt.md`, and `events.jsonl`.
+- The same test asserts `json.loads(argv_capture.read_text(...)) == ["run"]`, proving the fake command is actually launched as `opencode run`.
+- `tests/test_vibecode_run_controller.py:1131-1151` also proves agent stdin exactly matches the prompt snapshot written to disk.
+
+### 2. Replayability is proven for both success and failure paths
+
+Preserved successful run sample:
+
+```text
+python -m vibecode.cli runs show 20260512T051751673320Z --repo . --events
+```
+
+Fresh replay output shows:
+
+- **11 artifacts** listed, including `summary.json`, `metadata.json`, `events.jsonl`, `guard_report.json`, `guard_report.md`, `checks_report.json`, `handoff_report.json`, `agent_stdout.log`, `agent_stderr.log`, `context_pack.md`, and `opencode_prompt.md`
+- **Events (22)**
+- `Agent started: opencode run`
+- `VIBECODE_REAL_OPENCODE_SMOKE_OK`
+- `Agent finished (exit_code=0)`
+
+Preserved failure run sample:
+
+```text
+python -m vibecode.cli runs show 20260512T052734396950Z --repo . --events
+```
+
+Fresh replay output shows:
+
+- **11 artifacts** listed again
+- **Events (260)**
+- `Agent status : failure`
+- `Overall      : failure`
+- replay still works through the full stored event log
+
+The exact fake early-failure artifact sample from the validation report is not preserved by session ID in the repo, so I could not replay that exact sample folder. Current regression coverage still proves the early-abort/failure replay path:
+
+```text
+python -m pytest -p no:cacheprovider -q tests/test_vibecode_run_controller.py::TestEarlyAbortArtifacts tests/test_vibecode_show_run.py::TestEarlyAbortShowCLI
+18 passed in 8.44s
+```
+
+Supporting code evidence:
+
+- `tests/test_vibecode_run_controller.py:1159-1188` verifies early-abort runs still write durable `events.jsonl`.
+- `tests/test_vibecode_show_run.py:824-873` verifies `runs show --events` succeeds for abort summaries and prints replayed abort events.
+
+### 3. Monitor smoke coverage is deeper than parser registration
+
+Fresh command:
+
+```text
+python -m pytest -p no:cacheprovider -q tests/test_vibecode_monitor.py
+88 passed in 0.37s
+```
+
+Code evidence:
+
+- `tests/test_vibecode_monitor.py:876-930` (`TestMonitorEventPumpSmoke`) routes `run.agent_process` events into the agent pane and `run.lifecycle` / `run.guard` events into the event pane through `TUIEventSink`, `route_event`, `format_agent_line`, and `format_vibecode_line`.
+
+This directly checks the event-routing spine. It is not limited to CLI parser registration.
+
+**Live monitor smoke:** not rerun in this review. The skip reason remains valid: this session is a non-interactive PowerShell environment, while `vibecode monitor` is a split-pane TUI intended for a live terminal session.
+
+### 4. Advisory/strict guard behavior is tested, but the report's count is stale
+
+Fresh command:
+
+```text
+python -m pytest -p no:cacheprovider -q tests/test_vibecode_run_post.py
+52 passed in 41.66s
+```
+
+This materially supports the guard-mode claim, and `tests/test_vibecode_run_post.py:1345-1435` still contains `TestAdvisoryGuardMode` coverage for:
+
+- advisory default,
+- advisory `needs_review`,
+- strict failure behavior,
+- exit code mapping,
+- preserved guard findings.
+
+**Finding:** the validation report's `112 passed` figure for this suite is not accurate for the current codebase. The behavioral claim is supported; the numeric evidence is not.
+
+### 5. MCP/session correlation claims are backed by code and passing tests
+
+Fresh command:
+
+```text
+python -m pytest -p no:cacheprovider -q tests/test_vibecode_mcp_server.py
+79 passed in 1.16s
+```
+
+Fresh code review confirms:
+
+- `vibecode/run.py:925-931` injects `VIBECODE_SESSION_ID` and `VIBECODE_MCP_EVENTS_LOG` into the child environment before launching the agent.
+- `tests/test_vibecode_run_controller.py:1660-1761` captures those env vars from fake OpenCode and asserts the session id and per-run `mcp_events.jsonl` path.
+- `tests/test_vibecode_mcp_server.py:485-547` verifies `cmd_serve()` consumes `VIBECODE_MCP_EVENTS_LOG` and `VIBECODE_SESSION_ID` correctly.
+- `python -m vibecode.cli serve --help` still documents both env vars and the OpenCode MCP snippet.
+
+### 6. CLI discovery claims are current
+
+Fresh help output confirms:
+
+- `python -m vibecode.cli --help` lists `init`, `inventory`, `index`, `context`, `map`, `validate`, `guard`, `check`, `handoff-check`, `run`, `run-plan`, `history`, `project`, `serve`, `dashboard`, `monitor`, `export-agents`, `runs`
+- `python -m vibecode.cli run --help` shows `--guard-mode {advisory,strict}`
+- `python -m vibecode.cli monitor --help` describes the split-pane streaming monitor and explicitly says it is **not a PTY**
+- `python -m vibecode.cli runs --help` shows `list` / `show` and `--events`
+- `python -m vibecode.cli serve --help` documents `VIBECODE_MCP_EVENTS_LOG` and `VIBECODE_SESSION_ID`
+- `python -m vibecode.cli index --help` and `python -m vibecode.cli context --help` both return cleanly
+
+### 7. Full-suite readiness evidence is fresh
+
+Fresh command:
+
+```text
+python -m pytest -p no:cacheprovider -q
+1852 passed, 35 warnings in 334.88s (0:05:34)
+```
+
+This matches the validation report's headline full-suite claim.
+
+### 8. Real OpenCode smoke was not rerun, but preserved evidence remains replayable
+
+I did **not** launch a new real OpenCode run in this review session.
+
+Honest skip reason:
+
+1. it would invoke an external model/tool outside the scope of this doc-only audit,
+2. it can incur real cost,
+3. it can still modify the repository if the agent misbehaves.
+
+What is still evidenced in-repo:
+
+- `docs/audit/OBSERVABLE_RUN_MONITOR_REAL_OPENCODE_SMOKE.md` documents one successful real smoke and one timed-out failure smoke,
+- both corresponding run directories still replay today through `vibecode runs show --events`.
+
+That is enough to support the validation report's **skip with reason** posture, but not enough to treat a fresh real-OpenCode smoke as re-executed today.
+
+### 9. Required checks are not currently green via `vibecode check`
+
+Fresh command:
+
+```text
+python -m vibecode.cli check .
+FAIL: unit tests (exit code 1, 328.515s)
+PASS: cli help (exit code 0, 0.078s)
+PASS: index command help (exit code 0, 0.079s)
+PASS: context command help (exit code 0, 0.078s)
+```
+
+`.vibecode/current/check_results.json` records the unit-test failure as:
+
+```text
+Command timed out after 300 seconds
+```
+
+This does **not** contradict the explicit audit rerun:
+
+```text
+python -m pytest -p no:cacheprovider -q
+1852 passed, 35 warnings in 334.88s (0:05:34)
+```
+
+It does mean the repository's required-check wrapper is currently stricter than the observed suite runtime.
+
+## Overall Assessment of the Validation Report
+
+The report is **substantially credible** and its dogfood-readiness conclusion is still supported by current code/tests and preserved artifacts. The main correction needed is narrower:
+
+- keep the readiness verdict,
+- correct the `tests/test_vibecode_run_post.py` evidence from `112 passed` to the current passing result,
+- avoid implying that the exact fake early-failure artifact sample is still available for direct replay unless a session ID or artifact folder is preserved,
+- note that `vibecode check .` is not currently green because the unit-test timeout is below the observed full-suite runtime.
+
+## Commands Run
+
+```text
+python -m vibecode.cli validate
+python -m vibecode.cli context . --task "Review P18.1 validation report and produce final validation review"
+git --no-pager status --short
+python -m vibecode.cli --help
+python -m vibecode.cli run --help
+python -m vibecode.cli monitor --help
+python -m vibecode.cli runs --help
+python -m vibecode.cli serve --help
+python -m vibecode.cli index --help
+python -m vibecode.cli context --help
+python -m vibecode.cli runs show 20260512T051751673320Z --repo . --events
+python -m vibecode.cli runs show 20260512T052734396950Z --repo . --events
+python -m pytest -p no:cacheprovider -q tests/test_vibecode_opencode_adapter.py tests/test_vibecode_run_controller.py "tests/test_vibecode_run.py::TestCmdRunEndToEnd" "tests/test_vibecode_run.py::TestCmdRunPreflight::test_safe_gitignore_allows_agent_launch"
+python -m pytest -p no:cacheprovider -q tests/test_vibecode_run_controller.py::TestEarlyAbortArtifacts tests/test_vibecode_show_run.py::TestEarlyAbortShowCLI
+python -m pytest -p no:cacheprovider -q tests/test_vibecode_monitor.py
+python -m pytest -p no:cacheprovider -q tests/test_vibecode_run_post.py
+python -m pytest -p no:cacheprovider -q tests/test_vibecode_mcp_server.py
+python -m pytest -p no:cacheprovider -q
+python -m vibecode.cli check .
+```
+
+## Final Git Status
+
+Before review commands: clean working tree (`git --no-pager status --short` produced no file entries).
+
+After writing this review and running the audit commands:
+
+```text
+M docs/audit/OBSERVABLE_RUN_MONITOR_P18_FINAL_VALIDATION_REVIEW.md
+```
+
+Remaining dirt is expected and task-related only.
