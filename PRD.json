@@ -658,18 +658,20 @@
     {
       "title": "P18.2 Review final follow-up validation and dogfood evidence",
       "description": "Review the P18.1 validation report and current code/tests.\n\nWrite review output to:\n`docs/audit/OBSERVABLE_RUN_MONITOR_P18_FINAL_VALIDATION_REVIEW.md`\n\nCheck:\n- `docs/PRD_OBSERVABLE_RUN_MONITOR_FOLLOWUP_VALIDATION.md`\n- Current code/tests only where needed to verify validation claims.\n- CLI help output and artifact samples referenced by the validation report.\n\nRequire evidence:\n- Exact command outputs or summarized pass/fail evidence.\n- Proof that targeted fake OpenCode regression tests pass.\n- Proof that successful and early-failure run artifacts are replayable.\n- Proof or honest skip reason for fake monitor smoke and real OpenCode smoke.\n- Proof that final `git status --short` is clean or remaining dirt is unrelated and documented.\n\nWatch for:\n- Readiness claims while targeted run tests fail.\n- Dogfood report relying on old audit/dogfood documents.\n- Fake OpenCode tests not actually launching the fake command.\n- Monitor smoke only testing parser registration.\n- MCP/session correlation claims without event/log evidence.\n- Advisory guard findings hidden or strict mode untested.\n\nDo not modify implementation files. Only write the review document.",
-      "completed": true,
-      "engine": "codex",
-      "model": "gpt-5.5",
+      "completed": false,
+      "engine": "copilot",
+      "model": "gpt-5.4",
       "engine_args": [
-        "-c",
-        "model_reasoning_effort=\"high\""
+        "--reasoning-effort",
+        "high",
+        "--stream",
+        "off"
       ]
     },
     {
       "title": "P18.3 Apply final validation review fixes or record follow-ups",
       "description": "Read:\n`docs/audit/OBSERVABLE_RUN_MONITOR_P18_FINAL_VALIDATION_REVIEW.md`\n\nApply only concrete, safe, validation-report fixes from the review. If the review identifies substantial product or architecture work, do not start it here; append new PRD tasks or document future follow-up according to the repository process.\n\nKeep this phase focused on validation evidence, small test/report corrections, and final status truth. Do not perform broad refactors. Do not hide failing validation. Do not rely on old dogfood reports.\n\nRun if any source or tests changed:\n- `python -m compileall vibecode -q`\n- affected tests\n- the targeted fake OpenCode regression subset\n- full `python -m pytest -p no:cacheprovider -q` if practical\n- `git status --short`\n\nIf no fixes are needed, write:\n`docs/audit/OBSERVABLE_RUN_MONITOR_P18_FINAL_VALIDATION_FIX.md`\n\nIf fixes change validation outcome, update:\n`docs/PRD_OBSERVABLE_RUN_MONITOR_FOLLOWUP_VALIDATION.md`",
-      "completed": true,
+      "completed": false,
       "engine": "opencode",
       "model": "deepseek/deepseek-v4-pro",
       "engine_args": [
