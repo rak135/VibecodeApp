@@ -695,7 +695,7 @@
     {
       "title": "P19.2 Review TUI command entrypoint and repo status foundation",
       "description": "Review P19.1.\n\nWrite review output to:\n`docs/audit/TUI_PHASE1_P19_ENTRYPOINT_STATUS_REVIEW.md`\n\nScope:\n- Review the new no-argument `vibecode` behavior.\n- Review any explicit `vibecode tui [repo]` alias if implemented.\n- Review repo resolution service.\n- Review repo status model/service.\n- Review tests.\n\nCheck:\n- Existing explicit subcommands still work.\n- `vibecode --help` is not broken.\n- `vibecode` with no args is intentionally routed to the TUI bootstrap.\n- UI-independent status logic is testable without Textual.\n- Repo resolution priority is correct:\n  1. explicit repo;\n  2. active project registry;\n  3. current working directory.\n- Status model reports manual truth files separately from generated/current artifacts.\n- Git clean/dirty/unknown state is detected safely.\n- No LLM call or external OpenCode call is introduced.\n\nRequire evidence:\n- Exact or summarized test results.\n- CLI help behavior.\n- A small explanation of how no-argument routing avoids breaking existing commands.\n- A note about any risk around command parser ambiguity.\n\nWatch for:\n- Launching TUI when user requested help.\n- Breaking scripted use of existing subcommands.\n- Mixing UI rendering with business logic.\n- Fake status values not backed by filesystem/git checks.\n- Hardcoded Windows-only assumptions in repo resolution.\n- Any OpenCode invocation during app startup.\n\nDo not modify implementation files.\nOnly write the review document.",
-      "completed": false,
+      "completed": true,
       "engine": "copilot",
       "model": "gpt-5.4",
       "engine_args": [
