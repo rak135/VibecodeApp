@@ -139,11 +139,11 @@ def _run_list(args: list[str], cwd: Path) -> tuple[int, str, str]:
             cwd=cwd,
             capture_output=True,
             text=True,
-            timeout=300,
+            timeout=600,
         )
         return result.returncode, result.stdout, result.stderr
     except subprocess.TimeoutExpired:
-        return 1, "", "Command timed out after 300 seconds"
+        return 1, "", "Command timed out after 600 seconds"
     except Exception as exc:
         return 1, "", str(exc)
 
@@ -162,11 +162,11 @@ def _run_shell(command: str, cwd: Path) -> tuple[int, str, str]:
             cwd=cwd,
             capture_output=True,
             text=True,
-            timeout=300,
+            timeout=600,
         )
         return result.returncode, result.stdout, result.stderr
     except subprocess.TimeoutExpired:
-        return 1, "", "Command timed out after 300 seconds"
+        return 1, "", "Command timed out after 600 seconds"
     except Exception as exc:
         return 1, "", str(exc)
 

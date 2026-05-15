@@ -235,7 +235,7 @@ non-interactive smoke tests cover the event-routing logic without a live PTY.
 $ python -m pytest -p no:cacheprovider -q tests/test_vibecode_run_post.py
 ```
 
-**Result:** ✅ **112 passed in 35.56s** — exit code 0. Includes `TestAdvisoryGuardMode` (9 tests).
+**Result:** ✅ **52 passed in 41.66s** — exit code 0. Includes `TestAdvisoryGuardMode` (9 tests).
 
 Verified behaviors:
 - **Advisory mode** (default): guard findings logged with full severity as `needs_review`; run continues; exit code 0.
