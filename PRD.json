@@ -678,6 +678,376 @@
         "--variant",
         "high"
       ]
+    },
+    {
+      "title": "P19.1 Implement TUI-first command entrypoint and repo status services",
+      "description": "Goal:\nMake normal Vibecode usage start from a single command:\n`vibecode`\n\nThis is Phase 1 foundation work. Do not implement the full UI behavior in this task. Build the CLI entrypoint behavior and testable non-UI services that the TUI will use.\n\nWhy it matters:\nThe current workflow requires users to manually run many commands (`init`, `index`, `map`, `validate`, `context`, `run-plan`, `guard`, `check`, `handoff-check`). That is not a product; it is a pile of tools. Normal users should open Vibecode once and control the repo from there.\n\nRequired behavior:\n- Running `vibecode` with no subcommand opens the new TUI application.\n- Keep all existing explicit subcommands working exactly as before.\n- Keep `vibecode --help` working and useful.\n- Add `vibecode tui [repo]` as an explicit/diagnostic alias if it fits the existing CLI design, but the primary user command must be `vibecode`.\n- If no repo argument is supplied:\n  1. use active project registry if available;\n  2. otherwise use the current working directory;\n  3. resolve to a concrete path;\n  4. display that resolved path in the TUI.\n- If a repo argument is supplied through `vibecode tui [repo]`, use that path.\n- Do not call any LLM API.\n- Do not start OpenCode automatically just because the TUI opens.\n\nImplementation steps:\n- Inspect existing CLI parser structure and tests before changing anything.\n- Identify how the current entrypoint handles no arguments.\n- Introduce a small, testable repo resolution service, e.g. `RepoResolutionService`.\n- Introduce a testable repo status model, e.g. `RepoStatus`.\n- Introduce a repo status service, e.g. `RepoStatusService`, that can report:\n  - resolved repo path;\n  - whether `.vibecode` exists;\n  - whether manual truth files exist;\n  - whether generated index artifacts exist;\n  - whether `.vibecode/current/context_pack.md` exists;\n  - whether check results are present;\n  - whether git state is clean, dirty, or unknown;\n  - whether index is fresh/stale/missing using existing metadata if available.\n- Keep UI-independent logic out of Textual widgets so it can be tested without launching a terminal UI.\n- Prefer adding new modules over dumping logic into the CLI function.\n\nManual truth files to detect:\n- `.vibecode/project.yaml`\n- `.vibecode/architecture/OVERVIEW.md`\n- `.vibecode/architecture/INVARIANTS.md`\n- `.vibecode/architecture/STRUCTURE.md`\n- `.vibecode/architecture/MODULE_BOUNDARIES.md`\n- `.vibecode/architecture/PROTECTED_AREAS.md`\n- `.vibecode/architecture/DATA_FLOW.md`\n- `.vibecode/checks/required_checks.yaml`\n- `.vibecode/handoff/NOW.md`\n- `.vibecode/handoff/NEXT.md`\n- `.vibecode/handoff/BLOCKERS.md`\n- `.vibecode/agents/safe.json`\n- `.vibecode/agents/fast.json`\n- `.vibecode/agents/audit.json`\n- `.vibecode/history/README.md`\n- `.vibecode/index/README.md`\n- `.vibecode/index/schema.json`\n\nGenerated/current files to detect:\n- `.vibecode/index/file_inventory.json`\n- `.vibecode/index/symbol_map.json`\n- `.vibecode/index/dependency_map.json`\n- `.vibecode/index/test_map.json`\n- `.vibecode/index/entrypoints.md`\n- `.vibecode/index/risky_files.md`\n- `.vibecode/index/repo_tree.generated.md`\n- `.vibecode/index/risk_report.json`\n- `.vibecode/current/last_index.json`\n- `.vibecode/current/context_pack.md`\n- `.vibecode/current/opencode_prompt.md`\n- `.vibecode/current/check_results.json`\n\nTesting requirements:\n- Add tests for no-argument `vibecode` routing to TUI bootstrap without breaking help/subcommands.\n- Add tests for explicit `vibecode tui [repo]` if implemented.\n- Add tests for repo resolution priority:\n  1. explicit repo;\n  2. active project registry;\n  3. current working directory.\n- Add tests for status model with:\n  - missing `.vibecode`;\n  - partial `.vibecode`;\n  - complete manual truth files;\n  - generated index missing;\n  - generated index present;\n  - current context missing/present;\n  - clean/dirty/unknown git state.\n- Do not require a real OpenCode install in tests.\n\nRequired commands:\n- `git status --short`\n- `python -m compileall vibecode -q`\n- `python -m pytest -p no:cacheprovider -q`\n- CLI smoke:\n  - `python -m vibecode.cli --help`\n  - `python -m vibecode.cli tui --help` if the explicit alias exists\n\nAcceptance criteria:\n- `vibecode` with no arguments routes to the TUI bootstrap path.\n- Existing commands still work.\n- Repo status can be computed without launching Textual.\n- Status output can distinguish manual truth, generated artifacts, current context, checks, and git state.\n- No LLM calls are introduced.\n- Tests pass.\n\nWhat not to change:\n- Do not implement the full refresh workflow here.\n- Do not implement OpenCode launching here.\n- Do not rewrite existing index/context/guard/check logic.\n- Do not delete or overwrite any existing user files.",
+      "completed": true,
+      "engine": "copilot",
+      "model": "claude-sonnet-4.6",
+      "engine_args": [
+        "--reasoning-effort",
+        "high",
+        "--stream",
+        "off"
+      ]
+    },
+    {
+      "title": "P19.2 Review TUI command entrypoint and repo status foundation",
+      "description": "Review P19.1.\n\nWrite review output to:\n`docs/audit/TUI_PHASE1_P19_ENTRYPOINT_STATUS_REVIEW.md`\n\nScope:\n- Review the new no-argument `vibecode` behavior.\n- Review any explicit `vibecode tui [repo]` alias if implemented.\n- Review repo resolution service.\n- Review repo status model/service.\n- Review tests.\n\nCheck:\n- Existing explicit subcommands still work.\n- `vibecode --help` is not broken.\n- `vibecode` with no args is intentionally routed to the TUI bootstrap.\n- UI-independent status logic is testable without Textual.\n- Repo resolution priority is correct:\n  1. explicit repo;\n  2. active project registry;\n  3. current working directory.\n- Status model reports manual truth files separately from generated/current artifacts.\n- Git clean/dirty/unknown state is detected safely.\n- No LLM call or external OpenCode call is introduced.\n\nRequire evidence:\n- Exact or summarized test results.\n- CLI help behavior.\n- A small explanation of how no-argument routing avoids breaking existing commands.\n- A note about any risk around command parser ambiguity.\n\nWatch for:\n- Launching TUI when user requested help.\n- Breaking scripted use of existing subcommands.\n- Mixing UI rendering with business logic.\n- Fake status values not backed by filesystem/git checks.\n- Hardcoded Windows-only assumptions in repo resolution.\n- Any OpenCode invocation during app startup.\n\nDo not modify implementation files.\nOnly write the review document.",
+      "completed": false,
+      "engine": "copilot",
+      "model": "gpt-5.4",
+      "engine_args": [
+        "--reasoning-effort",
+        "high",
+        "--stream",
+        "off"
+      ]
+    },
+    {
+      "title": "P19.3 Apply TUI entrypoint/status review fixes",
+      "description": "Read:\n`docs/audit/TUI_PHASE1_P19_ENTRYPOINT_STATUS_REVIEW.md`\n\nGoal:\nApply only concrete fixes from the P19.2 review.\n\nAllowed changes:\n- CLI routing corrections.\n- Help behavior corrections.\n- Repo resolution fixes.\n- Repo status model/service fixes.\n- Missing or weak tests.\n- Documentation comments if they clarify intended behavior.\n\nDo not expand scope:\n- Do not implement refresh/rebuild here.\n- Do not implement the full TUI layout here.\n- Do not launch OpenCode here.\n- Do not introduce provider abstractions here.\n\nRequired behavior after fixes:\n- `vibecode` with no arguments still opens the TUI bootstrap.\n- Existing subcommands still work.\n- `--help` still works.\n- Tests cover the reviewed edge cases.\n\nRequired commands:\n- `git status --short`\n- `python -m compileall vibecode -q`\n- affected tests\n- full `python -m pytest -p no:cacheprovider -q` if practical\n- `git status --short`\n\nIf no fixes are needed:\n- Write:\n  `docs/audit/TUI_PHASE1_P19_ENTRYPOINT_STATUS_FIX.md`\n- State that no implementation changes were needed and why.\n\nCommit requirement:\n- If implementation/test files changed and validation passes, create a git commit.\n- Use the repository’s commit style.\n- Do not push.\n- Do not open a PR.",
+      "completed": false,
+      "engine": "opencode",
+      "model": "deepseek/deepseek-v4-pro",
+      "engine_args": [
+        "--variant",
+        "high"
+      ]
+    },
+    {
+      "title": "P20.1 Implement safe Refresh/Rebuild service preserving manual truth",
+      "description": "Goal:\nImplement the core Phase 1 Refresh/Rebuild behavior behind a testable service.\n\nThis service will later be triggered from the TUI by `[R] Refresh / Rebuild Vibecode layer`.\n\nWhy it matters:\nThe user should not manually run `init`, `index`, `inventory`, `validate`, and cleanup commands. One action should rebuild the disposable Vibecode layer while preserving human-maintained project truth. If this preservation rule is wrong, the product is dangerous.\n\nRequired behavior:\n- Add a testable service, e.g. `VibecodeRefreshService`.\n- The service must work independently of Textual.\n- If `.vibecode` does not exist:\n  - create it using the same defaults as existing `vibecode init`;\n  - do not require the user to manually run `init`.\n- If `.vibecode` exists:\n  - create missing manual truth files from defaults;\n  - never overwrite customized manual truth files;\n  - preserve user-written content.\n- Clean disposable/generated/current artifacts.\n- Regenerate index/inventory/risk outputs using existing internal logic.\n- Run validation using existing validation logic.\n- Return a structured refresh report.\n\nPreserve if present:\n- `.vibecode/project.yaml`\n- `.vibecode/architecture/OVERVIEW.md`\n- `.vibecode/architecture/INVARIANTS.md`\n- `.vibecode/architecture/STRUCTURE.md`\n- `.vibecode/architecture/MODULE_BOUNDARIES.md`\n- `.vibecode/architecture/PROTECTED_AREAS.md`\n- `.vibecode/architecture/DATA_FLOW.md`\n- `.vibecode/checks/required_checks.yaml`\n- `.vibecode/handoff/NOW.md`\n- `.vibecode/handoff/NEXT.md`\n- `.vibecode/handoff/BLOCKERS.md`\n- `.vibecode/agents/safe.json`\n- `.vibecode/agents/fast.json`\n- `.vibecode/agents/audit.json`\n- `.vibecode/history/README.md`\n- `.vibecode/index/README.md`\n- `.vibecode/index/schema.json`\n\nDisposable/generated paths that may be deleted/regenerated:\n- `.vibecode/current/*`\n- `.vibecode/generated/*`\n- `.vibecode/cache/*`\n- `.vibecode/tmp/*`\n- `.vibecode/index/file_inventory.json`\n- `.vibecode/index/symbol_map.json`\n- `.vibecode/index/dependency_map.json`\n- `.vibecode/index/test_map.json`\n- `.vibecode/index/entrypoints.md`\n- `.vibecode/index/risky_files.md`\n- `.vibecode/index/repo_tree.generated.md`\n- `.vibecode/index/risk_report.json`\n\nDo not delete by default:\n- `.vibecode/logs/*`\n- `.vibecode/runs/*`\n\nRefresh report must include:\n- repo path;\n- whether `.vibecode` was created or already existed;\n- preserved manual files;\n- created missing manual files;\n- disposable files/directories removed;\n- generated artifacts;\n- validation status;\n- warnings;\n- errors;\n- next recommended action.\n\nImplementation details:\n- Reuse existing init/index/inventory/validate logic instead of duplicating it.\n- If existing CLI functions are too entangled with terminal output, extract shared internal functions carefully.\n- Treat refresh as a controlled orchestration operation, not a broad filesystem delete.\n- Use allowlists, not broad delete patterns.\n- Handle missing optional directories gracefully.\n- Handle Windows paths correctly.\n\nTesting requirements:\n- Refresh creates `.vibecode` when missing.\n- Refresh creates missing manual truth files.\n- Refresh preserves existing customized manual truth files byte-for-byte.\n- Refresh removes disposable/current/generated files.\n- Refresh does not delete `.vibecode/logs/*`.\n- Refresh does not delete `.vibecode/runs/*`.\n- Refresh regenerates expected index artifacts or records honest failure if indexing cannot run in fixture.\n- Refresh returns a structured report.\n- Refresh is idempotent.\n- Tests must not require a real OpenCode install.\n- Tests must not call any LLM.\n\nRequired commands:\n- `git status --short`\n- `python -m compileall vibecode -q`\n- targeted refresh tests\n- full `python -m pytest -p no:cacheprovider -q` if practical\n\nAcceptance criteria:\n- A single service call can safely rebuild the Vibecode disposable layer.\n- Manual truth files are never overwritten.\n- Runtime/run/log history is not deleted by default.\n- A report suitable for TUI display is returned.\n- Existing CLI commands still work.",
+      "completed": false,
+      "engine": "copilot",
+      "model": "claude-sonnet-4.6",
+      "engine_args": [
+        "--reasoning-effort",
+        "high",
+        "--stream",
+        "off"
+      ]
+    },
+    {
+      "title": "P20.2 Review safe Refresh/Rebuild preservation behavior",
+      "description": "Review P20.1.\n\nWrite review output to:\n`docs/audit/TUI_PHASE1_P20_REFRESH_REBUILD_REVIEW.md`\n\nScope:\n- Review refresh/rebuild service behavior.\n- Review file preservation and cleanup rules.\n- Review use of existing init/index/inventory/validate logic.\n- Review tests.\n- Review Windows path safety.\n\nCheck:\n- Manual truth files are preserved byte-for-byte.\n- Missing manual files are created but customized files are not overwritten.\n- Cleanup uses explicit allowlists.\n- `.vibecode/logs/*` and `.vibecode/runs/*` are not deleted by default.\n- Generated/current files are cleaned/regenerated correctly.\n- Refresh report contains enough information for the TUI.\n- Refresh is idempotent.\n- No LLM/OpenCode call is made during refresh.\n\nRequire evidence:\n- Test names and pass/fail status.\n- A clear statement that customized manual truth files are preserved.\n- A clear statement that logs/runs survive refresh.\n- A list of any uncovered preservation edge cases.\n\nWatch for:\n- Dangerous `shutil.rmtree(\".vibecode\")` style behavior.\n- Hidden overwrites of manual files.\n- Deleting audit/session history.\n- Coupling refresh to Textual widgets.\n- Duplicated init/index logic that will drift.\n- False success when index/validation fails.\n- Silent failure of validation.\n\nDo not modify implementation files.\nOnly write the review document.",
+      "completed": false,
+      "engine": "copilot",
+      "model": "gpt-5.4",
+      "engine_args": [
+        "--reasoning-effort",
+        "high",
+        "--stream",
+        "off"
+      ]
+    },
+    {
+      "title": "P20.3 Apply Refresh/Rebuild review fixes",
+      "description": "Read:\n`docs/audit/TUI_PHASE1_P20_REFRESH_REBUILD_REVIEW.md`\n\nGoal:\nApply only concrete fixes from the P20.2 review.\n\nAllowed changes:\n- Preservation allowlist fixes.\n- Disposable cleanup fixes.\n- Report model improvements.\n- Idempotency fixes.\n- Test coverage improvements.\n- Safer reuse of existing init/index/inventory/validate functions.\n\nDo not expand scope:\n- Do not implement the full TUI layout here.\n- Do not launch OpenCode here.\n- Do not add external terminal integration here.\n- Do not add provider abstraction here.\n\nRequired verification:\n- Refresh on missing `.vibecode`.\n- Refresh on existing `.vibecode` with customized manual files.\n- Refresh with logs/runs present.\n- Refresh with disposable generated/current artifacts present.\n- Validation report is returned honestly.\n\nRequired commands:\n- `git status --short`\n- `python -m compileall vibecode -q`\n- affected refresh tests\n- full `python -m pytest -p no:cacheprovider -q` if practical\n- `git status --short`\n\nIf no fixes are needed:\n- Write:\n  `docs/audit/TUI_PHASE1_P20_REFRESH_REBUILD_FIX.md`\n- State that no implementation changes were needed and why.\n\nCommit requirement:\n- If implementation/test files changed and validation passes, create a git commit.\n- Use the repository’s commit style.\n- Do not push.\n- Do not open a PR.",
+      "completed": false,
+      "engine": "opencode",
+      "model": "deepseek/deepseek-v4-pro",
+      "engine_args": [
+        "--variant",
+        "high"
+      ]
+    },
+    {
+      "title": "P21.1 Implement three-column TUI shell for `vibecode`",
+      "description": "Goal:\nImplement the visible Phase 1 TUI shell with a three-column layout.\n\nPrimary command:\n`vibecode`\n\nOptional diagnostic alias if already added:\n`vibecode tui [repo]`\n\nLayout:\n- Left: Vibecode control/status/actions.\n- Center: Agent Console / command and output area.\n- Right: Vibecode logs/debug/context preview.\n\nWhy it matters:\nThe user wants to open one application and control the workflow visually. The current command-heavy flow is not acceptable for normal use.\n\nRequired left panel content:\n```\nVibecodeApp\n\nActive repo:\n  <resolved repo path>\n\nStatus:\n  .vibecode exists: yes/no\n  manual files: ok/missing/warn\n  generated index: fresh/stale/missing\n  current context: ready/missing\n  checks: pass/fail/warn/not run\n  git state: clean/dirty/unknown\n\nActions:\n  [R] Refresh / Rebuild Vibecode layer\n  [I] Inspect repo map\n  [C] Create context for task\n  [A] Run audit profile\n  [S] Run safe agent profile\n  [G] Run guard\n  [T] Run tests/checks\n  [H] Handoff check\n  [Q] Quit\n```\n\nRequired center panel content for Phase 1:\n- Provider: OpenCode.\n- Current task: none or selected task.\n- Prepared command/status.\n- Output stream/status area.\n- Clear note that fully embedded interactive terminal is not implemented in Phase 1.\n- Do not pretend plain subprocess is a reliable interactive terminal.\n\nRequired right panel content:\n- Vibecode event log.\n- Refresh/index/validate events.\n- Context creation events.\n- Guard/check/handoff summaries.\n- Warnings/errors.\n- Artifact paths.\n- Context preview summary when available.\n\nImplementation rules:\n- Use existing Textual/Rich infrastructure if present.\n- Keep rendering code separate from orchestration services.\n- TUI should read status from `RepoStatusService`.\n- TUI should trigger refresh through `VibecodeRefreshService`.\n- Do not implement embedded PTY in this task.\n- Do not launch external Windows Terminal in this task.\n- Do not call any LLM.\n- Avoid blocking the UI during long operations if Textual patterns already support background workers. If not, keep operations simple but clearly report running/completed/failure states.\n\nKeyboard actions:\n- `[R]` triggers refresh/rebuild service.\n- `[I]` shows repo map summary from existing map/index artifacts.\n- `[Q]` quits.\n- The remaining keys may show “not implemented yet” if their backend comes in later tasks, but they must be displayed in the left panel to lock the product shape.\n\nTesting requirements:\n- TUI command can instantiate app without launching full interactive session where practical.\n- Snapshot/model tests for left panel status text if existing test style supports it.\n- Tests for refresh action wiring using a fake service.\n- Tests that no OpenCode call happens on TUI startup.\n- Tests that no LLM call is introduced.\n- Existing CLI tests still pass.\n\nRequired commands:\n- `git status --short`\n- `python -m compileall vibecode -q`\n- targeted TUI tests\n- full `python -m pytest -p no:cacheprovider -q` if practical\n- manual smoke if safe:\n  - `python -m vibecode.cli --help`\n  - `python -m vibecode.cli`\n\nAcceptance criteria:\n- Running `vibecode` opens a TUI with the three-column shell.\n- Left panel shows repo path/status/actions.\n- Center panel is an agent console placeholder/output area, not a fake embedded terminal.\n- Right panel shows Vibecode debug/events.\n- `[R]` can refresh/rebuild from inside the TUI.\n- Existing explicit CLI commands still work.",
+      "completed": false,
+      "engine": "copilot",
+      "model": "claude-sonnet-4.6",
+      "engine_args": [
+        "--reasoning-effort",
+        "high",
+        "--stream",
+        "off"
+      ]
+    },
+    {
+      "title": "P21.2 Review three-column TUI shell",
+      "description": "Review P21.1.\n\nWrite review output to:\n`docs/audit/TUI_PHASE1_P21_THREE_COLUMN_SHELL_REVIEW.md`\n\nScope:\n- Review `vibecode` TUI startup.\n- Review three-column layout.\n- Review left status/actions.\n- Review center Agent Console placeholder/output behavior.\n- Review right debug/events panel.\n- Review keyboard action wiring.\n- Review tests.\n\nCheck:\n- The primary user command is `vibecode`.\n- Existing commands and `--help` remain usable.\n- TUI displays resolved repo path.\n- TUI displays status fields required by the PRD.\n- `[R]` triggers refresh service.\n- Center panel does not fake a fully interactive terminal.\n- Right panel provides useful debug/event information.\n- UI rendering is not tightly coupled to filesystem mutation logic.\n- No LLM/OpenCode call occurs on startup.\n\nRequire evidence:\n- Test output or summarized validation.\n- Screenshot text/smoke output if available.\n- Notes on any Textual limitations.\n- Confirmation that Phase 1 intentionally does not embed an interactive PTY.\n\nWatch for:\n- Broken CLI no-args/help behavior.\n- UI freezing without any status updates.\n- Hardcoded repo path.\n- Actions displayed but impossible to wire later.\n- OpenCode launched unexpectedly.\n- A fake terminal implemented with plain subprocess and marketed as interactive.\n\nDo not modify implementation files.\nOnly write the review document.",
+      "completed": false,
+      "engine": "copilot",
+      "model": "gpt-5.4",
+      "engine_args": [
+        "--reasoning-effort",
+        "high",
+        "--stream",
+        "off"
+      ]
+    },
+    {
+      "title": "P21.3 Apply three-column TUI shell review fixes",
+      "description": "Read:\n`docs/audit/TUI_PHASE1_P21_THREE_COLUMN_SHELL_REVIEW.md`\n\nGoal:\nApply only concrete fixes from the P21.2 review.\n\nAllowed changes:\n- TUI startup fixes.\n- Layout fixes.\n- Status display fixes.\n- Keyboard binding fixes.\n- Refresh action wiring fixes.\n- Tests/smoke improvements.\n- Better wording around non-interactive center console.\n\nDo not expand scope:\n- Do not implement full task/context flow here unless review identifies a tiny wiring correction only.\n- Do not implement embedded PTY.\n- Do not implement external Windows Terminal here.\n- Do not add broad provider abstractions here.\n\nRequired commands:\n- `git status --short`\n- `python -m compileall vibecode -q`\n- affected TUI tests\n- full `python -m pytest -p no:cacheprovider -q` if practical\n- `git status --short`\n\nIf no fixes are needed:\n- Write:\n  `docs/audit/TUI_PHASE1_P21_THREE_COLUMN_SHELL_FIX.md`\n- State that no implementation changes were needed and why.\n\nCommit requirement:\n- If implementation/test files changed and validation passes, create a git commit.\n- Use the repository’s commit style.\n- Do not push.\n- Do not open a PR.",
+      "completed": false,
+      "engine": "opencode",
+      "model": "deepseek/deepseek-v4-pro",
+      "engine_args": [
+        "--variant",
+        "high"
+      ]
+    },
+    {
+      "title": "P22.1 Implement TUI task/context flow and context preview",
+      "description": "Goal:\nImplement `[C] Create context for task` in the TUI.\n\nWhy it matters:\nThe user should not manually run:\n`vibecode context \"...\" --repo ... --platform opencode`\nThe TUI should ask for the task, generate the context, and show what useful context is going to the agent.\n\nRequired behavior:\n- Pressing `[C]` prompts the user for a task description.\n- The task description is stored as the current task in the TUI state.\n- Generate context using existing context generation logic.\n- Target platform/provider for Phase 1: OpenCode.\n- Write existing expected artifacts:\n  - `.vibecode/current/context_pack.md`\n  - `.vibecode/current/opencode_prompt.md`\n- Do not call an LLM.\n- Do not launch OpenCode from `[C]`.\n\nRight panel context preview must show a simplified summary:\n- task text;\n- platform/provider;\n- context pack path;\n- OpenCode prompt path;\n- included/relevant files if available from the context generation output;\n- architecture docs included if available;\n- required checks included if available;\n- protected/risky files included if available;\n- warnings/errors.\n\nCenter panel after context creation must show:\n- current provider: OpenCode;\n- current task;\n- prepared command or next action hint;\n- status: context ready;\n- note that `[A]` runs audit profile and `[S]` runs safe profile after the run backend is implemented/wired.\n\nImplementation details:\n- Add a `ContextPreviewService` or equivalent that reads/summarizes the generated context without dumping the entire file into the panel.\n- Keep full context in artifacts; the UI should show a concise preview.\n- Handle missing `.vibecode` cleanly:\n  - either prompt/advise refresh first;\n  - or trigger safe refresh if this matches existing UX decisions.\n- If context generation fails, show failure in the right debug panel and keep the TUI alive.\n- Do not duplicate context generation logic.\n- Do not require a real OpenCode install.\n\nTesting requirements:\n- Context action prompts/accepts task text using Textual test harness or service-level tests.\n- Context generation service is called with resolved repo and task.\n- Context artifacts are produced in test fixture or fake generation is wired.\n- Context preview includes artifact paths and selected summary fields.\n- Failure path reports error without crashing the TUI.\n- No LLM/OpenCode call is made by context creation.\n\nRequired commands:\n- `git status --short`\n- `python -m compileall vibecode -q`\n- targeted context/TUI tests\n- full `python -m pytest -p no:cacheprovider -q` if practical\n\nAcceptance criteria:\n- User can press `[C]`, enter a task, and get a generated context pack from the TUI.\n- Right panel explains what context was generated.\n- Center panel shows current task and prepared OpenCode-oriented status.\n- Existing CLI `context` command still works.",
+      "completed": false,
+      "engine": "copilot",
+      "model": "claude-sonnet-4.6",
+      "engine_args": [
+        "--reasoning-effort",
+        "high",
+        "--stream",
+        "off"
+      ]
+    },
+    {
+      "title": "P22.2 Review TUI task/context flow and preview",
+      "description": "Review P22.1.\n\nWrite review output to:\n`docs/audit/TUI_PHASE1_P22_CONTEXT_FLOW_REVIEW.md`\n\nScope:\n- Review `[C] Create context for task`.\n- Review context generation wiring.\n- Review right panel context preview.\n- Review center panel current task/status.\n- Review failure handling.\n- Review tests.\n\nCheck:\n- `[C]` does not call an LLM.\n- `[C]` does not launch OpenCode.\n- Existing context generation logic is reused.\n- Full context remains in artifacts.\n- UI preview is concise and useful.\n- Missing `.vibecode` or stale index behavior is honest and safe.\n- Failure path does not crash the TUI.\n- Existing CLI context behavior still works.\n\nRequire evidence:\n- Test output or summarized validation.\n- Example of context preview fields.\n- Artifact paths generated in a test/smoke run if safe.\n- Explanation of how context preview avoids dumping massive files into the UI.\n\nWatch for:\n- Duplicated context-selection logic.\n- Hardcoded OpenCode prompt paths that conflict with existing behavior.\n- Hiding context generation errors.\n- UI blocking without feedback.\n- LLM/OpenCode invocation hidden behind context generation.\n\nDo not modify implementation files.\nOnly write the review document.",
+      "completed": false,
+      "engine": "copilot",
+      "model": "gpt-5.4",
+      "engine_args": [
+        "--reasoning-effort",
+        "high",
+        "--stream",
+        "off"
+      ]
+    },
+    {
+      "title": "P22.3 Apply context flow review fixes",
+      "description": "Read:\n`docs/audit/TUI_PHASE1_P22_CONTEXT_FLOW_REVIEW.md`\n\nGoal:\nApply only concrete fixes from the P22.2 review.\n\nAllowed changes:\n- Context action wiring fixes.\n- Context preview summarization fixes.\n- Error handling fixes.\n- Missing/stale `.vibecode` behavior corrections.\n- Tests.\n\nDo not expand scope:\n- Do not implement audit/safe run if it was not already part of the reviewed fix.\n- Do not implement external Windows Terminal.\n- Do not implement embedded PTY.\n- Do not add provider abstraction beyond simple OpenCode labels.\n\nRequired commands:\n- `git status --short`\n- `python -m compileall vibecode -q`\n- affected context/TUI tests\n- full `python -m pytest -p no:cacheprovider -q` if practical\n- `git status --short`\n\nIf no fixes are needed:\n- Write:\n  `docs/audit/TUI_PHASE1_P22_CONTEXT_FLOW_FIX.md`\n- State that no implementation changes were needed and why.\n\nCommit requirement:\n- If implementation/test files changed and validation passes, create a git commit.\n- Use the repository’s commit style.\n- Do not push.\n- Do not open a PR.",
+      "completed": false,
+      "engine": "opencode",
+      "model": "deepseek/deepseek-v4-pro",
+      "engine_args": [
+        "--variant",
+        "high"
+      ]
+    },
+    {
+      "title": "P23.1 Implement TUI guard/check/handoff and inspect-map actions",
+      "description": "Goal:\nWire the non-agent TUI actions:\n- `[I] Inspect repo map`\n- `[G] Run guard`\n- `[T] Run tests/checks`\n- `[H] Handoff check`\n\nWhy it matters:\nThe TUI should replace the command pile for daily repo control. These actions are the safety loop around agent work.\n\nRequired behavior:\n- `[I] Inspect repo map`\n  - Show a readable map summary in the right panel.\n  - Use existing index/map data.\n  - If map/index is missing or stale, report it honestly and recommend `[R] Refresh`.\n- `[G] Run guard`\n  - Use existing guard logic.\n  - Show advisory/strict status if applicable.\n  - Update left panel guard/check state if the status model tracks it.\n  - Show full artifact/report path when available.\n- `[T] Run tests/checks`\n  - Use existing `check` behavior and `.vibecode/checks/required_checks.yaml`.\n  - Show PASS/FAIL/WARN/not-run.\n  - Write/consume `.vibecode/current/check_results.json` as existing behavior expects.\n  - Do not hide failing checks.\n- `[H] Handoff check`\n  - Use existing handoff validation.\n  - Show NOW/NEXT/BLOCKERS status.\n  - Show warnings/errors in right panel.\n\nImplementation rules:\n- Do not duplicate guard/check/handoff logic.\n- Prefer service wrappers that can be tested without the TUI.\n- Keep long output concise in the right panel; full logs should remain in artifacts.\n- Keep the TUI alive after failures.\n- Do not launch OpenCode.\n- Do not call an LLM.\n\nTesting requirements:\n- Each key action calls the expected service.\n- Success and failure results update event/debug panel.\n- Check failure is visible and not converted to success.\n- Missing config/index cases are honest.\n- Existing CLI commands still work:\n  - `map`\n  - `guard`\n  - `check`\n  - `handoff-check`\n\nRequired commands:\n- `git status --short`\n- `python -m compileall vibecode -q`\n- targeted action/service tests\n- full `python -m pytest -p no:cacheprovider -q` if practical\n- CLI help/smoke for map/guard/check/handoff-check if safe\n\nAcceptance criteria:\n- The TUI can inspect the repo map.\n- The TUI can run guard/check/handoff validations.\n- Results are visible in the right panel and summarized in the left panel.\n- Failures remain visible and honest.",
+      "completed": false,
+      "engine": "copilot",
+      "model": "claude-sonnet-4.6",
+      "engine_args": [
+        "--reasoning-effort",
+        "high",
+        "--stream",
+        "off"
+      ]
+    },
+    {
+      "title": "P23.2 Review TUI safety/action wiring",
+      "description": "Review P23.1.\n\nWrite review output to:\n`docs/audit/TUI_PHASE1_P23_SAFETY_ACTIONS_REVIEW.md`\n\nScope:\n- Review `[I]`, `[G]`, `[T]`, `[H]` behavior.\n- Review service wrappers around map/guard/check/handoff.\n- Review UI result reporting.\n- Review tests.\n\nCheck:\n- Existing map/guard/check/handoff logic is reused.\n- Failing checks/guards are not hidden.\n- Right panel shows enough detail to debug.\n- Full artifacts/logs are linked or path-referenced.\n- Missing/stale index is handled honestly.\n- The TUI remains alive after failures.\n- No LLM/OpenCode call is introduced.\n\nRequire evidence:\n- Test output.\n- Example success/failure event output if available.\n- Confirmation that existing CLI commands still pass.\n\nWatch for:\n- Converting non-zero check result into success.\n- Swallowing stderr.\n- Re-running destructive operations unexpectedly.\n- Hardcoded command assumptions.\n- UI code directly mutating lots of filesystem state.\n\nDo not modify implementation files.\nOnly write the review document.",
+      "completed": false,
+      "engine": "copilot",
+      "model": "gpt-5.4",
+      "engine_args": [
+        "--reasoning-effort",
+        "high",
+        "--stream",
+        "off"
+      ]
+    },
+    {
+      "title": "P23.3 Apply safety/action review fixes",
+      "description": "Read:\n`docs/audit/TUI_PHASE1_P23_SAFETY_ACTIONS_REVIEW.md`\n\nGoal:\nApply only concrete fixes from the P23.2 review.\n\nAllowed changes:\n- Action wiring fixes.\n- Result/status mapping fixes.\n- Failure visibility fixes.\n- Tests.\n- Small service wrapper cleanup.\n\nDo not expand scope:\n- Do not implement agent runs here.\n- Do not implement external terminal here.\n- Do not implement embedded PTY here.\n\nRequired commands:\n- `git status --short`\n- `python -m compileall vibecode -q`\n- affected action/service tests\n- full `python -m pytest -p no:cacheprovider -q` if practical\n- `git status --short`\n\nIf no fixes are needed:\n- Write:\n  `docs/audit/TUI_PHASE1_P23_SAFETY_ACTIONS_FIX.md`\n- State that no implementation changes were needed and why.\n\nCommit requirement:\n- If implementation/test files changed and validation passes, create a git commit.\n- Use the repository’s commit style.\n- Do not push.\n- Do not open a PR.",
+      "completed": false,
+      "engine": "opencode",
+      "model": "deepseek/deepseek-v4-pro",
+      "engine_args": [
+        "--variant",
+        "high"
+      ]
+    },
+    {
+      "title": "P24.1 Implement Phase 1 audit/safe run actions through existing orchestration",
+      "description": "Goal:\nWire the first version of agent run actions:\n- `[A] Run audit profile`\n- `[S] Run safe agent profile`\n\nThis is still Phase 1. Do not implement a real embedded interactive terminal. Use existing Vibecode run/monitor orchestration where possible.\n\nWhy it matters:\nThe user wants the center panel to represent the agent console and the right panel to represent Vibecode debug/logging. Phase 1 should launch or orchestrate the existing run flow and stream useful output, without pretending to be a full Windows terminal.\n\nRequired behavior:\n- `[A]` runs current task using audit profile.\n- `[S]` runs current task using safe profile.\n- If no current task exists:\n  - prompt the user for a task; or\n  - route through the same flow as `[C]`.\n- Ensure context is generated before run if needed.\n- Use existing run-plan/run/monitor internals where possible.\n- Center panel shows:\n  - provider: OpenCode;\n  - profile: audit/safe;\n  - running/completed/failed status;\n  - stdout/stderr stream or summarized output from existing run orchestration;\n  - session id/path when available.\n- Right panel shows:\n  - run started;\n  - context path;\n  - prompt path;\n  - guard result;\n  - check result;\n  - handoff result;\n  - artifact paths.\n- Left panel updates relevant status after run.\n- Do not make Vibecode itself call an LLM directly.\n- External LLM use is only through the explicitly started external OpenCode flow.\n- Do not implement embedded PTY.\n- Do not implement Windows Terminal phase 2 yet.\n\nImplementation details:\n- Prefer an `AgentRunService` wrapper around existing run controller.\n- Make the service testable with fake OpenCode.\n- Use existing fake OpenCode testing patterns if present.\n- Preserve session artifacts in `.vibecode/runs/<session_id>/`.\n- Surface early failures instead of hiding them.\n- Guard/check/handoff phase results should be visible if they ran.\n\nTesting requirements:\n- `[A]` and `[S]` call run service with correct profile.\n- No task flow prompts or rejects clearly.\n- Fake OpenCode run produces expected session artifacts.\n- Successful fake run shows output/status.\n- Early failure fake run is inspectable and does not crash TUI.\n- Existing run controller tests still pass.\n- No real OpenCode required in automated tests.\n\nRequired commands:\n- `git status --short`\n- `python -m compileall vibecode -q`\n- targeted fake OpenCode/run-controller tests\n- targeted TUI run-action tests\n- full `python -m pytest -p no:cacheprovider -q` if practical\n\nAcceptance criteria:\n- From TUI, user can create/select a task and run audit/safe profile.\n- Center panel shows useful agent output/status.\n- Right panel shows Vibecode debug/run artifacts.\n- Session artifacts are created and inspectable.\n- No embedded terminal is falsely claimed.",
+      "completed": false,
+      "engine": "copilot",
+      "model": "claude-sonnet-4.6",
+      "engine_args": [
+        "--reasoning-effort",
+        "high",
+        "--stream",
+        "off"
+      ]
+    },
+    {
+      "title": "P24.2 Review Phase 1 audit/safe run actions",
+      "description": "Review P24.1.\n\nWrite review output to:\n`docs/audit/TUI_PHASE1_P24_AGENT_RUN_ACTIONS_REVIEW.md`\n\nScope:\n- Review `[A]` and `[S]` behavior.\n- Review task/context prerequisite behavior.\n- Review use of existing run orchestration.\n- Review fake OpenCode tests.\n- Review center and right panel output.\n- Review session artifacts.\n\nCheck:\n- Audit profile and safe profile are correctly passed.\n- Context is generated before run when required.\n- No real OpenCode is required in tests.\n- Fake OpenCode tests actually launch the fake command, not just parser paths.\n- Successful and early-failure runs leave inspectable artifacts.\n- Guard/check/handoff results are visible if they ran.\n- The center panel is honest about not being a fully embedded interactive terminal.\n- Vibecode does not call an LLM directly.\n\nRequire evidence:\n- Test output.\n- Fake run artifact paths.\n- Example status/event output.\n- Confirmation that existing `run`, `monitor`, and `runs show` behavior remains compatible.\n\nWatch for:\n- Hiding early run failures.\n- Mixing stdout/stderr/debug logs into an unreadable dump.\n- Starting OpenCode on TUI startup.\n- Hardcoded profile assumptions.\n- Regressions in existing run-controller tests.\n- Claims that Phase 1 provides a real Windows Terminal.\n\nDo not modify implementation files.\nOnly write the review document.",
+      "completed": false,
+      "engine": "copilot",
+      "model": "gpt-5.4",
+      "engine_args": [
+        "--reasoning-effort",
+        "high",
+        "--stream",
+        "off"
+      ]
+    },
+    {
+      "title": "P24.3 Apply Phase 1 run-action review fixes",
+      "description": "Read:\n`docs/audit/TUI_PHASE1_P24_AGENT_RUN_ACTIONS_REVIEW.md`\n\nGoal:\nApply only concrete fixes from the P24.2 review.\n\nAllowed changes:\n- Audit/safe profile wiring fixes.\n- Task/context prerequisite fixes.\n- Fake OpenCode test improvements.\n- Session artifact/status visibility fixes.\n- Center/right panel output clarity.\n- Run service wrapper cleanup.\n\nDo not expand scope:\n- Do not implement external Windows Terminal yet.\n- Do not implement embedded PTY.\n- Do not add new provider support beyond OpenCode labels/wiring.\n\nRequired commands:\n- `git status --short`\n- `python -m compileall vibecode -q`\n- affected fake OpenCode/run/TUI tests\n- full `python -m pytest -p no:cacheprovider -q` if practical\n- `git status --short`\n\nIf no fixes are needed:\n- Write:\n  `docs/audit/TUI_PHASE1_P24_AGENT_RUN_ACTIONS_FIX.md`\n- State that no implementation changes were needed and why.\n\nCommit requirement:\n- If implementation/test files changed and validation passes, create a git commit.\n- Use the repository’s commit style.\n- Do not push.\n- Do not open a PR.",
+      "completed": false,
+      "engine": "opencode",
+      "model": "deepseek/deepseek-v4-pro",
+      "engine_args": [
+        "--variant",
+        "high"
+      ]
+    },
+    {
+      "title": "P25.1 Implement Phase 2 external Windows Terminal launch adapter for OpenCode",
+      "description": "Goal:\nImplement Phase 2 external terminal support for OpenCode.\n\nThe center panel in the TUI should still be the Agent Console/status area, but the actual interactive OpenCode session can be opened in an external Windows Terminal window/tab/pane. This avoids the trap of faking an embedded interactive terminal in Textual.\n\nWhy it matters:\nThe user explicitly wants a Windows-terminal-like middle console for OpenCode. A real embedded terminal is hard and should not be faked. Phase 2 should provide a practical bridge: launch OpenCode in real Windows Terminal while the TUI remains the Vibecode control/debug cockpit.\n\nRequired behavior:\n- Add an external terminal adapter, e.g. `ExternalTerminalAgentAdapter` or `WindowsTerminalOpenCodeAdapter`.\n- It must be behind an interface so future providers can be added later.\n- It must support OpenCode first.\n- It must use the generated `.vibecode/current/opencode_prompt.md`.\n- It must open an external Windows Terminal session when available.\n- If Windows Terminal (`wt.exe`) is unavailable:\n  - fall back to a clearly defined safe option, such as PowerShell/cmd window if appropriate;\n  - or report a clear unavailable status.\n- Do not fake interactivity inside Textual.\n- Do not break the existing Phase 1 run orchestration.\n- Do not call an LLM directly from Vibecode.\n- OpenCode LLM usage occurs only because the user explicitly starts the external agent session.\n\nDesign requirements:\n- Adapter should construct commands safely with proper Windows quoting.\n- Adapter should support:\n  - repo working directory;\n  - provider command;\n  - prompt path;\n  - profile/mode label;\n  - session/run id if available;\n  - environment variables if existing OpenCode orchestration needs them.\n- Adapter should return a structured launch result:\n  - launched/not launched;\n  - command shown to user;\n  - terminal kind;\n  - process id if available;\n  - error message if failed.\n- Center panel should show:\n  - external terminal launched;\n  - command;\n  - status;\n  - reminder that the interactive work is in the external terminal.\n- Right panel should log:\n  - launch attempt;\n  - command;\n  - prompt/context paths;\n  - result/failure.\n\nUser-facing TUI behavior:\n- Add a clear action or mode for external terminal launch.\n- Do not remove Phase 1 `[A]` and `[S]` run actions.\n- If `[A]`/`[S]` are reused for external launch, make that mode explicit in the center/right panel.\n- Prefer a toggle/setting if needed:\n  - run inside Vibecode orchestration;\n  - launch external terminal.\n\nTesting requirements:\n- Command construction tests for Windows paths with spaces.\n- Tests for missing `wt.exe`.\n- Tests for successful fake external-terminal launch without opening real Windows Terminal in CI.\n- Tests that generated prompt path is used.\n- Tests that no real OpenCode is required.\n- Tests that no LLM call is introduced.\n\nRequired commands:\n- `git status --short`\n- `python -m compileall vibecode -q`\n- targeted external terminal adapter tests\n- targeted TUI tests\n- full `python -m pytest -p no:cacheprovider -q` if practical\n\nAcceptance criteria:\n- TUI can launch an external terminal flow for OpenCode.\n- External launch uses current generated context/prompt.\n- Failure to find Windows Terminal is reported clearly.\n- Phase 1 run flow still works.\n- No fake embedded terminal is introduced.",
+      "completed": false,
+      "engine": "copilot",
+      "model": "claude-sonnet-4.6",
+      "engine_args": [
+        "--reasoning-effort",
+        "high",
+        "--stream",
+        "off"
+      ]
+    },
+    {
+      "title": "P25.2 Review Phase 2 external Windows Terminal launch adapter",
+      "description": "Review P25.1.\n\nWrite review output to:\n`docs/audit/TUI_PHASE2_P25_EXTERNAL_TERMINAL_REVIEW.md`\n\nScope:\n- Review external terminal adapter design.\n- Review Windows command construction/quoting.\n- Review TUI wiring.\n- Review failure behavior.\n- Review tests.\n\nCheck:\n- The implementation does not fake embedded interactivity in Textual.\n- External terminal launch is clearly separate from Phase 1 internal run orchestration.\n- Windows paths with spaces are safely handled.\n- Missing `wt.exe` or unsupported platform is handled honestly.\n- Generated OpenCode prompt path is used.\n- Center/right panels report launch status usefully.\n- No real Windows Terminal/OpenCode is required in automated tests.\n- No direct LLM call is introduced.\n\nRequire evidence:\n- Test output.\n- Example constructed command.\n- Failure-path behavior for missing terminal.\n- Explanation of how this can be extended to more providers later.\n\nWatch for:\n- Shell injection/quoting mistakes.\n- Hardcoded local repo paths.\n- CI tests opening real terminals.\n- Launching external terminal unexpectedly.\n- Breaking existing `run`/`monitor`.\n- Hiding launch failures.\n\nDo not modify implementation files.\nOnly write the review document.",
+      "completed": false,
+      "engine": "copilot",
+      "model": "gpt-5.4",
+      "engine_args": [
+        "--reasoning-effort",
+        "high",
+        "--stream",
+        "off"
+      ]
+    },
+    {
+      "title": "P25.3 Apply external terminal review fixes",
+      "description": "Read:\n`docs/audit/TUI_PHASE2_P25_EXTERNAL_TERMINAL_REVIEW.md`\n\nGoal:\nApply only concrete fixes from the P25.2 review.\n\nAllowed changes:\n- Command quoting fixes.\n- Adapter interface fixes.\n- Missing terminal/platform handling fixes.\n- TUI launch status improvements.\n- Tests.\n\nDo not expand scope:\n- Do not implement full provider registry unless the review identifies a small prerequisite.\n- Do not implement embedded PTY.\n- Do not change OpenCode prompt generation semantics beyond what is required.\n\nRequired commands:\n- `git status --short`\n- `python -m compileall vibecode -q`\n- affected external terminal/TUI tests\n- full `python -m pytest -p no:cacheprovider -q` if practical\n- `git status --short`\n\nIf no fixes are needed:\n- Write:\n  `docs/audit/TUI_PHASE2_P25_EXTERNAL_TERMINAL_FIX.md`\n- State that no implementation changes were needed and why.\n\nCommit requirement:\n- If implementation/test files changed and validation passes, create a git commit.\n- Use the repository’s commit style.\n- Do not push.\n- Do not open a PR.",
+      "completed": false,
+      "engine": "opencode",
+      "model": "deepseek/deepseek-v4-pro",
+      "engine_args": [
+        "--variant",
+        "high"
+      ]
+    },
+    {
+      "title": "P26.1 Implement provider abstraction for Agent Console with OpenCode first",
+      "description": "Goal:\nAdd a minimal provider abstraction for the TUI Agent Console so Phase 2 can support OpenCode now and more providers later without rewriting the UI.\n\nWhy it matters:\nThe user wants OpenCode for now, but future support for more providers. If provider-specific logic leaks everywhere in the TUI, the app will become trash quickly.\n\nRequired behavior:\n- Add a provider abstraction, e.g.:\n  - `AgentProvider`\n  - `AgentProviderRegistry`\n  - `OpenCodeProvider`\n- OpenCode is the only required provider in this task.\n- The provider abstraction should expose:\n  - display name;\n  - availability check;\n  - context/prompt artifact expectations;\n  - internal Vibecode run support if available;\n  - external terminal launch support if available;\n  - prepared command description;\n  - limitations.\n- TUI center panel should read provider metadata from this abstraction instead of hardcoded strings everywhere.\n- TUI actions should still work with OpenCode.\n- No LLM calls from Vibecode itself.\n- Provider abstraction must not break existing run/monitor CLI behavior.\n\nImplementation details:\n- Keep the abstraction minimal.\n- Do not build a huge plugin system prematurely.\n- Do not add unimplemented providers as fake working options.\n- It is acceptable to show future providers as “not implemented” only if clearly disabled.\n- Use OpenCode as the real provider.\n\nTesting requirements:\n- Provider registry returns OpenCode.\n- Provider availability can be tested/faked.\n- TUI displays provider from registry.\n- Context/run/external launch actions use provider interface where appropriate.\n- Missing provider or unavailable provider reports clear status.\n- Existing OpenCode tests still pass.\n\nRequired commands:\n- `git status --short`\n- `python -m compileall vibecode -q`\n- targeted provider/TUI tests\n- targeted OpenCode adapter/run tests\n- full `python -m pytest -p no:cacheprovider -q` if practical\n\nAcceptance criteria:\n- OpenCode is represented through a provider abstraction.\n- TUI no longer hardcodes provider behavior everywhere.\n- Future provider support has a sane seam.\n- Existing behavior remains stable.",
+      "completed": false,
+      "engine": "copilot",
+      "model": "claude-sonnet-4.6",
+      "engine_args": [
+        "--reasoning-effort",
+        "high",
+        "--stream",
+        "off"
+      ]
+    },
+    {
+      "title": "P26.2 Review provider abstraction for Agent Console",
+      "description": "Review P26.1.\n\nWrite review output to:\n`docs/audit/TUI_PHASE2_P26_PROVIDER_ABSTRACTION_REVIEW.md`\n\nScope:\n- Review provider abstraction shape.\n- Review OpenCode provider implementation.\n- Review TUI integration.\n- Review tests.\n- Review whether abstraction is too big or too fake.\n\nCheck:\n- OpenCode works as the only real provider.\n- Future providers are not falsely advertised as working.\n- Provider interface is small and useful.\n- TUI uses provider metadata instead of hardcoding everywhere.\n- Existing OpenCode run/monitor behavior still works.\n- No LLM call is introduced.\n- No broad plugin architecture overengineering.\n\nRequire evidence:\n- Test output.\n- Example provider status display.\n- Explanation of how OpenCode run and external terminal launch connect to the provider.\n\nWatch for:\n- Abstract factory overkill.\n- Fake provider options that do nothing.\n- Breaking existing OpenCode adapter.\n- Provider logic mixed into Textual widgets.\n- Unsupported platforms reported as success.\n\nDo not modify implementation files.\nOnly write the review document.",
+      "completed": false,
+      "engine": "copilot",
+      "model": "gpt-5.4",
+      "engine_args": [
+        "--reasoning-effort",
+        "high",
+        "--stream",
+        "off"
+      ]
+    },
+    {
+      "title": "P26.3 Apply provider abstraction review fixes",
+      "description": "Read:\n`docs/audit/TUI_PHASE2_P26_PROVIDER_ABSTRACTION_REVIEW.md`\n\nGoal:\nApply only concrete fixes from the P26.2 review.\n\nAllowed changes:\n- Provider interface simplification.\n- OpenCode provider fixes.\n- TUI provider display/wiring fixes.\n- Tests.\n- Removal or disabling of fake provider options.\n\nDo not expand scope:\n- Do not add real new providers.\n- Do not implement embedded terminal.\n- Do not change context generation architecture broadly.\n\nRequired commands:\n- `git status --short`\n- `python -m compileall vibecode -q`\n- affected provider/TUI/OpenCode tests\n- full `python -m pytest -p no:cacheprovider -q` if practical\n- `git status --short`\n\nIf no fixes are needed:\n- Write:\n  `docs/audit/TUI_PHASE2_P26_PROVIDER_ABSTRACTION_FIX.md`\n- State that no implementation changes were needed and why.\n\nCommit requirement:\n- If implementation/test files changed and validation passes, create a git commit.\n- Use the repository’s commit style.\n- Do not push.\n- Do not open a PR.",
+      "completed": false,
+      "engine": "opencode",
+      "model": "deepseek/deepseek-v4-pro",
+      "engine_args": [
+        "--variant",
+        "high"
+      ]
+    },
+    {
+      "title": "P27.1 Implement TUI event/session watcher and artifact surfacing",
+      "description": "Goal:\nMake the right panel useful for real debugging by surfacing Vibecode events, session artifacts, and generated context/run outputs.\n\nWhy it matters:\nThe user wants the right side to show logs and useful debug information: what context goes to the agent, refresh/index logs, guard/check/handoff outputs, and artifact paths. Raw spam is not enough. The panel should answer what Vibecode did and where evidence is.\n\nRequired behavior:\n- Add a TUI event model if not already present, e.g. `TuiEventLog`.\n- Add artifact/session watcher service if needed, e.g. `SessionArtifactWatcher`.\n- Right panel should show:\n  - latest Vibecode events;\n  - refresh/rebuild report;\n  - context preview;\n  - run/session id;\n  - paths to:\n    - context pack;\n    - OpenCode prompt;\n    - agent stdout/stderr logs;\n    - events.jsonl;\n    - summary.json;\n    - guard report;\n    - checks report;\n    - handoff report;\n  - warnings/errors;\n  - next recommended action.\n- It should not dump entire huge files by default.\n- It should support manual refresh/reload of displayed artifact state if needed.\n- It should handle missing artifacts honestly.\n- It should distinguish:\n  - context/debug events from Vibecode;\n  - agent output from center panel;\n  - validation/guard/check/handoff results.\n\nImplementation details:\n- Reuse `.vibecode/runs/<session_id>/` structure.\n- Reuse `.vibecode/current/*` artifacts.\n- Avoid blocking the UI while reading files.\n- Keep file reading safe and bounded.\n- Add utility to summarize long logs.\n- Keep exact full artifacts on disk and show paths.\n\nTesting requirements:\n- Event log records refresh/context/run/check events.\n- Artifact watcher handles missing files.\n- Artifact watcher reads/summarizes existing files.\n- Right panel model contains expected paths.\n- Large logs are bounded/truncated with a clear marker.\n- Existing runs show functionality remains compatible.\n\nRequired commands:\n- `git status --short`\n- `python -m compileall vibecode -q`\n- targeted event/artifact watcher tests\n- targeted TUI panel tests\n- full `python -m pytest -p no:cacheprovider -q` if practical\n\nAcceptance criteria:\n- Right panel provides useful debug cockpit information.\n- Generated context and run artifacts are easy to locate.\n- Missing/failing artifacts are visible, not hidden.\n- The TUI remains readable with large logs.",
+      "completed": false,
+      "engine": "copilot",
+      "model": "claude-sonnet-4.6",
+      "engine_args": [
+        "--reasoning-effort",
+        "high",
+        "--stream",
+        "off"
+      ]
+    },
+    {
+      "title": "P27.2 Review TUI event/session watcher and artifact surfacing",
+      "description": "Review P27.1.\n\nWrite review output to:\n`docs/audit/TUI_PHASE2_P27_EVENT_ARTIFACT_SURFACING_REVIEW.md`\n\nScope:\n- Review event model.\n- Review artifact/session watcher.\n- Review right panel debug information.\n- Review bounded log reading.\n- Review tests.\n\nCheck:\n- Right panel distinguishes Vibecode debug from agent output.\n- Artifact paths are accurate.\n- Missing artifacts are handled honestly.\n- Large logs are bounded/truncated clearly.\n- Run artifacts remain compatible with existing `runs list/show`.\n- Refresh/context/check/guard/handoff outputs are visible enough for debugging.\n- No LLM/OpenCode call is introduced by the watcher.\n\nRequire evidence:\n- Test output.\n- Example right panel/debug model output.\n- Example handling for missing artifacts.\n- Example truncation behavior.\n\nWatch for:\n- Reading giant logs into memory.\n- Showing stale artifact paths as current.\n- Hiding failures under generic “done”.\n- Coupling watcher to one session shape too tightly.\n- Breaking existing run artifact layout.\n\nDo not modify implementation files.\nOnly write the review document.",
+      "completed": false,
+      "engine": "copilot",
+      "model": "gpt-5.4",
+      "engine_args": [
+        "--reasoning-effort",
+        "high",
+        "--stream",
+        "off"
+      ]
+    },
+    {
+      "title": "P27.3 Apply event/artifact surfacing review fixes",
+      "description": "Read:\n`docs/audit/TUI_PHASE2_P27_EVENT_ARTIFACT_SURFACING_REVIEW.md`\n\nGoal:\nApply only concrete fixes from the P27.2 review.\n\nAllowed changes:\n- Event model fixes.\n- Artifact watcher fixes.\n- Right panel display fixes.\n- Truncation/bounds fixes.\n- Tests.\n\nDo not expand scope:\n- Do not implement new provider support.\n- Do not implement embedded terminal.\n- Do not change run artifact layout broadly unless required for compatibility.\n\nRequired commands:\n- `git status --short`\n- `python -m compileall vibecode -q`\n- affected event/artifact/TUI tests\n- full `python -m pytest -p no:cacheprovider -q` if practical\n- `git status --short`\n\nIf no fixes are needed:\n- Write:\n  `docs/audit/TUI_PHASE2_P27_EVENT_ARTIFACT_SURFACING_FIX.md`\n- State that no implementation changes were needed and why.\n\nCommit requirement:\n- If implementation/test files changed and validation passes, create a git commit.\n- Use the repository’s commit style.\n- Do not push.\n- Do not open a PR.",
+      "completed": false,
+      "engine": "opencode",
+      "model": "deepseek/deepseek-v4-pro",
+      "engine_args": [
+        "--variant",
+        "high"
+      ]
+    },
+    {
+      "title": "P28.1 Run final Phase 1+2 TUI validation and dogfood report",
+      "description": "Goal:\nRun a fresh validation pass proving the TUI-first Phase 1+2 workflow is ready or honestly not ready for supervised use.\n\nWrite validation report to:\n`docs/PRD_TUI_PHASE1_PHASE2_VALIDATION.md`\n\nWhy it matters:\nAfter implementing multiple TUI and terminal-integration tasks, the project needs a hard evidence pass. Do not rely on old dogfood reports. Do not claim readiness if the core path fails.\n\nValidation scope:\n- TUI command behavior.\n- Refresh/rebuild preservation.\n- Context generation.\n- Guard/check/handoff actions.\n- Phase 1 audit/safe run actions with fake OpenCode.\n- Phase 2 external Windows Terminal launch adapter with mocked/fake launch.\n- Provider abstraction with OpenCode.\n- Right-panel event/artifact surfacing.\n- Existing CLI commands.\n\nRequired validation steps:\n- Start with `git status --short`.\n- Run compile.\n- Run full pytest if practical.\n- Run targeted tests for:\n  - CLI entrypoint/no-args behavior;\n  - repo status/resolution;\n  - refresh/rebuild preservation;\n  - TUI shell/actions;\n  - context flow;\n  - guard/check/handoff actions;\n  - fake OpenCode audit/safe run;\n  - external terminal adapter;\n  - provider abstraction;\n  - event/artifact watcher.\n- Run CLI discovery:\n  - `python -m vibecode.cli --help`\n  - `python -m vibecode.cli init --help`\n  - `python -m vibecode.cli index --help`\n  - `python -m vibecode.cli context --help`\n  - `python -m vibecode.cli run --help`\n  - `python -m vibecode.cli monitor --help`\n  - `python -m vibecode.cli runs --help`\n  - `python -m vibecode.cli guard --help`\n  - `python -m vibecode.cli check --help`\n  - `python -m vibecode.cli handoff-check --help`\n  - `python -m vibecode.cli serve --help` if safe\n- Run a safe fixture/manual smoke for:\n  - `vibecode` TUI startup if non-interactive smoke is available;\n  - refresh/rebuild on a temporary repo;\n  - manual truth preservation;\n  - context generation;\n  - fake OpenCode run;\n  - artifact inspection.\n- Run external terminal launch only in fake/mocked mode by default.\n- Real Windows Terminal/OpenCode smoke is optional:\n  - run only if safe and available;\n  - otherwise skip with exact reason.\n- Finish with `git status --short`.\n\nValidation report must contain:\n- Exact commands.\n- Pass/fail/skipped table.\n- Artifact paths inspected.\n- Evidence that manual files are preserved.\n- Evidence that logs/runs are not deleted.\n- Evidence that no real LLM call is required for tests.\n- Known limitations.\n- Clear final verdict:\n  - ready for supervised dogfood;\n  - not ready;\n  - or partially ready with blockers.\n\nWhat not to change:\n- Do not implement broad fixes in this validation task.\n- If substantial bugs are found, record them as follow-up tasks.\n- Do not hide failures.\n- Do not run real OpenCode if unsafe, unavailable, costly, or likely to modify important user work.\n\nRequired commands:\n- `git status --short`\n- `python -m compileall vibecode -q`\n- targeted test subsets listed above\n- `python -m pytest -p no:cacheprovider -q` if practical\n- CLI help commands listed above\n- `git status --short`\n\nAcceptance criteria:\n- Validation report is created.\n- It contains fresh evidence, not old claims.\n- Core TUI path is honestly assessed.\n- Fake OpenCode and external terminal adapter paths are validated without requiring real LLM spend.",
+      "completed": false,
+      "engine": "copilot",
+      "model": "claude-sonnet-4.6",
+      "engine_args": [
+        "--reasoning-effort",
+        "high",
+        "--stream",
+        "off"
+      ]
+    },
+    {
+      "title": "P28.2 Review final TUI Phase 1+2 validation evidence",
+      "description": "Review P28.1 validation report.\n\nWrite review output to:\n`docs/audit/TUI_PHASE1_PHASE2_P28_FINAL_VALIDATION_REVIEW.md`\n\nCheck:\n- `docs/PRD_TUI_PHASE1_PHASE2_VALIDATION.md`\n- Current code/tests only where needed to verify validation claims.\n- Referenced artifact paths and sample outputs where practical.\n\nRequire evidence:\n- Exact or summarized command outputs.\n- Proof that full or broadest practical pytest ran.\n- Proof that targeted TUI tests pass.\n- Proof that refresh preserves manual truth files.\n- Proof that refresh does not delete logs/runs.\n- Proof that context generation works from the TUI/service path.\n- Proof that fake OpenCode audit/safe run works.\n- Proof that external terminal adapter is tested without opening real terminals in CI.\n- Honest status of real Windows Terminal/OpenCode smoke.\n- Proof that final `git status --short` is clean or remaining dirt is unrelated and documented.\n\nWatch for:\n- Readiness claims while targeted tests fail.\n- Validation relying on old reports.\n- Tests that only check parser registration, not behavior.\n- Fake OpenCode not actually launched.\n- External terminal tests opening real terminals.\n- Manual truth preservation not proven.\n- Right-panel debug claims without artifact evidence.\n- Hidden failures in guard/check/handoff.\n\nDo not modify implementation files.\nOnly write the review document.",
+      "completed": false,
+      "engine": "copilot",
+      "model": "gpt-5.4",
+      "engine_args": [
+        "--reasoning-effort",
+        "high",
+        "--stream",
+        "off"
+      ]
+    },
+    {
+      "title": "P28.3 Apply final TUI validation review fixes or record follow-ups",
+      "description": "Read:\n`docs/audit/TUI_PHASE1_PHASE2_P28_FINAL_VALIDATION_REVIEW.md`\n\nGoal:\nApply only concrete, safe validation-report fixes from the review. If the review identifies substantial product or architecture work, do not start it here. Record follow-up tasks or document future work according to the repository process.\n\nAllowed changes:\n- Small test/report corrections.\n- Validation evidence corrections.\n- Minor wiring fixes if review identifies a clear safe defect.\n- Documentation of known limitations.\n\nDo not expand scope:\n- Do not implement embedded PTY.\n- Do not add real new providers.\n- Do not do broad refactors.\n- Do not hide failing validation.\n\nRun if source/tests changed:\n- `python -m compileall vibecode -q`\n- affected tests\n- relevant targeted TUI/run/external-terminal tests\n- full `python -m pytest -p no:cacheprovider -q` if practical\n- `git status --short`\n\nIf no fixes are needed:\n- Write:\n  `docs/audit/TUI_PHASE1_PHASE2_P28_FINAL_VALIDATION_FIX.md`\n\nIf fixes change validation outcome, update:\n`docs/PRD_TUI_PHASE1_PHASE2_VALIDATION.md`\n\nCommit requirement:\n- If implementation/test/report files changed and validation passes, create a git commit.\n- Use the repository’s commit style.\n- Do not push.\n- Do not open a PR.\n\nAcceptance criteria:\n- Final validation truth is corrected if needed.\n- Any unresolved issues are explicitly documented.\n- The repository ends in a clean or honestly documented state.",
+      "completed": false,
+      "engine": "opencode",
+      "model": "deepseek/deepseek-v4-pro",
+      "engine_args": [
+        "--variant",
+        "high"
+      ]
     }
   ]
 }

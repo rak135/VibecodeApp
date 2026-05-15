@@ -444,6 +444,28 @@ def create_parser() -> argparse.ArgumentParser:
         help="Guard enforcement mode (default: advisory).",
     )
 
+    # tui
+    tui_parser = subparsers.add_parser(
+        "tui",
+        help="Open the main Vibecode TUI (explicit alias for running vibecode with no arguments).",
+        description=(
+            "Open the primary Vibecode TUI that shows repository status at a glance.\n\n"
+            "Repository resolution order:\n"
+            "  1. Explicit [repo] argument\n"
+            "  2. Active project from the project registry\n"
+            "  3. Current working directory\n\n"
+            "The resolved path is displayed in the TUI.\n\n"
+            "Requires the '[tui]' extra: pip install -e \".[tui]\" "
+            "(or pip install vibecode[tui])."
+        ),
+    )
+    tui_parser.add_argument(
+        "repo",
+        nargs="?",
+        default=None,
+        help="Repository root directory (default: active project from registry or cwd).",
+    )
+
     # export-agents
     export_agents_parser = subparsers.add_parser(
         "export-agents", help="Export agent instructions to AGENTS.md."
@@ -549,8 +571,8 @@ def main(argv: list[str] | None = None) -> int:
     debug: bool = getattr(args, "debug", False)
 
     if args.command is None:
-        parser.print_help()
-        return 0
+        import vibecode.main_app as _main_app
+        return _main_app.cmd_tui(args)
 
     try:
         return _dispatch(args, parser)
@@ -691,6 +713,10 @@ def _dispatch(args, parser) -> int:
     if args.command == "project":
         from vibecode.project_cli import cmd_project
         return cmd_project(args)
+
+    if args.command == "tui":
+        import vibecode.main_app as _main_app
+        return _main_app.cmd_tui(args)
 
     parser.print_help()
     return 1

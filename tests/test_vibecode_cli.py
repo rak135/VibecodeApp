@@ -127,8 +127,14 @@ def test_dashboard_help_exits_zero():
     assert exc_info.value.code == 0
 
 
-def test_no_command_returns_zero():
+def test_no_command_routes_to_tui(monkeypatch):
+    """main([]) must route to TUI bootstrap rather than printing help."""
+    import vibecode.main_app as ma
+
+    called = []
+    monkeypatch.setattr(ma, "cmd_tui", lambda args: called.append(args) or 0)
     assert main([]) == 0
+    assert len(called) == 1
 
 
 def test_import_vibecode():
