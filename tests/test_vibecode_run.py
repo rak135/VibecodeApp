@@ -620,6 +620,71 @@ class TestCmdRunPreflight:
         assert "OpenCode check failed" in err
         assert "definitely-not-opencode" in err
 
+    def test_missing_gitignore_leaves_no_run_artifacts(self, tmp_path: Path, monkeypatch):
+        """When .gitignore safety fails, no .vibecode/runs/** artifact must be written."""
+        _init_repo(tmp_path)
+        _minimal_vibecode(tmp_path)
+        (tmp_path / ".gitignore").unlink()
+        _write(tmp_path / "app.py", "x = 1\n")
+        _commit_all(tmp_path)
+
+        fake_dir = (tmp_path / ".." / "fake_bin_art").resolve()
+        fake_dir.mkdir(parents=True, exist_ok=True)
+        script = fake_dir / "opencode.py"
+        script.write_text(
+            "import sys\n"
+            f"argv = sys.argv[1:] if len(sys.argv) > 1 else []\n"
+            'if "--version" in argv:\n'
+            '    sys.stdout.write("fake-opencode 1.0.0\\n")\n'
+            "    sys.exit(0)\n"
+            "sys.stdout.write('OK\\n')\n",
+            encoding="utf-8",
+        )
+        wrapper = fake_dir / "opencode.cmd"
+        wrapper.write_text(
+            "@echo off\n" + f'"{sys.executable}" "%~dp0opencode.py" %*\n',
+            encoding="utf-8",
+        )
+        monkeypatch.setenv("OPENCODE_COMMAND", str(wrapper))
+
+        rc = main(["run", str(tmp_path), "--task", "test", "--no-index"])
+
+        assert rc == 1
+        runs_dir = tmp_path / ".vibecode" / "runs"
+        # The runs directory must either not exist or be empty — gitignore safety
+        # failure must not write any run artifacts into the target repo.
+        assert not runs_dir.exists() or not any(runs_dir.iterdir()), (
+            "No run artifacts should exist when gitignore safety check fails"
+        )
+
+    def test_post_safety_failure_writes_durable_events_and_summary(
+        self, tmp_path: Path, monkeypatch
+    ):
+        """After gitignore safety passes, a post-safety failure must still write
+        durable events.jsonl and summary.json so the run is replayable."""
+        _init_repo(tmp_path)
+        _minimal_vibecode(tmp_path)
+        _write(tmp_path / "app.py", "x = 1\n")
+        _commit_all(tmp_path)
+
+        # Point to an invalid opencode so the run aborts after the safety check.
+        monkeypatch.setenv("OPENCODE_COMMAND", "definitely-not-a-real-opencode")
+
+        rc = main(["run", str(tmp_path), "--task", "test", "--no-index"])
+
+        assert rc == 1
+        runs_dir = tmp_path / ".vibecode" / "runs"
+        assert runs_dir.exists(), "runs/ directory must exist after a post-safety failure"
+        run_dirs = [d for d in runs_dir.iterdir() if d.is_dir()]
+        assert len(run_dirs) == 1, "Exactly one run directory should be created"
+        run_dir = run_dirs[0]
+        assert (run_dir / "events.jsonl").exists(), (
+            "events.jsonl must be written once gitignore safety has passed"
+        )
+        assert (run_dir / "summary.json").exists(), (
+            "summary.json must be written for post-safety abort so 'runs show' can display it"
+        )
+
 
 # ---------------------------------------------------------------------------
 # build_run_plan integration with run module
@@ -783,7 +848,20 @@ class TestRunRefusesDirtyOnboarding:
         _write(tmp_path / "app.py", "x = 1\n")
         _commit_all(tmp_path)
 
-        # Create .vibecode setup files (onboarding baseline, not committed)
+        # Create .vibecode setup files (onboarding baseline, not committed).
+        # A real 'vibecode init' would also write .gitignore with ignore rules, so
+        # we include it here to let the pre-session gitignore safety check pass and
+        # exercise the dirty-tree check this test is designed to cover.
+        _write(
+            tmp_path / ".gitignore",
+            ".vibecode/current/\n"
+            ".vibecode/generated/\n"
+            ".vibecode/runs/\n"
+            ".vibecode/tmp/\n"
+            ".vibecode/cache/\n"
+            ".vibecode/logs/\n"
+            ".vibecode/index/*.generated.*\n",
+        )
         _write(
             tmp_path / ".vibecode" / "project.yaml",
             "project:\n  id: test\n  name: Test\n  root: .\n"

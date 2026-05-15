@@ -77,7 +77,7 @@ from vibecode.handoff import HandoffResult, validate_handoff_files
 from vibecode.indexer import check_inventory_health, cmd_index, compute_current_file_set_fingerprint
 from vibecode.permissions import PROFILES, profile_path
 from vibecode.process_runner import run_streaming
-from vibecode.run_plan import build_run_plan, _classify_dirty_paths
+from vibecode.run_plan import build_run_plan, _classify_dirty_paths, _verify_gitignore_policy
 from vibecode.session_log import RunSession
 
 
@@ -529,8 +529,31 @@ class RunController:
         vibecode_dir = root / ".vibecode"
         started_at = datetime.now(tz=timezone.utc).isoformat()
 
-        # Create the per-run artifact directory and JSONL sink immediately so that
-        # every observable run attempt — including early aborts — has durable artifacts.
+        # ----------------------------------------------------------------
+        # 0. Pre-session repository write-safety check
+        #    Verify that critical runtime paths are git-ignored before
+        #    creating any run artifacts inside the repo.  This MUST happen
+        #    before RunSession.create_event_sink() writes events.jsonl,
+        #    because an unignored write would dirty the repo and mask the
+        #    intended safety diagnostic.
+        # ----------------------------------------------------------------
+        try:
+            _pre_check_state = inspect_git_state(root)
+            if _pre_check_state.is_git_repo:
+                _ignore_errors = _verify_gitignore_policy(root, _pre_check_state)
+                if _ignore_errors:
+                    for _ie in _ignore_errors:
+                        print(f"Error: {_ie.message}", file=sys.stderr)
+                    return None, 1
+        except Exception as _exc:
+            # Best-effort check: if git state cannot be inspected, proceed
+            # and let the later git-preflight step handle the failure.
+            print(f"Warning: could not verify gitignore policy: {_exc}", file=sys.stderr)
+
+        # Create the per-run artifact directory and JSONL sink now that
+        # the repo has been verified safe for runtime writes.
+        # Every subsequent observable run attempt — including post-safety
+        # early aborts — will have durable artifacts.
         session = RunSession(root, self.session_id)
         jsonl_sink = session.create_event_sink()
 
