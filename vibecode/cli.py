@@ -375,7 +375,9 @@ def create_parser() -> argparse.ArgumentParser:
             "  - Content snippet\n\n"
             "The footer shows total file count, card count, and number of high-risk items.\n\n"
             "Key bindings: Enter — open detail view  |  Escape / Q — go back or quit\n\n"
-            "Requires 'vibecode inventory' to have been run first."
+            "Requires 'vibecode inventory' to have been run first.\n\n"
+            "Requires the '[tui]' extra: pip install -e \".[tui]\" "
+            "(or pip install vibecode[tui])."
         ),
     )
     dashboard_parser.add_argument(
@@ -397,7 +399,9 @@ def create_parser() -> argparse.ArgumentParser:
             "  Status bar: agent status, guard status, checks status, run artifact path.\n\n"
             "Note: this is a streaming-output monitor (text mode), not a PTY.  For\n"
             "full interactive terminal control, run OpenCode directly.\n\n"
-            "Press Q to close the monitor (running agent process behavior is not managed)."
+            "Press Q to close the monitor (running agent process behavior is not managed).\n\n"
+            "Requires the '[tui]' extra: pip install -e \".[tui]\" "
+            "(or pip install vibecode[tui])."
         ),
     )
     monitor_parser.add_argument(
@@ -466,8 +470,11 @@ def create_parser() -> argparse.ArgumentParser:
             "  list [--repo REPO]                    — list recent run session IDs\n"
             "  show <session_id> [--repo REPO]        — show summary for a run\n"
             "                   [--events]            — also replay events in order\n\n"
-            "Each run directory contains: summary.json, events.jsonl, guard_report.json,\n"
-            "checks_report.json, handoff_report.json, agent_stdout.log, agent_stderr.log."
+            "Completed run directories contain: summary.json, metadata.json, events.jsonl,\n"
+            "guard_report.json, guard_report.md, checks_report.json, handoff_report.json,\n"
+            "agent_stdout.log, agent_stderr.log, context_pack.md, opencode_prompt.md.\n\n"
+            "Aborted runs (post gitignore-safety) contain only events.jsonl and summary.json.\n"
+            "Runs that fail the gitignore safety check create no run directory at all."
         ),
     )
     runs_sub = runs_parser.add_subparsers(dest="runs_subcommand", metavar="SUBCOMMAND")
