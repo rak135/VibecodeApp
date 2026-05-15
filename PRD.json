@@ -732,7 +732,7 @@
     {
       "title": "P20.2 Review safe Refresh/Rebuild preservation behavior",
       "description": "Review P20.1.\n\nWrite review output to:\n`docs/audit/TUI_PHASE1_P20_REFRESH_REBUILD_REVIEW.md`\n\nScope:\n- Review refresh/rebuild service behavior.\n- Review file preservation and cleanup rules.\n- Review use of existing init/index/inventory/validate logic.\n- Review tests.\n- Review Windows path safety.\n\nCheck:\n- Manual truth files are preserved byte-for-byte.\n- Missing manual files are created but customized files are not overwritten.\n- Cleanup uses explicit allowlists.\n- `.vibecode/logs/*` and `.vibecode/runs/*` are not deleted by default.\n- Generated/current files are cleaned/regenerated correctly.\n- Refresh report contains enough information for the TUI.\n- Refresh is idempotent.\n- No LLM/OpenCode call is made during refresh.\n\nRequire evidence:\n- Test names and pass/fail status.\n- A clear statement that customized manual truth files are preserved.\n- A clear statement that logs/runs survive refresh.\n- A list of any uncovered preservation edge cases.\n\nWatch for:\n- Dangerous `shutil.rmtree(\".vibecode\")` style behavior.\n- Hidden overwrites of manual files.\n- Deleting audit/session history.\n- Coupling refresh to Textual widgets.\n- Duplicated init/index logic that will drift.\n- False success when index/validation fails.\n- Silent failure of validation.\n\nDo not modify implementation files.\nOnly write the review document.",
-      "completed": false,
+      "completed": true,
       "engine": "copilot",
       "model": "gpt-5.4",
       "engine_args": [
