@@ -151,6 +151,374 @@ def _extract_pack_warnings(content: str) -> list[str]:
     return warnings[:5]
 
 
+class InspectMapService:
+    """Loads the repo map and file inventory for TUI display.
+
+    Returns a summary dict; does not contain any TUI logic.
+    """
+
+    def run(self, repo_root: Path) -> dict:
+        """Load the repo map and return a summary dict.
+
+        Keys: content, path, total_files, card_count, high_risk_count,
+              stale, error (None on success).
+        """
+        result: dict = {
+            "content": "",
+            "path": "",
+            "total_files": 0,
+            "card_count": 0,
+            "high_risk_count": 0,
+            "stale": False,
+            "error": None,
+        }
+        map_file = repo_root / ".vibecode" / "index" / "repo_tree.generated.md"
+        inventory_file = repo_root / ".vibecode" / "index" / "file_inventory.json"
+
+        if not map_file.exists() and not inventory_file.exists():
+            result["error"] = "Index not found. Run [R] Refresh or 'vibecode index'."
+            return result
+
+        if map_file.exists():
+            try:
+                result["content"] = map_file.read_text(encoding="utf-8")
+                result["path"] = str(map_file)
+            except Exception as exc:  # noqa: BLE001
+                result["error"] = f"Failed to read repo map: {exc}"
+
+        if inventory_file.exists():
+            try:
+                inv_data = json.loads(inventory_file.read_text(encoding="utf-8"))
+                result["total_files"] = inv_data.get("total_files", 0)
+                cards = inv_data.get("context_cards") or []
+                result["card_count"] = len(cards)
+            except Exception:  # noqa: BLE001
+                pass
+
+        risk_file = repo_root / ".vibecode" / "index" / "risk_report.json"
+        if risk_file.exists():
+            try:
+                risk_data = json.loads(risk_file.read_text(encoding="utf-8"))
+                high_risk = sum(
+                    1 for item in (risk_data.get("files") or {}).values()
+                    if (item.get("risk_level") == "high" or
+                        any(h.get("severity") == "high" for h in (item.get("heuristics") or [])))
+                )
+                result["high_risk_count"] = high_risk
+            except Exception:  # noqa: BLE001
+                pass
+
+        # Check for stale index
+        last_index = repo_root / ".vibecode" / "current" / "last_index.json"
+        if not last_index.exists():
+            result["stale"] = True
+
+        return result
+
+
+def render_inspect_map_result(result: dict) -> str:
+    """Return right-panel text summarising the repo map (pure, testable)."""
+    if result.get("error"):
+        return (
+            "─── Inspect Repo Map ───\n"
+            f"ERROR: {result['error']}\n\n"
+            "Hint: Run [R] Refresh to build the index."
+        )
+
+    lines = ["─── Repo Map ───"]
+    if result.get("path"):
+        lines.append(f"Map: {result['path']}")
+    if result.get("total_files"):
+        lines.append(f"Files: {result['total_files']}")
+    if result.get("card_count"):
+        lines.append(f"Cards: {result['card_count']}")
+    if result.get("high_risk_count"):
+        lines.append(f"High-risk: {result['high_risk_count']}")
+    if result.get("stale"):
+        lines.append("WARN: Index may be stale — run [R] Refresh to update.")
+
+    content = result.get("content", "")
+    if content:
+        lines.append("")
+        # Show first ~3000 chars of the map (summary section)
+        snippet = content[:3000]
+        if len(content) > 3000:
+            snippet += f"\n… ({len(content) - 3000} more chars — see {result.get('path', 'file')})"
+        lines.append(snippet)
+
+    return "\n".join(lines)
+
+
+class GuardService:
+    """Runs guard evaluation and returns a summary dict.
+
+    Wraps :func:`evaluate_project_guard` and :func:`write_guard_result`;
+    contains no TUI logic.
+    """
+
+    def run(self, repo_root: Path) -> dict:
+        """Run guard and return a summary dict.
+
+        Keys: passed, errors, warnings, findings_summary (list[str]),
+              report_path, error (None on success).
+        """
+        result: dict = {
+            "passed": True,
+            "errors": 0,
+            "warnings": 0,
+            "findings_summary": [],
+            "report_path": "",
+            "error": None,
+        }
+        vibecode_dir = repo_root / ".vibecode"
+
+        project_yaml = vibecode_dir / "project.yaml"
+        if not project_yaml.exists():
+            result["error"] = (
+                ".vibecode/project.yaml not found. "
+                "Run 'vibecode init' to initialise the project."
+            )
+            return result
+
+        try:
+            from vibecode.git_state import inspect_git_state
+
+            git_state = inspect_git_state(repo_root)
+        except Exception as exc:  # noqa: BLE001
+            result["error"] = f"Git error: {exc}"
+            return result
+
+        if not git_state.is_git_repo:
+            result["error"] = "Not a git repository."
+            return result
+
+        try:
+            from vibecode.guard import evaluate_project_guard, write_guard_result
+
+            guard_result = evaluate_project_guard(git_state, vibecode_dir)
+        except Exception as exc:  # noqa: BLE001
+            result["error"] = f"Guard evaluation error: {exc}"
+            return result
+
+        result["passed"] = guard_result.passed
+        result["errors"] = sum(1 for f in guard_result.findings if f.severity == "error")
+        result["warnings"] = sum(1 for f in guard_result.findings if f.severity == "warning")
+
+        for finding in guard_result.findings[:20]:
+            severity = finding.severity.upper()
+            title = (finding.title or finding.message)[:80]
+            result["findings_summary"].append(f"  [{severity}] {finding.path}: {title}")
+
+        try:
+            report_path = write_guard_result(guard_result, vibecode_dir, repo_root)
+            result["report_path"] = str(report_path)
+        except Exception:  # noqa: BLE001
+            pass
+
+        return result
+
+
+def render_guard_result_summary(result: dict) -> str:
+    """Return right-panel text for a guard run result (pure, testable)."""
+    if result.get("error"):
+        return (
+            "─── Guard ───\n"
+            f"ERROR: {result['error']}"
+        )
+
+    status = "✓ PASSED" if result.get("passed") else "✗ FAILED"
+    lines = [
+        "─── Guard ───",
+        f"Result: {status}",
+        f"Errors: {result.get('errors', 0)}  Warnings: {result.get('warnings', 0)}",
+    ]
+    if result.get("report_path"):
+        lines.append(f"Report: {result['report_path']}")
+
+    findings = result.get("findings_summary") or []
+    if findings:
+        lines.append("")
+        lines.append("Findings:")
+        lines.extend(findings)
+    else:
+        lines.append("No violations found.")
+
+    return "\n".join(lines)
+
+
+class CheckService:
+    """Runs required checks and returns a summary dict.
+
+    Wraps :func:`run_checks` and :func:`write_check_results`;
+    contains no TUI logic.
+    """
+
+    def run(self, repo_root: Path) -> dict:
+        """Run checks and return a summary dict.
+
+        Keys: status, total, passed, failed, warnings,
+              results_summary (list[str]), path, error (None on success).
+        """
+        result: dict = {
+            "status": "not-run",
+            "total": 0,
+            "passed": 0,
+            "failed": 0,
+            "warnings": 0,
+            "results_summary": [],
+            "path": "",
+            "error": None,
+        }
+        vibecode_dir = repo_root / ".vibecode"
+
+        checks_yaml = vibecode_dir / "checks" / "required_checks.yaml"
+        if not checks_yaml.exists():
+            result["error"] = (
+                ".vibecode/checks/required_checks.yaml not found. "
+                "No checks configured."
+            )
+            return result
+
+        try:
+            from vibecode.check import run_checks, write_check_results
+
+            check_run = run_checks(repo_root)
+        except Exception as exc:  # noqa: BLE001
+            result["error"] = f"Check execution error: {exc}"
+            return result
+
+        result["status"] = "fail" if check_run.has_required_failures else "pass"
+        result["total"] = check_run.total
+        result["passed"] = check_run.passed
+        result["failed"] = check_run.failed
+        result["warnings"] = check_run.warnings
+
+        for r in check_run.results:
+            label = {"pass": "PASS", "fail": "FAIL", "warn": "WARN"}.get(r.status, "?")
+            result["results_summary"].append(
+                f"  [{label}] {r.name} (exit {r.exit_code}, {r.duration_seconds:.2f}s)"
+            )
+
+        try:
+            path = write_check_results(check_run, vibecode_dir)
+            result["path"] = str(path)
+        except Exception:  # noqa: BLE001
+            pass
+
+        return result
+
+
+def render_check_result_summary(result: dict) -> str:
+    """Return right-panel text for a check run result (pure, testable)."""
+    if result.get("error"):
+        return (
+            "─── Checks ───\n"
+            f"ERROR: {result['error']}"
+        )
+
+    status_label = {"pass": "✓ PASS", "fail": "✗ FAIL"}.get(
+        result.get("status", ""), result.get("status", "unknown")
+    )
+    lines = [
+        "─── Checks ───",
+        f"Result: {status_label}",
+        (
+            f"Total: {result.get('total', 0)}  "
+            f"Passed: {result.get('passed', 0)}  "
+            f"Failed: {result.get('failed', 0)}  "
+            f"Warnings: {result.get('warnings', 0)}"
+        ),
+    ]
+    if result.get("path"):
+        lines.append(f"Report: {result['path']}")
+
+    summaries = result.get("results_summary") or []
+    if summaries:
+        lines.append("")
+        lines.append("Results:")
+        lines.extend(summaries)
+
+    return "\n".join(lines)
+
+
+class HandoffService:
+    """Runs handoff file validation and returns a summary dict.
+
+    Wraps :func:`validate_handoff_files`; contains no TUI logic.
+    """
+
+    def run(self, repo_root: Path) -> dict:
+        """Run handoff check and return a summary dict.
+
+        Keys: passed, issues (list[dict with file/message]),
+              status, error (None on success).
+        """
+        result: dict = {
+            "passed": True,
+            "issues": [],
+            "status": "ok",
+            "error": None,
+        }
+        vibecode_dir = repo_root / ".vibecode"
+
+        if not vibecode_dir.exists():
+            result["error"] = ".vibecode directory not found."
+            return result
+
+        try:
+            from vibecode.git_state import inspect_git_state
+
+            git_state = inspect_git_state(repo_root)
+            diff_paths = (
+                list(git_state.diff_name_only) + list(git_state.untracked_paths)
+                if git_state.is_git_repo
+                else []
+            )
+        except Exception:  # noqa: BLE001
+            diff_paths = []
+
+        try:
+            from vibecode.handoff import validate_handoff_files
+
+            handoff_result = validate_handoff_files(repo_root, diff=diff_paths)
+        except Exception as exc:  # noqa: BLE001
+            result["error"] = f"Handoff validation error: {exc}"
+            return result
+
+        result["passed"] = handoff_result.passed
+        result["status"] = handoff_result.status
+        result["issues"] = [
+            {"file": issue.file, "message": issue.message}
+            for issue in handoff_result.issues
+        ]
+        return result
+
+
+def render_handoff_result_summary(result: dict) -> str:
+    """Return right-panel text for a handoff check result (pure, testable)."""
+    if result.get("error"):
+        return (
+            "─── Handoff Check ───\n"
+            f"ERROR: {result['error']}"
+        )
+
+    status = "✓ PASSED" if result.get("passed") else "✗ FAILED"
+    lines = [
+        "─── Handoff Check ───",
+        f"Result: {status}",
+    ]
+
+    issues = result.get("issues") or []
+    if issues:
+        lines.append(f"Issues ({len(issues)}):")
+        for issue in issues:
+            lines.append(f"  • {issue.get('file', '')}: {issue.get('message', '')}")
+    else:
+        lines.append("All handoff files are valid.")
+
+    return "\n".join(lines)
+
+
 class ContextPreviewService:
     """Generates context artifacts and summarises them for TUI display.
 
@@ -398,12 +766,20 @@ if _TEXTUAL_AVAILABLE:
             status: object,
             refresh_service: object | None = None,
             context_service: object | None = None,
+            inspect_service: object | None = None,
+            guard_service: object | None = None,
+            check_service: object | None = None,
+            handoff_service: object | None = None,
         ) -> None:
             super().__init__()
             self._repo_path = repo_path
             self._status = status
             self._refresh_service = refresh_service
             self._context_service = context_service
+            self._inspect_service = inspect_service
+            self._guard_service = guard_service
+            self._check_service = check_service
+            self._handoff_service = handoff_service
             self._current_task: str | None = None
 
         def _get_refresh_service(self) -> object:
@@ -417,6 +793,26 @@ if _TEXTUAL_AVAILABLE:
             if self._context_service is None:
                 self._context_service = ContextPreviewService()
             return self._context_service
+
+        def _get_inspect_service(self) -> object:
+            if self._inspect_service is None:
+                self._inspect_service = InspectMapService()
+            return self._inspect_service
+
+        def _get_guard_service(self) -> object:
+            if self._guard_service is None:
+                self._guard_service = GuardService()
+            return self._guard_service
+
+        def _get_check_service(self) -> object:
+            if self._check_service is None:
+                self._check_service = CheckService()
+            return self._check_service
+
+        def _get_handoff_service(self) -> object:
+            if self._handoff_service is None:
+                self._handoff_service = HandoffService()
+            return self._handoff_service
 
         # ------------------------------------------------------------------
         # Compose
@@ -461,19 +857,18 @@ if _TEXTUAL_AVAILABLE:
             threading.Thread(target=_worker, daemon=True, name="tui-refresh").start()
 
         def action_inspect_map(self) -> None:
-            """Load repo map into the center output area."""
-            map_file = self._repo_path / ".vibecode" / "index" / "repo_tree.generated.md"
-            if not map_file.exists():
-                self._log_event("[I] Repo map not found. Run 'vibecode index' first.")
-                return
-            try:
-                content = map_file.read_text(encoding="utf-8")
-                center = self.query_one("#center-output", RichLog)
-                center.clear()
-                center.write(content[:4000])
-                self._log_event("[I] Repo map loaded into center panel.")
-            except Exception as exc:  # noqa: BLE001
-                self._log_event(f"[I] Failed to read map: {exc}")
+            """Load repo map summary into the right panel."""
+            self._log_event("[I] Inspecting repo map...")
+            svc = self._get_inspect_service()
+
+            def _worker() -> None:
+                try:
+                    result = svc.run(self._repo_path)  # type: ignore[attr-defined]
+                    self.call_from_thread(self._on_inspect_done, result)
+                except Exception as exc:  # noqa: BLE001
+                    self.call_from_thread(self._on_inspect_error, str(exc))
+
+            threading.Thread(target=_worker, daemon=True, name="tui-inspect").start()
 
         def action_cmd_context(self) -> None:
             """Prompt for a task and generate context artifacts."""
@@ -491,13 +886,46 @@ if _TEXTUAL_AVAILABLE:
             self._log_not_impl("S", "Safe agent profile")
 
         def action_cmd_guard(self) -> None:
-            self._log_not_impl("G", "Guard")
+            """Run guard and show results in right panel."""
+            self._log_event("[G] Running guard...")
+            svc = self._get_guard_service()
+
+            def _worker() -> None:
+                try:
+                    result = svc.run(self._repo_path)  # type: ignore[attr-defined]
+                    self.call_from_thread(self._on_guard_done, result)
+                except Exception as exc:  # noqa: BLE001
+                    self.call_from_thread(self._on_guard_error, str(exc))
+
+            threading.Thread(target=_worker, daemon=True, name="tui-guard").start()
 
         def action_cmd_tests(self) -> None:
-            self._log_not_impl("T", "Tests/checks")
+            """Run required checks and show results in right panel."""
+            self._log_event("[T] Running checks...")
+            svc = self._get_check_service()
+
+            def _worker() -> None:
+                try:
+                    result = svc.run(self._repo_path)  # type: ignore[attr-defined]
+                    self.call_from_thread(self._on_check_done, result)
+                except Exception as exc:  # noqa: BLE001
+                    self.call_from_thread(self._on_check_error, str(exc))
+
+            threading.Thread(target=_worker, daemon=True, name="tui-checks").start()
 
         def action_cmd_handoff(self) -> None:
-            self._log_not_impl("H", "Handoff check")
+            """Run handoff check and show results in right panel."""
+            self._log_event("[H] Running handoff check...")
+            svc = self._get_handoff_service()
+
+            def _worker() -> None:
+                try:
+                    result = svc.run(self._repo_path)  # type: ignore[attr-defined]
+                    self.call_from_thread(self._on_handoff_done, result)
+                except Exception as exc:  # noqa: BLE001
+                    self.call_from_thread(self._on_handoff_error, str(exc))
+
+            threading.Thread(target=_worker, daemon=True, name="tui-handoff").start()
 
         # ------------------------------------------------------------------
         # Internal helpers
@@ -511,6 +939,70 @@ if _TEXTUAL_AVAILABLE:
 
         def _log_not_impl(self, key: str, label: str) -> None:
             self._log_event(f"[{key}] {label}: not implemented yet.")
+
+        def _on_inspect_done(self, result: dict) -> None:
+            self._log_event(render_inspect_map_result(result))
+            if result.get("error"):
+                self._log_event("[I] Repo map unavailable.")
+            else:
+                self._log_event("[I] Repo map loaded.")
+
+        def _on_inspect_error(self, error: str) -> None:
+            self._log_event(f"[I] Inspect failed: {error}")
+
+        def _on_guard_done(self, result: dict) -> None:
+            self._log_event(render_guard_result_summary(result))
+            status_text = (
+                "[G] Guard: PASSED" if result.get("passed") else
+                f"[G] Guard: FAILED ({result.get('errors', 0)} errors, {result.get('warnings', 0)} warnings)"
+            )
+            if result.get("error"):
+                status_text = f"[G] Guard error: {result['error'][:60]}"
+            self._log_event(status_text)
+            self._refresh_left_panel()
+
+        def _on_guard_error(self, error: str) -> None:
+            self._log_event(f"[G] Guard failed: {error}")
+
+        def _on_check_done(self, result: dict) -> None:
+            self._log_event(render_check_result_summary(result))
+            if result.get("error"):
+                status_text = f"[T] Checks error: {result['error'][:60]}"
+            elif result.get("failed", 0):
+                status_text = f"[T] Checks FAILED ({result['failed']} required failures)"
+            else:
+                status_text = f"[T] Checks PASSED ({result.get('passed', 0)}/{result.get('total', 0)})"
+            self._log_event(status_text)
+            self._refresh_left_panel()
+
+        def _on_check_error(self, error: str) -> None:
+            self._log_event(f"[T] Checks failed: {error}")
+
+        def _on_handoff_done(self, result: dict) -> None:
+            self._log_event(render_handoff_result_summary(result))
+            if result.get("error"):
+                status_text = f"[H] Handoff error: {result['error'][:60]}"
+            elif result.get("passed"):
+                status_text = "[H] Handoff check: PASSED"
+            else:
+                status_text = f"[H] Handoff check: FAILED ({len(result.get('issues', []))} issues)"
+            self._log_event(status_text)
+
+        def _on_handoff_error(self, error: str) -> None:
+            self._log_event(f"[H] Handoff check failed: {error}")
+
+        def _refresh_left_panel(self) -> None:
+            """Re-read repo status and update the left panel."""
+            try:
+                from vibecode.repo_status import RepoStatusService
+
+                new_status = RepoStatusService().get_status(self._repo_path)
+                self._status = new_status
+                self.query_one("#left-status", Static).update(
+                    render_left_panel(self._repo_path, new_status)
+                )
+            except Exception:  # noqa: BLE001
+                pass
 
         def _on_context_task_received(self, task: str | None) -> None:
             """Called when ContextInputScreen is dismissed."""

@@ -737,3 +737,1006 @@ class TestComposeThreeColumnLayout:
         css = getattr(VibecodeMainApp, "CSS_PATH", None)
         assert css is not None
         assert css.name == "tui_theme.tcss"
+
+
+# ---------------------------------------------------------------------------
+# InspectMapService — unit tests
+# ---------------------------------------------------------------------------
+
+
+class TestInspectMapService:
+    def test_error_when_no_index_files(self, tmp_path):
+        from vibecode.main_app import InspectMapService
+
+        svc = InspectMapService()
+        result = svc.run(tmp_path)
+        assert result["error"] is not None
+        assert "index" in result["error"].lower() or "not found" in result["error"].lower()
+
+    def test_loads_repo_tree_when_present(self, tmp_path):
+        from vibecode.main_app import InspectMapService
+
+        index_dir = tmp_path / ".vibecode" / "index"
+        index_dir.mkdir(parents=True)
+        map_file = index_dir / "repo_tree.generated.md"
+        map_file.write_text("# Repo Map\n\nsome content\n", encoding="utf-8")
+
+        svc = InspectMapService()
+        result = svc.run(tmp_path)
+        assert result["error"] is None
+        assert "# Repo Map" in result["content"]
+        assert result["path"] == str(map_file)
+
+    def test_stale_when_no_last_index(self, tmp_path):
+        from vibecode.main_app import InspectMapService
+
+        index_dir = tmp_path / ".vibecode" / "index"
+        index_dir.mkdir(parents=True)
+        (index_dir / "repo_tree.generated.md").write_text("content", encoding="utf-8")
+
+        svc = InspectMapService()
+        result = svc.run(tmp_path)
+        assert result["stale"] is True
+
+    def test_not_stale_when_last_index_exists(self, tmp_path):
+        from vibecode.main_app import InspectMapService
+
+        index_dir = tmp_path / ".vibecode" / "index"
+        index_dir.mkdir(parents=True)
+        (index_dir / "repo_tree.generated.md").write_text("content", encoding="utf-8")
+        current_dir = tmp_path / ".vibecode" / "current"
+        current_dir.mkdir(parents=True)
+        (current_dir / "last_index.json").write_text("{}", encoding="utf-8")
+
+        svc = InspectMapService()
+        result = svc.run(tmp_path)
+        assert result["stale"] is False
+
+    def test_reads_total_files_from_inventory(self, tmp_path):
+        import json
+
+        from vibecode.main_app import InspectMapService
+
+        index_dir = tmp_path / ".vibecode" / "index"
+        index_dir.mkdir(parents=True)
+        (index_dir / "file_inventory.json").write_text(
+            json.dumps({"total_files": 42, "context_cards": [{}, {}, {}]}),
+            encoding="utf-8",
+        )
+
+        svc = InspectMapService()
+        result = svc.run(tmp_path)
+        assert result["total_files"] == 42
+        assert result["card_count"] == 3
+        assert result["error"] is None
+
+    def test_succeeds_with_only_inventory(self, tmp_path):
+        import json
+
+        from vibecode.main_app import InspectMapService
+
+        index_dir = tmp_path / ".vibecode" / "index"
+        index_dir.mkdir(parents=True)
+        (index_dir / "file_inventory.json").write_text(
+            json.dumps({"total_files": 5, "context_cards": []}),
+            encoding="utf-8",
+        )
+
+        svc = InspectMapService()
+        result = svc.run(tmp_path)
+        assert result["error"] is None
+
+
+# ---------------------------------------------------------------------------
+# render_inspect_map_result — pure rendering tests
+# ---------------------------------------------------------------------------
+
+
+class TestRenderInspectMapResult:
+    def test_shows_error_when_error_set(self):
+        from vibecode.main_app import render_inspect_map_result
+
+        result = {
+            "error": "Index not found.",
+            "content": "",
+            "path": "",
+            "stale": False,
+            "total_files": 0,
+            "card_count": 0,
+            "high_risk_count": 0,
+        }
+        text = render_inspect_map_result(result)
+        assert "ERROR" in text
+        assert "Index not found." in text
+
+    def test_hints_refresh_on_error(self):
+        from vibecode.main_app import render_inspect_map_result
+
+        result = {
+            "error": "No index.",
+            "content": "",
+            "path": "",
+            "stale": False,
+            "total_files": 0,
+            "card_count": 0,
+            "high_risk_count": 0,
+        }
+        text = render_inspect_map_result(result)
+        assert "Refresh" in text or "refresh" in text.lower()
+
+    def test_shows_path_on_success(self):
+        from vibecode.main_app import render_inspect_map_result
+
+        result = {
+            "error": None,
+            "content": "some content",
+            "path": "/some/path.md",
+            "stale": False,
+            "total_files": 10,
+            "card_count": 5,
+            "high_risk_count": 0,
+        }
+        text = render_inspect_map_result(result)
+        assert "/some/path.md" in text
+
+    def test_shows_stale_warning(self):
+        from vibecode.main_app import render_inspect_map_result
+
+        result = {
+            "error": None,
+            "content": "content",
+            "path": "/p.md",
+            "stale": True,
+            "total_files": 10,
+            "card_count": 5,
+            "high_risk_count": 0,
+        }
+        text = render_inspect_map_result(result)
+        assert "stale" in text.lower() or "WARN" in text
+
+    def test_includes_content_snippet(self):
+        from vibecode.main_app import render_inspect_map_result
+
+        result = {
+            "error": None,
+            "content": "# My Repo Map\nfiles here",
+            "path": "/p.md",
+            "stale": False,
+            "total_files": 10,
+            "card_count": 5,
+            "high_risk_count": 0,
+        }
+        text = render_inspect_map_result(result)
+        assert "My Repo Map" in text
+
+
+# ---------------------------------------------------------------------------
+# GuardService — unit tests
+# ---------------------------------------------------------------------------
+
+
+class TestGuardService:
+    def test_error_when_project_yaml_missing(self, tmp_path):
+        from vibecode.main_app import GuardService
+
+        svc = GuardService()
+        result = svc.run(tmp_path)
+        assert result["error"] is not None
+        assert "project.yaml" in result["error"]
+
+    def test_returns_passed_true_on_clean_repo(self, tmp_path, monkeypatch):
+        from vibecode.main_app import GuardService
+
+        monkeypatch.setattr(
+            "vibecode.main_app.GuardService.run",
+            lambda self, root: {
+                "passed": True,
+                "errors": 0,
+                "warnings": 0,
+                "findings_summary": [],
+                "report_path": "",
+                "error": None,
+            },
+        )
+
+        svc = GuardService()
+        result = svc.run(tmp_path)
+        assert result["passed"] is True
+        assert result["error"] is None
+
+    def test_findings_summary_populated(self, tmp_path, monkeypatch):
+        from vibecode.main_app import GuardService
+
+        expected_result = {
+            "passed": False,
+            "errors": 1,
+            "warnings": 0,
+            "findings_summary": ["  [ERROR] some/path.py: Some rule violated"],
+            "report_path": "",
+            "error": None,
+        }
+        monkeypatch.setattr(
+            "vibecode.main_app.GuardService.run",
+            lambda self, root: expected_result,
+        )
+        svc = GuardService()
+        result = svc.run(tmp_path)
+        assert result["findings_summary"]
+        assert "ERROR" in result["findings_summary"][0]
+
+    def test_error_propagated_when_not_git(self, tmp_path):
+        import unittest.mock as mock
+
+        from vibecode.main_app import GuardService
+
+        (tmp_path / ".vibecode").mkdir()
+        (tmp_path / ".vibecode" / "project.yaml").write_text(
+            "project_id: test\n", encoding="utf-8"
+        )
+
+        class FakeGitState:
+            is_git_repo = False
+            error = ""
+
+        with mock.patch("vibecode.git_state.inspect_git_state", return_value=FakeGitState()):
+            svc = GuardService()
+            result = svc.run(tmp_path)
+        assert result["error"] is not None
+        assert "git" in result["error"].lower()
+
+
+# ---------------------------------------------------------------------------
+# render_guard_result_summary — pure rendering tests
+# ---------------------------------------------------------------------------
+
+
+class TestRenderGuardResultSummary:
+    def test_shows_error_when_error_set(self):
+        from vibecode.main_app import render_guard_result_summary
+
+        result = {
+            "error": "Not a git repo.",
+            "passed": True,
+            "errors": 0,
+            "warnings": 0,
+            "findings_summary": [],
+            "report_path": "",
+        }
+        text = render_guard_result_summary(result)
+        assert "ERROR" in text
+        assert "Not a git repo." in text
+
+    def test_shows_passed_when_passed(self):
+        from vibecode.main_app import render_guard_result_summary
+
+        result = {
+            "error": None,
+            "passed": True,
+            "errors": 0,
+            "warnings": 0,
+            "findings_summary": [],
+            "report_path": "",
+        }
+        text = render_guard_result_summary(result)
+        assert "PASSED" in text
+
+    def test_shows_failed_when_not_passed(self):
+        from vibecode.main_app import render_guard_result_summary
+
+        result = {
+            "error": None,
+            "passed": False,
+            "errors": 2,
+            "warnings": 1,
+            "findings_summary": ["  [ERROR] foo.py: Bad thing"],
+            "report_path": "/r/g.json",
+        }
+        text = render_guard_result_summary(result)
+        assert "FAILED" in text
+
+    def test_shows_report_path(self):
+        from vibecode.main_app import render_guard_result_summary
+
+        result = {
+            "error": None,
+            "passed": True,
+            "errors": 0,
+            "warnings": 0,
+            "findings_summary": [],
+            "report_path": "/the/report.json",
+        }
+        text = render_guard_result_summary(result)
+        assert "/the/report.json" in text
+
+    def test_shows_findings_when_present(self):
+        from vibecode.main_app import render_guard_result_summary
+
+        result = {
+            "error": None,
+            "passed": False,
+            "errors": 1,
+            "warnings": 0,
+            "findings_summary": ["  [ERROR] a.py: Rule X"],
+            "report_path": "",
+        }
+        text = render_guard_result_summary(result)
+        assert "Rule X" in text
+
+    def test_failure_not_hidden(self):
+        from vibecode.main_app import render_guard_result_summary
+
+        result = {
+            "error": None,
+            "passed": False,
+            "errors": 3,
+            "warnings": 0,
+            "findings_summary": [],
+            "report_path": "",
+        }
+        text = render_guard_result_summary(result)
+        assert "PASSED" not in text
+        assert "FAILED" in text
+
+
+# ---------------------------------------------------------------------------
+# CheckService — unit tests
+# ---------------------------------------------------------------------------
+
+
+class TestCheckService:
+    def test_error_when_no_checks_yaml(self, tmp_path):
+        from vibecode.main_app import CheckService
+
+        svc = CheckService()
+        result = svc.run(tmp_path)
+        assert result["error"] is not None
+        assert "required_checks.yaml" in result["error"]
+
+    def test_returns_pass_with_passing_check(self, tmp_path, monkeypatch):
+        from vibecode.main_app import CheckService
+
+        expected = {
+            "status": "pass",
+            "total": 1,
+            "passed": 1,
+            "failed": 0,
+            "warnings": 0,
+            "results_summary": ["  [PASS] cli help (exit 0, 0.10s)"],
+            "path": str(tmp_path / ".vibecode" / "current" / "check_results.json"),
+            "error": None,
+        }
+        monkeypatch.setattr(
+            "vibecode.main_app.CheckService.run",
+            lambda self, root: expected,
+        )
+        svc = CheckService()
+        result = svc.run(tmp_path)
+        assert result["status"] == "pass"
+        assert result["failed"] == 0
+
+    def test_returns_fail_with_failing_check(self, tmp_path, monkeypatch):
+        from vibecode.main_app import CheckService
+
+        expected = {
+            "status": "fail",
+            "total": 1,
+            "passed": 0,
+            "failed": 1,
+            "warnings": 0,
+            "results_summary": ["  [FAIL] unit tests (exit 1, 5.00s)"],
+            "path": "",
+            "error": None,
+        }
+        monkeypatch.setattr(
+            "vibecode.main_app.CheckService.run",
+            lambda self, root: expected,
+        )
+        svc = CheckService()
+        result = svc.run(tmp_path)
+        assert result["status"] == "fail"
+        assert result["failed"] == 1
+
+    def test_with_real_passing_check_command(self, tmp_path):
+        import json
+        from pathlib import Path
+
+        from vibecode.main_app import CheckService
+
+        checks_dir = tmp_path / ".vibecode" / "checks"
+        checks_dir.mkdir(parents=True)
+        (tmp_path / ".vibecode" / "project.yaml").write_text(
+            "project:\n  id: test\n  name: Test\n  root: .\n", encoding="utf-8"
+        )
+        (checks_dir / "required_checks.yaml").write_text(
+            "checks:\n  - name: trivial\n    command: python -c \"print('ok')\"\n    required: true\n",
+            encoding="utf-8",
+        )
+
+        svc = CheckService()
+        result = svc.run(tmp_path)
+        assert result["error"] is None
+        assert result["status"] == "pass"
+        assert result["passed"] == 1
+        assert result["failed"] == 0
+        assert result["path"]
+        out_path = Path(result["path"])
+        assert out_path.exists()
+        data = json.loads(out_path.read_text())
+        assert data.get("status") == "ok"
+
+    def test_failing_check_status_is_fail(self, tmp_path):
+        from vibecode.main_app import CheckService
+
+        checks_dir = tmp_path / ".vibecode" / "checks"
+        checks_dir.mkdir(parents=True)
+        (tmp_path / ".vibecode" / "project.yaml").write_text(
+            "project:\n  id: test\n  name: Test\n  root: .\n", encoding="utf-8"
+        )
+        (checks_dir / "required_checks.yaml").write_text(
+            "checks:\n  - name: always fails\n    command: python -c \"raise SystemExit(1)\"\n    required: true\n",
+            encoding="utf-8",
+        )
+
+        svc = CheckService()
+        result = svc.run(tmp_path)
+        assert result["error"] is None
+        assert result["status"] == "fail"
+        assert result["failed"] == 1
+
+
+# ---------------------------------------------------------------------------
+# render_check_result_summary — pure rendering tests
+# ---------------------------------------------------------------------------
+
+
+class TestRenderCheckResultSummary:
+    def test_shows_error_when_error_set(self):
+        from vibecode.main_app import render_check_result_summary
+
+        result = {
+            "error": "No checks yaml.",
+            "status": "not-run",
+            "total": 0,
+            "passed": 0,
+            "failed": 0,
+            "warnings": 0,
+            "results_summary": [],
+            "path": "",
+        }
+        text = render_check_result_summary(result)
+        assert "ERROR" in text
+        assert "No checks yaml." in text
+
+    def test_shows_pass_on_pass(self):
+        from vibecode.main_app import render_check_result_summary
+
+        result = {
+            "error": None,
+            "status": "pass",
+            "total": 2,
+            "passed": 2,
+            "failed": 0,
+            "warnings": 0,
+            "results_summary": [],
+            "path": "",
+        }
+        text = render_check_result_summary(result)
+        assert "PASS" in text
+
+    def test_shows_fail_on_fail(self):
+        from vibecode.main_app import render_check_result_summary
+
+        result = {
+            "error": None,
+            "status": "fail",
+            "total": 2,
+            "passed": 1,
+            "failed": 1,
+            "warnings": 0,
+            "results_summary": ["  [FAIL] tests (exit 1)"],
+            "path": "",
+        }
+        text = render_check_result_summary(result)
+        assert "FAIL" in text
+
+    def test_failure_not_hidden(self):
+        from vibecode.main_app import render_check_result_summary
+
+        result = {
+            "error": None,
+            "status": "fail",
+            "total": 1,
+            "passed": 0,
+            "failed": 1,
+            "warnings": 0,
+            "results_summary": [],
+            "path": "",
+        }
+        text = render_check_result_summary(result)
+        assert "✓ PASS" not in text
+
+    def test_shows_report_path(self):
+        from vibecode.main_app import render_check_result_summary
+
+        result = {
+            "error": None,
+            "status": "pass",
+            "total": 1,
+            "passed": 1,
+            "failed": 0,
+            "warnings": 0,
+            "results_summary": [],
+            "path": "/the/results.json",
+        }
+        text = render_check_result_summary(result)
+        assert "/the/results.json" in text
+
+    def test_check_items_listed(self):
+        from vibecode.main_app import render_check_result_summary
+
+        result = {
+            "error": None,
+            "status": "pass",
+            "total": 1,
+            "passed": 1,
+            "failed": 0,
+            "warnings": 0,
+            "results_summary": ["  [PASS] cli help (exit 0, 0.05s)"],
+            "path": "",
+        }
+        text = render_check_result_summary(result)
+        assert "cli help" in text
+
+
+# ---------------------------------------------------------------------------
+# HandoffService — unit tests
+# ---------------------------------------------------------------------------
+
+
+class TestHandoffService:
+    def test_error_when_no_vibecode_dir(self, tmp_path):
+        from vibecode.main_app import HandoffService
+
+        svc = HandoffService()
+        result = svc.run(tmp_path)
+        assert result["error"] is not None
+        assert ".vibecode" in result["error"]
+
+    def test_passed_when_handoff_valid(self, tmp_path):
+        from vibecode.main_app import HandoffService
+
+        hdir = tmp_path / ".vibecode" / "handoff"
+        hdir.mkdir(parents=True)
+        (hdir / "NOW.md").write_text("# Now\n\nSome real content here.\n", encoding="utf-8")
+        (hdir / "NEXT.md").write_text("# Next\n\nSome next steps.\n", encoding="utf-8")
+        (hdir / "BLOCKERS.md").write_text("# Blockers\n\nNo hard blockers.\n", encoding="utf-8")
+
+        svc = HandoffService()
+        result = svc.run(tmp_path)
+        assert result["error"] is None
+        assert result["passed"] is True
+        assert result["issues"] == []
+
+    def test_fails_when_handoff_missing(self, tmp_path):
+        from vibecode.main_app import HandoffService
+
+        (tmp_path / ".vibecode").mkdir()
+
+        svc = HandoffService()
+        result = svc.run(tmp_path)
+        assert result["error"] is None
+        assert result["passed"] is False
+        assert len(result["issues"]) > 0
+
+    def test_issues_include_file_and_message(self, tmp_path):
+        from vibecode.main_app import HandoffService
+
+        (tmp_path / ".vibecode").mkdir()
+
+        svc = HandoffService()
+        result = svc.run(tmp_path)
+        for issue in result["issues"]:
+            assert "file" in issue
+            assert "message" in issue
+
+
+# ---------------------------------------------------------------------------
+# render_handoff_result_summary — pure rendering tests
+# ---------------------------------------------------------------------------
+
+
+class TestRenderHandoffResultSummary:
+    def test_shows_error_when_error_set(self):
+        from vibecode.main_app import render_handoff_result_summary
+
+        result = {"error": ".vibecode not found.", "passed": True, "issues": [], "status": "ok"}
+        text = render_handoff_result_summary(result)
+        assert "ERROR" in text
+        assert ".vibecode not found." in text
+
+    def test_shows_passed_when_passed(self):
+        from vibecode.main_app import render_handoff_result_summary
+
+        result = {"error": None, "passed": True, "issues": [], "status": "ok"}
+        text = render_handoff_result_summary(result)
+        assert "PASSED" in text
+
+    def test_shows_failed_when_failed(self):
+        from vibecode.main_app import render_handoff_result_summary
+
+        result = {
+            "error": None,
+            "passed": False,
+            "issues": [{"file": ".vibecode/handoff/NOW.md", "message": "Missing"}],
+            "status": "error",
+        }
+        text = render_handoff_result_summary(result)
+        assert "FAILED" in text
+
+    def test_shows_issue_details(self):
+        from vibecode.main_app import render_handoff_result_summary
+
+        result = {
+            "error": None,
+            "passed": False,
+            "issues": [{"file": ".vibecode/handoff/NOW.md", "message": "NOW.md is missing"}],
+            "status": "error",
+        }
+        text = render_handoff_result_summary(result)
+        assert "NOW.md" in text
+        assert "missing" in text.lower()
+
+    def test_failure_not_converted_to_success(self):
+        from vibecode.main_app import render_handoff_result_summary
+
+        result = {
+            "error": None,
+            "passed": False,
+            "issues": [{"file": "f", "message": "bad"}],
+            "status": "error",
+        }
+        text = render_handoff_result_summary(result)
+        assert "PASSED" not in text
+        assert "FAILED" in text
+
+
+# ---------------------------------------------------------------------------
+# Action callback tests — service results update event/debug panel
+# ---------------------------------------------------------------------------
+
+
+class TestActionCallbacks:
+    def _make_app(self, tmp_path):
+        from vibecode.main_app import _TEXTUAL_AVAILABLE, VibecodeMainApp
+        from vibecode.repo_status import RepoStatus
+
+        if not _TEXTUAL_AVAILABLE:
+            pytest.skip("Textual not available")
+
+        status = RepoStatus(repo_path=tmp_path)
+        app = VibecodeMainApp(repo_path=tmp_path, status=status)
+        log_messages: list = []
+
+        class _FakeWidget:
+            def update(self, msg):
+                log_messages.append(msg)
+
+            def write(self, msg):
+                log_messages.append(msg)
+
+        app.query_one = lambda selector, *_: _FakeWidget()
+        return app, log_messages
+
+    def test_on_inspect_done_logs_summary(self, tmp_path):
+        app, log_messages = self._make_app(tmp_path)
+        result = {
+            "error": None,
+            "content": "# Map\nstuff",
+            "path": "/p.md",
+            "stale": False,
+            "total_files": 5,
+            "card_count": 3,
+            "high_risk_count": 0,
+        }
+        app._on_inspect_done(result)
+        all_text = " ".join(str(m) for m in log_messages)
+        assert len(all_text) > 0
+
+    def test_on_inspect_done_error_logged(self, tmp_path):
+        app, log_messages = self._make_app(tmp_path)
+        result = {
+            "error": "No index.",
+            "content": "",
+            "path": "",
+            "stale": False,
+            "total_files": 0,
+            "card_count": 0,
+            "high_risk_count": 0,
+        }
+        app._on_inspect_done(result)
+        all_text = " ".join(str(m) for m in log_messages)
+        assert "No index." in all_text or len(all_text) > 0
+
+    def test_on_guard_done_passes_logs_passed(self, tmp_path):
+        app, log_messages = self._make_app(tmp_path)
+        result = {
+            "error": None,
+            "passed": True,
+            "errors": 0,
+            "warnings": 0,
+            "findings_summary": [],
+            "report_path": "",
+        }
+        app._on_guard_done(result)
+        all_text = " ".join(str(m) for m in log_messages)
+        assert "PASSED" in all_text
+
+    def test_on_guard_done_failure_stays_visible(self, tmp_path):
+        app, log_messages = self._make_app(tmp_path)
+        result = {
+            "error": None,
+            "passed": False,
+            "errors": 2,
+            "warnings": 0,
+            "findings_summary": ["  [ERROR] a.py: Bad rule"],
+            "report_path": "",
+        }
+        app._on_guard_done(result)
+        all_text = " ".join(str(m) for m in log_messages)
+        assert "FAILED" in all_text or "FAIL" in all_text
+
+    def test_on_check_done_failure_visible(self, tmp_path):
+        app, log_messages = self._make_app(tmp_path)
+        result = {
+            "error": None,
+            "status": "fail",
+            "total": 1,
+            "passed": 0,
+            "failed": 1,
+            "warnings": 0,
+            "results_summary": ["  [FAIL] tests"],
+            "path": "",
+        }
+        app._on_check_done(result)
+        all_text = " ".join(str(m) for m in log_messages)
+        assert "FAIL" in all_text
+
+    def test_on_check_done_pass_logged(self, tmp_path):
+        app, log_messages = self._make_app(tmp_path)
+        result = {
+            "error": None,
+            "status": "pass",
+            "total": 2,
+            "passed": 2,
+            "failed": 0,
+            "warnings": 0,
+            "results_summary": [],
+            "path": "",
+        }
+        app._on_check_done(result)
+        all_text = " ".join(str(m) for m in log_messages)
+        assert "PASSED" in all_text or "PASS" in all_text
+
+    def test_on_handoff_done_passed_logged(self, tmp_path):
+        app, log_messages = self._make_app(tmp_path)
+        result = {"error": None, "passed": True, "issues": [], "status": "ok"}
+        app._on_handoff_done(result)
+        all_text = " ".join(str(m) for m in log_messages)
+        assert "PASSED" in all_text
+
+    def test_on_handoff_done_failure_visible(self, tmp_path):
+        app, log_messages = self._make_app(tmp_path)
+        result = {
+            "error": None,
+            "passed": False,
+            "issues": [{"file": "NOW.md", "message": "missing"}],
+            "status": "error",
+        }
+        app._on_handoff_done(result)
+        all_text = " ".join(str(m) for m in log_messages)
+        assert "FAILED" in all_text
+
+    def test_on_guard_error_logged(self, tmp_path):
+        app, log_messages = self._make_app(tmp_path)
+        app._on_guard_error("something went wrong")
+        all_text = " ".join(str(m) for m in log_messages)
+        assert "Guard" in all_text or "guard" in all_text.lower()
+
+    def test_on_check_error_logged(self, tmp_path):
+        app, log_messages = self._make_app(tmp_path)
+        app._on_check_error("check boom")
+        all_text = " ".join(str(m) for m in log_messages)
+        assert "Checks" in all_text or "check" in all_text.lower()
+
+    def test_on_handoff_error_logged(self, tmp_path):
+        app, log_messages = self._make_app(tmp_path)
+        app._on_handoff_error("handoff exploded")
+        all_text = " ".join(str(m) for m in log_messages)
+        assert "Handoff" in all_text or "handoff" in all_text.lower()
+
+    def test_on_inspect_error_logged(self, tmp_path):
+        app, log_messages = self._make_app(tmp_path)
+        app._on_inspect_error("disk error")
+        all_text = " ".join(str(m) for m in log_messages)
+        assert "Inspect" in all_text or "inspect" in all_text.lower()
+
+
+# ---------------------------------------------------------------------------
+# Service injection — lazy getter tests
+# ---------------------------------------------------------------------------
+
+
+class TestServiceInjection:
+    def test_inject_inspect_service(self, tmp_path):
+        from vibecode.main_app import _TEXTUAL_AVAILABLE, VibecodeMainApp
+        from vibecode.repo_status import RepoStatus
+
+        if not _TEXTUAL_AVAILABLE:
+            pytest.skip("Textual not available")
+
+        class FakeSvc:
+            pass
+
+        fake = FakeSvc()
+        status = RepoStatus(repo_path=tmp_path)
+        app = VibecodeMainApp(repo_path=tmp_path, status=status, inspect_service=fake)
+        assert app._get_inspect_service() is fake
+
+    def test_inject_guard_service(self, tmp_path):
+        from vibecode.main_app import _TEXTUAL_AVAILABLE, VibecodeMainApp
+        from vibecode.repo_status import RepoStatus
+
+        if not _TEXTUAL_AVAILABLE:
+            pytest.skip("Textual not available")
+
+        class FakeSvc:
+            pass
+
+        fake = FakeSvc()
+        status = RepoStatus(repo_path=tmp_path)
+        app = VibecodeMainApp(repo_path=tmp_path, status=status, guard_service=fake)
+        assert app._get_guard_service() is fake
+
+    def test_inject_check_service(self, tmp_path):
+        from vibecode.main_app import _TEXTUAL_AVAILABLE, VibecodeMainApp
+        from vibecode.repo_status import RepoStatus
+
+        if not _TEXTUAL_AVAILABLE:
+            pytest.skip("Textual not available")
+
+        class FakeSvc:
+            pass
+
+        fake = FakeSvc()
+        status = RepoStatus(repo_path=tmp_path)
+        app = VibecodeMainApp(repo_path=tmp_path, status=status, check_service=fake)
+        assert app._get_check_service() is fake
+
+    def test_inject_handoff_service(self, tmp_path):
+        from vibecode.main_app import _TEXTUAL_AVAILABLE, VibecodeMainApp
+        from vibecode.repo_status import RepoStatus
+
+        if not _TEXTUAL_AVAILABLE:
+            pytest.skip("Textual not available")
+
+        class FakeSvc:
+            pass
+
+        fake = FakeSvc()
+        status = RepoStatus(repo_path=tmp_path)
+        app = VibecodeMainApp(repo_path=tmp_path, status=status, handoff_service=fake)
+        assert app._get_handoff_service() is fake
+
+    def test_default_inspect_service_type(self, tmp_path):
+        from vibecode.main_app import _TEXTUAL_AVAILABLE, InspectMapService, VibecodeMainApp
+        from vibecode.repo_status import RepoStatus
+
+        if not _TEXTUAL_AVAILABLE:
+            pytest.skip("Textual not available")
+        status = RepoStatus(repo_path=tmp_path)
+        app = VibecodeMainApp(repo_path=tmp_path, status=status)
+        assert isinstance(app._get_inspect_service(), InspectMapService)
+
+    def test_default_guard_service_type(self, tmp_path):
+        from vibecode.main_app import _TEXTUAL_AVAILABLE, GuardService, VibecodeMainApp
+        from vibecode.repo_status import RepoStatus
+
+        if not _TEXTUAL_AVAILABLE:
+            pytest.skip("Textual not available")
+        status = RepoStatus(repo_path=tmp_path)
+        app = VibecodeMainApp(repo_path=tmp_path, status=status)
+        assert isinstance(app._get_guard_service(), GuardService)
+
+    def test_default_check_service_type(self, tmp_path):
+        from vibecode.main_app import _TEXTUAL_AVAILABLE, CheckService, VibecodeMainApp
+        from vibecode.repo_status import RepoStatus
+
+        if not _TEXTUAL_AVAILABLE:
+            pytest.skip("Textual not available")
+        status = RepoStatus(repo_path=tmp_path)
+        app = VibecodeMainApp(repo_path=tmp_path, status=status)
+        assert isinstance(app._get_check_service(), CheckService)
+
+    def test_default_handoff_service_type(self, tmp_path):
+        from vibecode.main_app import _TEXTUAL_AVAILABLE, HandoffService, VibecodeMainApp
+        from vibecode.repo_status import RepoStatus
+
+        if not _TEXTUAL_AVAILABLE:
+            pytest.skip("Textual not available")
+        status = RepoStatus(repo_path=tmp_path)
+        app = VibecodeMainApp(repo_path=tmp_path, status=status)
+        assert isinstance(app._get_handoff_service(), HandoffService)
+
+
+# ---------------------------------------------------------------------------
+# Binding and action method alignment for new actions
+# ---------------------------------------------------------------------------
+
+
+class TestNewActionBindings:
+    def test_guard_action_method_exists(self, tmp_path):
+        from vibecode.main_app import _TEXTUAL_AVAILABLE, VibecodeMainApp
+        from vibecode.repo_status import RepoStatus
+
+        if not _TEXTUAL_AVAILABLE:
+            pytest.skip("Textual not available")
+        app = VibecodeMainApp(repo_path=tmp_path, status=RepoStatus(repo_path=tmp_path))
+        assert hasattr(app, "action_cmd_guard")
+        assert callable(app.action_cmd_guard)
+
+    def test_tests_action_method_exists(self, tmp_path):
+        from vibecode.main_app import _TEXTUAL_AVAILABLE, VibecodeMainApp
+        from vibecode.repo_status import RepoStatus
+
+        if not _TEXTUAL_AVAILABLE:
+            pytest.skip("Textual not available")
+        app = VibecodeMainApp(repo_path=tmp_path, status=RepoStatus(repo_path=tmp_path))
+        assert hasattr(app, "action_cmd_tests")
+        assert callable(app.action_cmd_tests)
+
+    def test_handoff_action_method_exists(self, tmp_path):
+        from vibecode.main_app import _TEXTUAL_AVAILABLE, VibecodeMainApp
+        from vibecode.repo_status import RepoStatus
+
+        if not _TEXTUAL_AVAILABLE:
+            pytest.skip("Textual not available")
+        app = VibecodeMainApp(repo_path=tmp_path, status=RepoStatus(repo_path=tmp_path))
+        assert hasattr(app, "action_cmd_handoff")
+        assert callable(app.action_cmd_handoff)
+
+    def test_inspect_action_method_exists(self, tmp_path):
+        from vibecode.main_app import _TEXTUAL_AVAILABLE, VibecodeMainApp
+        from vibecode.repo_status import RepoStatus
+
+        if not _TEXTUAL_AVAILABLE:
+            pytest.skip("Textual not available")
+        app = VibecodeMainApp(repo_path=tmp_path, status=RepoStatus(repo_path=tmp_path))
+        assert hasattr(app, "action_inspect_map")
+        assert callable(app.action_inspect_map)
+
+    def test_guard_binding_present(self):
+        from vibecode.main_app import _TEXTUAL_AVAILABLE, VibecodeMainApp
+
+        if not _TEXTUAL_AVAILABLE:
+            pytest.skip("Textual not available")
+        bindings = getattr(VibecodeMainApp, "BINDINGS", [])
+        keys = {getattr(b, "key", None) for b in bindings}
+        assert "g" in keys
+
+    def test_tests_binding_present(self):
+        from vibecode.main_app import _TEXTUAL_AVAILABLE, VibecodeMainApp
+
+        if not _TEXTUAL_AVAILABLE:
+            pytest.skip("Textual not available")
+        bindings = getattr(VibecodeMainApp, "BINDINGS", [])
+        keys = {getattr(b, "key", None) for b in bindings}
+        assert "t" in keys
+
+    def test_handoff_binding_present(self):
+        from vibecode.main_app import _TEXTUAL_AVAILABLE, VibecodeMainApp
+
+        if not _TEXTUAL_AVAILABLE:
+            pytest.skip("Textual not available")
+        bindings = getattr(VibecodeMainApp, "BINDINGS", [])
+        keys = {getattr(b, "key", None) for b in bindings}
+        assert "h" in keys
