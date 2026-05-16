@@ -856,7 +856,7 @@
     {
       "title": "P23.3 Apply safety/action review fixes",
       "description": "Read:\n`docs/audit/TUI_PHASE1_P23_SAFETY_ACTIONS_REVIEW.md`\n\nGoal:\nApply only concrete fixes from the P23.2 review.\n\nAllowed changes:\n- Action wiring fixes.\n- Result/status mapping fixes.\n- Failure visibility fixes.\n- Tests.\n- Small service wrapper cleanup.\n\nDo not expand scope:\n- Do not implement agent runs here.\n- Do not implement external terminal here.\n- Do not implement embedded PTY here.\n\nRequired commands:\n- `git status --short`\n- `python -m compileall vibecode -q`\n- affected action/service tests\n- full `python -m pytest -p no:cacheprovider -q` if practical\n- `git status --short`\n\nIf no fixes are needed:\n- Write:\n  `docs/audit/TUI_PHASE1_P23_SAFETY_ACTIONS_FIX.md`\n- State that no implementation changes were needed and why.\n\nCommit requirement:\n- If implementation/test files changed and validation passes, create a git commit.\n- Use the repository’s commit style.\n- Do not push.\n- Do not open a PR.",
-      "completed": false,
+      "completed": true,
       "engine": "opencode",
       "model": "deepseek/deepseek-v4-pro",
       "engine_args": [

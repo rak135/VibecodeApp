@@ -208,12 +208,20 @@ class InspectMapService:
             except Exception:  # noqa: BLE001
                 pass
 
-        # Check for stale index
-        last_index = repo_root / ".vibecode" / "current" / "last_index.json"
-        if not last_index.exists():
-            result["stale"] = True
+        result["stale"] = self._is_stale(repo_root)
 
         return result
+
+    @staticmethod
+    def _is_stale(repo_root: Path) -> bool:
+        try:
+            from vibecode.indexer import check_index_freshness
+
+            is_fresh, _detail = check_index_freshness(repo_root)
+            return not is_fresh
+        except Exception:
+            last_index = repo_root / ".vibecode" / "current" / "last_index.json"
+            return not last_index.exists()
 
 
 def render_inspect_map_result(result: dict) -> str:

@@ -792,6 +792,46 @@ class TestInspectMapService:
         result = svc.run(tmp_path)
         assert result["stale"] is False
 
+    def test_stale_when_index_too_old(self, tmp_path):
+        import json
+        from datetime import datetime, timezone, timedelta
+
+        from vibecode.main_app import InspectMapService
+
+        index_dir = tmp_path / ".vibecode" / "index"
+        index_dir.mkdir(parents=True)
+        (index_dir / "repo_tree.generated.md").write_text("content", encoding="utf-8")
+        current_dir = tmp_path / ".vibecode" / "current"
+        current_dir.mkdir(parents=True)
+        old_time = (datetime.now(timezone.utc) - timedelta(seconds=600)).isoformat()
+        (current_dir / "last_index.json").write_text(
+            json.dumps({"started_at": old_time}), encoding="utf-8"
+        )
+
+        svc = InspectMapService()
+        result = svc.run(tmp_path)
+        assert result["stale"] is True
+
+    def test_not_stale_when_index_is_recent(self, tmp_path):
+        import json
+        from datetime import datetime, timezone
+
+        from vibecode.main_app import InspectMapService
+
+        index_dir = tmp_path / ".vibecode" / "index"
+        index_dir.mkdir(parents=True)
+        (index_dir / "repo_tree.generated.md").write_text("content", encoding="utf-8")
+        current_dir = tmp_path / ".vibecode" / "current"
+        current_dir.mkdir(parents=True)
+        recent_time = datetime.now(timezone.utc).isoformat()
+        (current_dir / "last_index.json").write_text(
+            json.dumps({"started_at": recent_time}), encoding="utf-8"
+        )
+
+        svc = InspectMapService()
+        result = svc.run(tmp_path)
+        assert result["stale"] is False
+
     def test_reads_total_files_from_inventory(self, tmp_path):
         import json
 
@@ -1740,3 +1780,202 @@ class TestNewActionBindings:
         bindings = getattr(VibecodeMainApp, "BINDINGS", [])
         keys = {getattr(b, "key", None) for b in bindings}
         assert "h" in keys
+
+
+# ---------------------------------------------------------------------------
+# Action wiring regression — direct calls verify service→callback path
+# ---------------------------------------------------------------------------
+
+
+class TestActionWiringRegression:
+    """Call action methods directly and verify the service-invoke →
+    callback-forward wire is intact (threading is patched synchronous)."""
+
+    @staticmethod
+    def _make_app(tmp_path: Path, monkeypatch, svc_kwarg: str, fake_svc):
+        from vibecode.main_app import _TEXTUAL_AVAILABLE, VibecodeMainApp
+        from vibecode.repo_status import RepoStatus
+
+        if not _TEXTUAL_AVAILABLE:
+            pytest.skip("Textual not available")
+
+        svc_kwargs: dict = {svc_kwarg: fake_svc}
+        status = RepoStatus(repo_path=tmp_path)
+        app = VibecodeMainApp(repo_path=tmp_path, status=status, **svc_kwargs)
+
+        # Silence _log_event to avoid query_one lookup.
+        app._log_event = lambda msg: None  # type: ignore[method-assign]
+        # Suppress _refresh_left_panel called by _on_guard_done / _on_check_done.
+        app._refresh_left_panel = lambda: None  # type: ignore[method-assign]
+
+        # Record call_from_thread invocations and run the handler synchronously.
+        call_records: list = []
+
+        def _recording_call_from_thread(fn, *args):
+            call_records.append((fn.__name__, args))
+            fn(*args)
+
+        app.call_from_thread = _recording_call_from_thread  # type: ignore[method-assign]
+
+        # Patch threading.Thread to run the target synchronously.
+        import vibecode.main_app as ma
+
+        class _SyncThread:
+            def __init__(self, target=None, daemon=None, name=None):
+                self._target = target
+
+            def start(self):
+                self._target()
+
+        monkeypatch.setattr(ma.threading, "Thread", _SyncThread)
+        return app, call_records
+
+    # -- inspect -----------------------------------------------------------
+
+    def test_action_inspect_map_calls_service(self, tmp_path, monkeypatch):
+        class FakeSvc:
+            def __init__(self):
+                self.called_with: Path | None = None
+                self._result = {
+                    "error": None, "content": "map", "path": "/p.md",
+                    "stale": False, "total_files": 3, "card_count": 1,
+                    "high_risk_count": 0,
+                }
+
+            def run(self, repo_root):
+                self.called_with = repo_root
+                return self._result
+
+        fake = FakeSvc()
+        app, call_records = self._make_app(tmp_path, monkeypatch, "inspect_service", fake)
+
+        app.action_inspect_map()
+
+        assert fake.called_with == tmp_path
+        assert len(call_records) == 1
+        assert call_records[0][0] == "_on_inspect_done"
+
+    def test_action_inspect_map_routes_error(self, tmp_path, monkeypatch):
+        class FakeSvc:
+            def run(self, repo_root):
+                raise RuntimeError("disk failure")
+
+        fake = FakeSvc()
+        app, call_records = self._make_app(tmp_path, monkeypatch, "inspect_service", fake)
+
+        app.action_inspect_map()
+
+        assert len(call_records) == 1
+        assert call_records[0][0] == "_on_inspect_error"
+        assert "disk failure" in str(call_records[0][1])
+
+    # -- guard -------------------------------------------------------------
+
+    def test_action_cmd_guard_calls_service(self, tmp_path, monkeypatch):
+        class FakeSvc:
+            def __init__(self):
+                self.called_with: Path | None = None
+                self._result = {
+                    "error": None, "passed": True, "errors": 0, "warnings": 0,
+                    "findings_summary": [], "report_path": "",
+                }
+
+            def run(self, repo_root):
+                self.called_with = repo_root
+                return self._result
+
+        fake = FakeSvc()
+        app, call_records = self._make_app(tmp_path, monkeypatch, "guard_service", fake)
+
+        app.action_cmd_guard()
+
+        assert fake.called_with == tmp_path
+        assert len(call_records) == 1
+        assert call_records[0][0] == "_on_guard_done"
+
+    def test_action_cmd_guard_routes_error(self, tmp_path, monkeypatch):
+        class FakeSvc:
+            def run(self, repo_root):
+                raise RuntimeError("guard crash")
+
+        fake = FakeSvc()
+        app, call_records = self._make_app(tmp_path, monkeypatch, "guard_service", fake)
+
+        app.action_cmd_guard()
+
+        assert len(call_records) == 1
+        assert call_records[0][0] == "_on_guard_error"
+        assert "guard crash" in str(call_records[0][1])
+
+    # -- tests/checks ------------------------------------------------------
+
+    def test_action_cmd_tests_calls_service(self, tmp_path, monkeypatch):
+        class FakeSvc:
+            def __init__(self):
+                self.called_with: Path | None = None
+                self._result = {
+                    "error": None, "status": "pass", "total": 3, "passed": 3,
+                    "failed": 0, "warnings": 0, "results_summary": [], "path": "",
+                }
+
+            def run(self, repo_root):
+                self.called_with = repo_root
+                return self._result
+
+        fake = FakeSvc()
+        app, call_records = self._make_app(tmp_path, monkeypatch, "check_service", fake)
+
+        app.action_cmd_tests()
+
+        assert fake.called_with == tmp_path
+        assert len(call_records) == 1
+        assert call_records[0][0] == "_on_check_done"
+
+    def test_action_cmd_tests_routes_error(self, tmp_path, monkeypatch):
+        class FakeSvc:
+            def run(self, repo_root):
+                raise RuntimeError("check boom")
+
+        fake = FakeSvc()
+        app, call_records = self._make_app(tmp_path, monkeypatch, "check_service", fake)
+
+        app.action_cmd_tests()
+
+        assert len(call_records) == 1
+        assert call_records[0][0] == "_on_check_error"
+        assert "check boom" in str(call_records[0][1])
+
+    # -- handoff -----------------------------------------------------------
+
+    def test_action_cmd_handoff_calls_service(self, tmp_path, monkeypatch):
+        class FakeSvc:
+            def __init__(self):
+                self.called_with: Path | None = None
+                self._result = {"error": None, "passed": True, "issues": [], "status": "ok"}
+
+            def run(self, repo_root):
+                self.called_with = repo_root
+                return self._result
+
+        fake = FakeSvc()
+        app, call_records = self._make_app(tmp_path, monkeypatch, "handoff_service", fake)
+
+        app.action_cmd_handoff()
+
+        assert fake.called_with == tmp_path
+        assert len(call_records) == 1
+        assert call_records[0][0] == "_on_handoff_done"
+
+    def test_action_cmd_handoff_routes_error(self, tmp_path, monkeypatch):
+        class FakeSvc:
+            def run(self, repo_root):
+                raise RuntimeError("handoff exploded")
+
+        fake = FakeSvc()
+        app, call_records = self._make_app(tmp_path, monkeypatch, "handoff_service", fake)
+
+        app.action_cmd_handoff()
+
+        assert len(call_records) == 1
+        assert call_records[0][0] == "_on_handoff_error"
+        assert "handoff exploded" in str(call_records[0][1])
