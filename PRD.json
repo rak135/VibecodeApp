@@ -769,7 +769,7 @@
     {
       "title": "P21.2 Review three-column TUI shell",
       "description": "Review P21.1.\n\nWrite review output to:\n`docs/audit/TUI_PHASE1_P21_THREE_COLUMN_SHELL_REVIEW.md`\n\nScope:\n- Review `vibecode` TUI startup.\n- Review three-column layout.\n- Review left status/actions.\n- Review center Agent Console placeholder/output behavior.\n- Review right debug/events panel.\n- Review keyboard action wiring.\n- Review tests.\n\nCheck:\n- The primary user command is `vibecode`.\n- Existing commands and `--help` remain usable.\n- TUI displays resolved repo path.\n- TUI displays status fields required by the PRD.\n- `[R]` triggers refresh service.\n- Center panel does not fake a fully interactive terminal.\n- Right panel provides useful debug/event information.\n- UI rendering is not tightly coupled to filesystem mutation logic.\n- No LLM/OpenCode call occurs on startup.\n\nRequire evidence:\n- Test output or summarized validation.\n- Screenshot text/smoke output if available.\n- Notes on any Textual limitations.\n- Confirmation that Phase 1 intentionally does not embed an interactive PTY.\n\nWatch for:\n- Broken CLI no-args/help behavior.\n- UI freezing without any status updates.\n- Hardcoded repo path.\n- Actions displayed but impossible to wire later.\n- OpenCode launched unexpectedly.\n- A fake terminal implemented with plain subprocess and marketed as interactive.\n\nDo not modify implementation files.\nOnly write the review document.",
-      "completed": false,
+      "completed": true,
       "engine": "copilot",
       "model": "gpt-5.4",
       "engine_args": [
