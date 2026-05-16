@@ -15,10 +15,14 @@ Columns:
 from __future__ import annotations
 
 import json
+import os
 import re
 import sys
 import threading
+from dataclasses import dataclass
+from datetime import datetime, timezone
 from pathlib import Path
+from typing import Any
 
 try:
     from textual.app import App, ComposeResult
@@ -39,6 +43,7 @@ except ImportError:
 _ACTIONS_TEXT = (
     "Actions:\n"
     "  [R] Refresh / Rebuild Vibecode layer\n"
+    "  [L] Reload right-panel debug state\n"
     "  [I] Inspect repo map\n"
     "  [C] Create context for task\n"
     "  [A] Run audit profile\n"
@@ -70,11 +75,11 @@ def _make_center_placeholder(provider_name: str, available: bool | None = None, 
         "No command running.",
         "",
         "Options:",
-        f"  [A]/[S] — Vibecode-orchestrated run with event streaming",
+        "  [A]/[S] — Vibecode-orchestrated run with event streaming",
         f"  [E]     — Launch {provider_name} in external Windows Terminal",
         "",
         "Note: An interactive terminal is not implemented inside the TUI.",
-        f"Use [E] to open a real terminal window for a fully interactive",
+        "Use [E] to open a real terminal window for a fully interactive",
         f"{provider_name} session.  The TUI remains the Vibecode cockpit.",
         "Use 'vibecode monitor' for orchestrated run with live output.",
     ]
@@ -174,6 +179,291 @@ def _extract_pack_warnings(content: str) -> list[str]:
         elif "WARNING:" in line and line.strip().startswith("-"):
             warnings.append(line.strip().lstrip("- "))
     return warnings[:5]
+
+
+@dataclass(frozen=True)
+class TuiEventRecord:
+    """Small immutable event record used by the right-panel debug model."""
+
+    timestamp: str
+    category: str
+    level: str
+    message: str
+
+
+class TuiEventLog:
+    """Bounded in-memory event log for right-panel debug summaries."""
+
+    def __init__(self, *, max_entries: int = 120, max_message_chars: int = 240) -> None:
+        self._max_entries = max(1, max_entries)
+        self._max_message_chars = max(40, max_message_chars)
+        self._records: list[TuiEventRecord] = []
+
+    def add(
+        self,
+        message: str,
+        *,
+        category: str = "event",
+        level: str = "info",
+        timestamp: datetime | None = None,
+    ) -> None:
+        text = (message or "").replace("\r", "").strip()
+        if len(text) > self._max_message_chars:
+            text = text[: self._max_message_chars - 1] + "…"
+        ts = (timestamp or datetime.now(tz=timezone.utc)).strftime("%H:%M:%S")
+        self._records.append(
+            TuiEventRecord(timestamp=ts, category=category, level=level.lower(), message=text)
+        )
+        overflow = len(self._records) - self._max_entries
+        if overflow > 0:
+            del self._records[:overflow]
+
+    def latest(self, limit: int = 8) -> list[TuiEventRecord]:
+        capped = max(1, limit)
+        return list(self._records[-capped:])
+
+
+def _shorten_path(path: str, max_chars: int = 92) -> str:
+    if len(path) <= max_chars:
+        return path
+    head = max_chars // 2 - 2
+    tail = max_chars - head - 3
+    return f"{path[:head]}...{path[-tail:]}"
+
+
+def _summarize_text_file(
+    path: Path,
+    *,
+    max_bytes: int = 4096,
+    max_lines: int = 12,
+    tail: bool = False,
+) -> tuple[str, bool]:
+    """Return a bounded summary of *path* and whether truncation occurred."""
+    if not path.exists():
+        return "(missing)", False
+    try:
+        with path.open("rb") as handle:
+            truncated = False
+            if tail:
+                handle.seek(0, os.SEEK_END)
+                size = handle.tell()
+                if size > max_bytes:
+                    handle.seek(-max_bytes, os.SEEK_END)
+                    truncated = True
+                else:
+                    handle.seek(0)
+                raw = handle.read(max_bytes)
+            else:
+                raw = handle.read(max_bytes + 1)
+                if len(raw) > max_bytes:
+                    raw = raw[:max_bytes]
+                    truncated = True
+        text = raw.decode("utf-8", errors="replace")
+    except OSError as exc:
+        return (f"(unreadable: {exc})", False)
+
+    lines = text.splitlines()
+    if len(lines) > max_lines:
+        lines = lines[:max_lines]
+        truncated = True
+    summary = "\n".join(lines).strip()
+    if not summary:
+        summary = "(empty)"
+    return summary, truncated
+
+
+class SessionArtifactWatcher:
+    """Collect and summarize run/current artifacts for the right debug panel."""
+
+    def __init__(self, repo_root: Path) -> None:
+        self._root = Path(repo_root)
+
+    def _latest_session_id(self) -> str | None:
+        runs_dir = self._root / ".vibecode" / "runs"
+        if not runs_dir.is_dir():
+            return None
+        sessions = [entry.name for entry in runs_dir.iterdir() if entry.is_dir()]
+        if not sessions:
+            return None
+        return sorted(sessions, reverse=True)[0]
+
+    def snapshot(self, session_id: str | None = None) -> dict[str, Any]:
+        from vibecode.session_log import RunSession
+
+        selected_session = session_id or self._latest_session_id()
+        session = RunSession(self._root, selected_session) if selected_session else None
+        current_dir = self._root / ".vibecode" / "current"
+
+        context_path = session.context_pack_md if session else (current_dir / "context_pack.md")
+        prompt_path = session.opencode_prompt_md if session else (current_dir / "opencode_prompt.md")
+        events_path = session.events_jsonl if session else None
+        summary_path = session.summary_json if session else None
+        stdout_path = session.agent_stdout_log if session else None
+        stderr_path = session.agent_stderr_log if session else None
+        guard_path = session.guard_report_json if session else None
+        checks_path = session.checks_report_json if session else None
+        handoff_path = session.handoff_report_json if session else None
+
+        entries: list[dict[str, Any]] = []
+        for label, path in (
+            ("context pack", context_path),
+            ("opencode prompt", prompt_path),
+            ("events.jsonl", events_path),
+            ("summary.json", summary_path),
+            ("agent stdout.log", stdout_path),
+            ("agent stderr.log", stderr_path),
+            ("guard report", guard_path),
+            ("checks report", checks_path),
+            ("handoff report", handoff_path),
+        ):
+            if path is None:
+                entries.append(
+                    {"label": label, "path": "(no active run session)", "exists": False}
+                )
+            else:
+                entries.append({"label": label, "path": str(path), "exists": path.exists()})
+
+        context_summary, context_truncated = _summarize_text_file(context_path, max_lines=8)
+        events_summary, events_truncated = (
+            _summarize_text_file(events_path, tail=True, max_lines=6)
+            if events_path is not None
+            else ("(no active run session)", False)
+        )
+        stderr_summary, stderr_truncated = (
+            _summarize_text_file(stderr_path, tail=True, max_lines=4)
+            if stderr_path is not None
+            else ("(no active run session)", False)
+        )
+
+        warnings: list[str] = []
+        if not selected_session:
+            warnings.append("No run session selected yet.")
+
+        missing = [item["label"] for item in entries if not item["exists"]]
+        if missing:
+            warnings.append("Missing artifacts: " + ", ".join(missing[:6]) + ("…" if len(missing) > 6 else ""))
+
+        return {
+            "session_id": selected_session,
+            "run_dir": str(session.run_dir) if session else "",
+            "artifacts": entries,
+            "context_summary": context_summary,
+            "events_summary": events_summary,
+            "stderr_summary": stderr_summary,
+            "context_truncated": context_truncated,
+            "events_truncated": events_truncated,
+            "stderr_truncated": stderr_truncated,
+            "warnings": warnings,
+            "errors": [],
+        }
+
+
+def render_right_debug_cockpit(
+    *,
+    snapshot: dict[str, Any] | None,
+    event_log: TuiEventLog,
+    refresh_report: dict[str, Any] | None = None,
+    context_preview: dict[str, Any] | None = None,
+    run_result: dict[str, Any] | None = None,
+    guard_result: dict[str, Any] | None = None,
+    check_result: dict[str, Any] | None = None,
+    handoff_result: dict[str, Any] | None = None,
+    next_action: str = "",
+) -> str:
+    """Render the structured right-panel debug cockpit (pure, testable)."""
+    lines = ["─── Debug Cockpit ───"]
+    snapshot = snapshot or {}
+    session_id = snapshot.get("session_id") or (run_result or {}).get("session_id") or "—"
+    run_dir = snapshot.get("run_dir") or (run_result or {}).get("run_dir") or "—"
+    lines.append(f"Session: {session_id}")
+    lines.append(f"Run dir: {_shorten_path(str(run_dir))}")
+
+    lines.extend(["", "Artifacts:"])
+    for item in (snapshot.get("artifacts") or [])[:9]:
+        marker = "ok" if item.get("exists") else "missing"
+        lines.append(
+            f"  [{marker:7s}] {item.get('label')}: {_shorten_path(str(item.get('path', '')))}"
+        )
+
+    lines.extend(["", "Refresh / Rebuild:"])
+    if refresh_report:
+        lines.append(f"  validation: {refresh_report.get('validation_status', 'unknown')}")
+        lines.append(f"  artifacts written: {len(refresh_report.get('generated_artifacts') or [])}")
+    else:
+        lines.append("  (no refresh report yet)")
+
+    lines.extend(["", "Context preview:"])
+    if context_preview:
+        task = str(context_preview.get("task", "")).strip()
+        if task:
+            lines.append(f"  task: {task[:80]}{'…' if len(task) > 80 else ''}")
+    context_summary = str(snapshot.get("context_summary", "(missing)"))
+    if snapshot.get("context_truncated"):
+        context_summary += "\n[truncated]"
+    lines.append("  " + context_summary.replace("\n", "\n  "))
+
+    lines.extend(["", "Event/log excerpts:"])
+    events_summary = str(snapshot.get("events_summary", "(missing)"))
+    if snapshot.get("events_truncated"):
+        events_summary += "\n[truncated]"
+    lines.append("  events: " + events_summary.replace("\n", "\n  "))
+    stderr_summary = str(snapshot.get("stderr_summary", "(missing)"))
+    if snapshot.get("stderr_truncated"):
+        stderr_summary += "\n[truncated]"
+    lines.append("  stderr: " + stderr_summary.replace("\n", "\n  "))
+
+    lines.extend(["", "Validation / post-run:"])
+    if run_result:
+        lines.append(f"  run: {run_result.get('overall_status', 'unknown')}")
+        lines.append(f"  exit: {run_result.get('exit_code')}")
+    if guard_result:
+        lines.append(
+            f"  guard: {'passed' if guard_result.get('passed') else 'failed'} "
+            f"(errors={guard_result.get('errors', 0)}, warnings={guard_result.get('warnings', 0)})"
+        )
+    if check_result:
+        lines.append(
+            f"  checks: {check_result.get('status', 'unknown')} "
+            f"(failed={check_result.get('failed', 0)})"
+        )
+    if handoff_result:
+        lines.append(
+            f"  handoff: {'passed' if handoff_result.get('passed') else 'failed'} "
+            f"(issues={len(handoff_result.get('issues') or [])})"
+        )
+    if not any((run_result, guard_result, check_result, handoff_result)):
+        lines.append("  (not run yet)")
+
+    lines.extend(["", "Latest Vibecode events:"])
+    latest = event_log.latest(8)
+    if latest:
+        for record in latest:
+            lines.append(
+                f"  [{record.timestamp}] {record.level.upper():7s} {record.category}: {record.message}"
+            )
+    else:
+        lines.append("  (none)")
+
+    warnings: list[str] = list(snapshot.get("warnings") or [])
+    errors: list[str] = list(snapshot.get("errors") or [])
+    if refresh_report:
+        warnings.extend([str(w) for w in (refresh_report.get("warnings") or [])[:3]])
+        errors.extend([str(e) for e in (refresh_report.get("errors") or [])[:3]])
+
+    lines.extend(["", "Warnings / errors:"])
+    if warnings:
+        for warning in warnings[:4]:
+            lines.append(f"  WARN: {warning}")
+    if errors:
+        for error in errors[:4]:
+            lines.append(f"  ERROR: {error}")
+    if not warnings and not errors:
+        lines.append("  none")
+
+    lines.extend(["", "Next recommended action:"])
+    lines.append(f"  {next_action or 'Use [R] refresh, [C] context, or [L] reload debug state.'}")
+
+    return "\n".join(lines)
 
 
 class InspectMapService:
@@ -1180,6 +1470,7 @@ if _TEXTUAL_AVAILABLE:
         CSS_PATH = Path(__file__).with_name("tui_theme.tcss")
         BINDINGS = [
             Binding("r", "refresh_repo", "Refresh"),
+            Binding("l", "reload_debug", "Reload debug"),
             Binding("i", "inspect_map", "Inspect map"),
             Binding("c", "cmd_context", "Context"),
             Binding("a", "cmd_audit", "Audit"),
@@ -1225,6 +1516,16 @@ if _TEXTUAL_AVAILABLE:
             self._current_task: str | None = None
             self._pending_run_profile: str | None = None
             self._pending_external_profile: str | None = None
+            self._event_model = TuiEventLog()
+            self._artifact_watcher = SessionArtifactWatcher(self._repo_path)
+            self._artifact_snapshot: dict[str, Any] = self._artifact_watcher.snapshot()
+            self._refresh_report: dict[str, Any] | None = None
+            self._last_context_preview: dict[str, Any] | None = None
+            self._last_run_result: dict[str, Any] | None = None
+            self._last_guard_result: dict[str, Any] | None = None
+            self._last_check_result: dict[str, Any] | None = None
+            self._last_handoff_result: dict[str, Any] | None = None
+            self._next_recommended_action = "Use [R] refresh, [C] context, or [L] reload debug state."
 
         def _get_refresh_service(self) -> object:
             if self._refresh_service is None:
@@ -1291,13 +1592,16 @@ if _TEXTUAL_AVAILABLE:
                     yield Static(placeholder, id="center-status")
                     yield RichLog(id="center-output", highlight=False, markup=False)
                 with Vertical(id="right-panel"):
-                    yield Label("Vibecode Events", id="right-panel-label")
+                    yield Label("Vibecode Debug", id="right-panel-label")
+                    yield Static("", id="right-debug-cockpit")
+                    yield Label("Event Stream", id="right-stream-label")
                     yield RichLog(id="main-event-log", highlight=False, markup=False)
             yield Footer()
 
         def on_mount(self) -> None:
             self._log_event("[ready] VibecodeApp started.")
             self._log_event(f"[repo]  {self._repo_path}")
+            self._refresh_debug_cockpit()
 
         # ------------------------------------------------------------------
         # Actions
@@ -1316,6 +1620,15 @@ if _TEXTUAL_AVAILABLE:
                     self.call_from_thread(self._on_refresh_error, str(exc))
 
             threading.Thread(target=_worker, daemon=True, name="tui-refresh").start()
+
+        def action_reload_debug(self) -> None:
+            """Manual reload of right-panel artifact/session state."""
+            self._log_event("[L] Reloading right-panel debug state...")
+            self._artifact_snapshot = self._artifact_watcher.snapshot(
+                self._artifact_snapshot.get("session_id")
+            )
+            self._refresh_debug_cockpit()
+            self._log_event("[L] Right-panel debug state refreshed.")
 
         def action_inspect_map(self) -> None:
             """Load repo map summary into the right panel."""
@@ -1416,11 +1729,37 @@ if _TEXTUAL_AVAILABLE:
         # Internal helpers
         # ------------------------------------------------------------------
 
-        def _log_event(self, message: str) -> None:
+        def _refresh_debug_cockpit(self) -> None:
+            """Render/update the right debug cockpit panel."""
+            text = render_right_debug_cockpit(
+                snapshot=self._artifact_snapshot,
+                event_log=self._event_model,
+                refresh_report=self._refresh_report,
+                context_preview=self._last_context_preview,
+                run_result=self._last_run_result,
+                guard_result=self._last_guard_result,
+                check_result=self._last_check_result,
+                handoff_result=self._last_handoff_result,
+                next_action=self._next_recommended_action,
+            )
+            try:
+                self.query_one("#right-debug-cockpit", Static).update(text)
+            except Exception:  # noqa: BLE001
+                pass
+
+        def _log_event(
+            self,
+            message: str,
+            *,
+            category: str = "event",
+            level: str = "info",
+        ) -> None:
             try:
                 self.query_one("#main-event-log", RichLog).write(message)
             except Exception:  # noqa: BLE001
                 pass
+            self._event_model.add(message, category=category, level=level)
+            self._refresh_debug_cockpit()
 
         def _on_inspect_done(self, result: dict) -> None:
             self._log_event(render_inspect_map_result(result))
@@ -1433,6 +1772,7 @@ if _TEXTUAL_AVAILABLE:
             self._log_event(f"[I] Inspect failed: {error}")
 
         def _on_guard_done(self, result: dict) -> None:
+            self._last_guard_result = result
             self._log_event(render_guard_result_summary(result))
             status_text = (
                 "[G] Guard: PASSED" if result.get("passed") else
@@ -1441,12 +1781,14 @@ if _TEXTUAL_AVAILABLE:
             if result.get("error"):
                 status_text = f"[G] Guard error: {result['error'][:60]}"
             self._log_event(status_text)
+            self._refresh_debug_cockpit()
             self._refresh_left_panel()
 
         def _on_guard_error(self, error: str) -> None:
             self._log_event(f"[G] Guard failed: {error}")
 
         def _on_check_done(self, result: dict) -> None:
+            self._last_check_result = result
             self._log_event(render_check_result_summary(result))
             if result.get("error"):
                 status_text = f"[T] Checks error: {result['error'][:60]}"
@@ -1455,12 +1797,14 @@ if _TEXTUAL_AVAILABLE:
             else:
                 status_text = f"[T] Checks PASSED ({result.get('passed', 0)}/{result.get('total', 0)})"
             self._log_event(status_text)
+            self._refresh_debug_cockpit()
             self._refresh_left_panel()
 
         def _on_check_error(self, error: str) -> None:
             self._log_event(f"[T] Checks failed: {error}")
 
         def _on_handoff_done(self, result: dict) -> None:
+            self._last_handoff_result = result
             self._log_event(render_handoff_result_summary(result))
             if result.get("error"):
                 status_text = f"[H] Handoff error: {result['error'][:60]}"
@@ -1469,6 +1813,7 @@ if _TEXTUAL_AVAILABLE:
             else:
                 status_text = f"[H] Handoff check: FAILED ({len(result.get('issues', []))} issues)"
             self._log_event(status_text)
+            self._refresh_debug_cockpit()
 
         def _on_handoff_error(self, error: str) -> None:
             self._log_event(f"[H] Handoff check failed: {error}")
@@ -1506,9 +1851,13 @@ if _TEXTUAL_AVAILABLE:
 
         def _on_context_done(self, preview: dict) -> None:
             """Update center and right panels after context generation."""
+            self._last_context_preview = preview
             if preview.get("error"):
                 self._log_event(f"[C] Context generation failed: {preview['error']}")
                 self._log_event(render_context_preview(preview))
+                self._artifact_snapshot = self._artifact_watcher.snapshot(
+                    self._artifact_snapshot.get("session_id")
+                )
                 return
 
             # Update center panel with task + artifact paths + status.
@@ -1529,6 +1878,11 @@ if _TEXTUAL_AVAILABLE:
                 f"[C] Context ready — task: {preview['task'][:60]}"
                 f"{'…' if len(preview['task']) > 60 else ''}"
             )
+            self._artifact_snapshot = self._artifact_watcher.snapshot(
+                self._artifact_snapshot.get("session_id")
+            )
+            self._next_recommended_action = "Use [A] or [S] to run with this context."
+            self._refresh_debug_cockpit()
 
         def _on_context_error(self, error: str) -> None:
             self._log_event(f"[C] Context generation error: {error}")
@@ -1608,10 +1962,21 @@ if _TEXTUAL_AVAILABLE:
                 except Exception:  # noqa: BLE001
                     pass
             else:
-                self._log_event(format_vibecode_line(event))  # type: ignore[arg-type]
+                category = "vibecode"
+                event_type = getattr(event, "type", "")
+                if event_type in ("run.context", "run.prompt"):
+                    category = "context"
+                elif event_type in ("run.guard", "run.check", "run.handoff", "run.guard_finding"):
+                    category = "validation"
+                self._log_event(
+                    format_vibecode_line(event),  # type: ignore[arg-type]
+                    category=category,
+                    level=getattr(getattr(event, "level", None), "name", "info").lower(),
+                )
 
         def _on_run_done(self, result: dict) -> None:
             """Update panels and refresh status after an agent run completes."""
+            self._last_run_result = result
             final_text = render_center_run_status(
                 result.get("task", ""),
                 result.get("profile", ""),
@@ -1629,11 +1994,16 @@ if _TEXTUAL_AVAILABLE:
             status = result.get("overall_status", "?")
             key = profile[0].upper() if profile else "?"
             self._log_event(f"[{key}] Run complete: {status}")
+            self._artifact_snapshot = self._artifact_watcher.snapshot(result.get("session_id"))
+            self._next_recommended_action = "Review artifacts; run [G], [T], or [H] if needed."
+            self._refresh_debug_cockpit()
             self._refresh_left_panel()
 
         def _on_run_error(self, error: str) -> None:
             """Log an unhandled exception from the run worker."""
             self._log_event(f"[A/S] Run worker error: {error}")
+            self._next_recommended_action = "Inspect run artifacts and retry after fixing the error."
+            self._refresh_debug_cockpit()
 
         def _start_external(self, profile: str) -> None:
             """Kick off an external terminal launch in a background thread.
@@ -1702,16 +2072,29 @@ if _TEXTUAL_AVAILABLE:
                 self._log_event(
                     f"[E] External terminal launched ({result.get('terminal_kind', '?')})"
                 )
+                self._next_recommended_action = "Use the external terminal for interaction, then run [G]/[T]/[H]."
             else:
                 self._log_event(
                     f"[E] External terminal launch failed: {result.get('error_message', '?')}"
                 )
+                self._next_recommended_action = "Fix external launch errors and try [E] again."
+            self._artifact_snapshot = self._artifact_watcher.snapshot(
+                self._artifact_snapshot.get("session_id")
+            )
+            self._refresh_debug_cockpit()
 
         def _on_external_error(self, error: str) -> None:
             """Log an unhandled exception from the external terminal worker."""
             self._log_event(f"[E] External terminal worker error: {error}")
 
         def _on_refresh_done(self, report: object) -> None:
+            self._refresh_report = {
+                "validation_status": getattr(report, "validation_status", "unknown"),
+                "generated_artifacts": list(getattr(report, "generated_artifacts", []) or []),
+                "warnings": list(getattr(report, "warnings", []) or []),
+                "errors": list(getattr(report, "errors", []) or []),
+                "next_recommended_action": getattr(report, "next_recommended_action", ""),
+            }
             self._log_event(
                 f"[R] Refresh complete: {report.validation_status}"  # type: ignore[attr-defined]
             )
@@ -1727,6 +2110,7 @@ if _TEXTUAL_AVAILABLE:
             nxt = report.next_recommended_action  # type: ignore[attr-defined]
             if nxt:
                 self._log_event(f"    → {nxt}")
+                self._next_recommended_action = str(nxt)
 
             # Re-read status and refresh left panel.
             try:
@@ -1742,9 +2126,22 @@ if _TEXTUAL_AVAILABLE:
                     self._log_event(f"    context pack: {ctx_path}")
             except Exception as exc:  # noqa: BLE001
                 self._log_event(f"    status refresh failed: {exc}")
+            self._artifact_snapshot = self._artifact_watcher.snapshot(
+                self._artifact_snapshot.get("session_id")
+            )
+            self._refresh_debug_cockpit()
 
         def _on_refresh_error(self, error: str) -> None:
             self._log_event(f"[R] Refresh failed: {error}")
+            self._refresh_report = {
+                "validation_status": "error",
+                "generated_artifacts": [],
+                "warnings": [],
+                "errors": [error],
+                "next_recommended_action": "Fix refresh errors, then run [L] to reload artifact state.",
+            }
+            self._next_recommended_action = self._refresh_report["next_recommended_action"]
+            self._refresh_debug_cockpit()
 
 else:
 
