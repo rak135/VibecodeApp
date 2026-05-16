@@ -50,19 +50,25 @@ _ACTIONS_TEXT = (
     "  [Q] Quit"
 )
 
-_CENTER_PLACEHOLDER = (
-    "Provider: OpenCode\n"
-    "Current task: none\n\n"
-    "─── Phase 1 / Phase 2 ───\n"
-    "No command running.\n\n"
-    "Options:\n"
-    "  [A]/[S] — Vibecode-orchestrated run with event streaming\n"
-    "  [E]     — Launch OpenCode in external Windows Terminal\n\n"
-    "Note: An interactive terminal is not implemented inside the TUI.\n"
-    "Use [E] to open a real terminal window for a fully interactive\n"
-    "OpenCode session.  The TUI remains the Vibecode cockpit.\n"
-    "Use 'vibecode monitor' for orchestrated run with live output."
-)
+def _make_center_placeholder(provider_name: str) -> str:
+    """Return center-panel placeholder text for *provider_name*."""
+    return (
+        f"Provider: {provider_name}\n"
+        "Current task: none\n\n"
+        "─── Phase 1 / Phase 2 ───\n"
+        "No command running.\n\n"
+        "Options:\n"
+        f"  [A]/[S] — Vibecode-orchestrated run with event streaming\n"
+        f"  [E]     — Launch {provider_name} in external Windows Terminal\n\n"
+        "Note: An interactive terminal is not implemented inside the TUI.\n"
+        f"Use [E] to open a real terminal window for a fully interactive\n"
+        f"{provider_name} session.  The TUI remains the Vibecode cockpit.\n"
+        "Use 'vibecode monitor' for orchestrated run with live output."
+    )
+
+
+# Module-level constant kept for backward compatibility with tests and imports.
+_CENTER_PLACEHOLDER = _make_center_placeholder("OpenCode")
 
 
 # ---------------------------------------------------------------------------
@@ -588,14 +594,16 @@ def render_center_context_status(
     task: str,
     context_pack_path: str,
     opencode_prompt_path: str,
+    *,
+    provider_name: str = "OpenCode",
 ) -> str:
     """Return center panel text when context is ready (pure, testable)."""
     task_short = task[:100] + ("…" if len(task) > 100 else "")
     return (
-        f"Provider: OpenCode\n"
+        f"Provider: {provider_name}\n"
         f"Current task: {task_short}\n\n"
         f"Context pack:\n  {context_pack_path}\n\n"
-        f"OpenCode prompt:\n  {opencode_prompt_path}\n\n"
+        f"{provider_name} prompt:\n  {opencode_prompt_path}\n\n"
         "Status: context ready\n\n"
         "─── Next steps ───\n"
         "[A] Audit profile   — press A to launch agent with audit rules\n"
@@ -788,11 +796,12 @@ def render_center_run_status(
     *,
     session_id: str | None = None,
     run_dir: str | None = None,
+    provider_name: str = "OpenCode",
 ) -> str:
     """Return center panel header text during/after an agent run (pure, testable)."""
     task_short = task[:80] + ("…" if len(task) > 80 else "")
     lines = [
-        "Provider: OpenCode",
+        f"Provider: {provider_name}",
         f"Profile:  {profile}",
         f"Task:     {task_short}",
         "",
@@ -954,13 +963,13 @@ class ExternalTerminalService:
         return result
 
 
-def render_center_external_launch_status(result: dict) -> str:
+def render_center_external_launch_status(result: dict, *, provider_name: str = "OpenCode") -> str:
     """Return center panel text after an external terminal launch (pure, testable)."""
     task = result.get("task", "")
     task_short = task[:80] + ("…" if len(task) > 80 else "")
     profile = result.get("profile", "")
     lines = [
-        "Provider: OpenCode",
+        f"Provider: {provider_name}",
         f"Profile:  {profile}",
         f"Task:     {task_short}",
         "",
@@ -1180,6 +1189,7 @@ if _TEXTUAL_AVAILABLE:
             handoff_service: object | None = None,
             run_service: object | None = None,
             external_terminal_service: object | None = None,
+            provider: object | None = None,
         ) -> None:
             super().__init__()
             self._repo_path = repo_path
@@ -1192,6 +1202,11 @@ if _TEXTUAL_AVAILABLE:
             self._handoff_service = handoff_service
             self._run_service = run_service
             self._external_terminal_service = external_terminal_service
+            if provider is not None:
+                self._provider = provider
+            else:
+                from vibecode.adapters.provider import get_default_provider
+                self._provider = get_default_provider()
             self._current_task: str | None = None
             self._pending_run_profile: str | None = None
             self._pending_external_profile: str | None = None
@@ -1244,6 +1259,7 @@ if _TEXTUAL_AVAILABLE:
 
         def compose(self) -> ComposeResult:
             left_text = render_left_panel(self._repo_path, self._status)
+            provider_name = self._provider.display_name  # type: ignore[attr-defined]
             yield Label("VibecodeApp — Control Shell", id="main-tui-title")
             with Horizontal(id="tui-columns"):
                 with Vertical(id="left-panel"):
@@ -1251,7 +1267,7 @@ if _TEXTUAL_AVAILABLE:
                     yield Static(left_text, id="left-status")
                 with Vertical(id="center-panel"):
                     yield Label("Agent Console", id="center-panel-label")
-                    yield Static(_CENTER_PLACEHOLDER, id="center-status")
+                    yield Static(_make_center_placeholder(provider_name), id="center-status")
                     yield RichLog(id="center-output", highlight=False, markup=False)
                 with Vertical(id="right-panel"):
                     yield Label("Vibecode Events", id="right-panel-label")
@@ -1461,6 +1477,7 @@ if _TEXTUAL_AVAILABLE:
                 preview["task"],
                 preview["context_pack_path"],
                 preview["opencode_prompt_path"],
+                provider_name=self._provider.display_name,  # type: ignore[attr-defined]
             )
             try:
                 self.query_one("#center-status", Static).update(center_text)
@@ -1496,7 +1513,10 @@ if _TEXTUAL_AVAILABLE:
             svc = self._get_run_service()
             sink = MainAppEventSink(self)
 
-            center_text = render_center_run_status(task, profile, "running...")
+            center_text = render_center_run_status(
+                task, profile, "running...",
+                provider_name=self._provider.display_name,  # type: ignore[attr-defined]
+            )
             try:
                 self.query_one("#center-status", Static).update(center_text)
                 self.query_one("#center-output", RichLog).clear()
@@ -1559,6 +1579,7 @@ if _TEXTUAL_AVAILABLE:
                 result.get("overall_status", "unknown"),
                 session_id=result.get("session_id"),
                 run_dir=result.get("run_dir"),
+                provider_name=self._provider.display_name,  # type: ignore[attr-defined]
             )
             try:
                 self.query_one("#center-status", Static).update(final_text)
@@ -1593,7 +1614,7 @@ if _TEXTUAL_AVAILABLE:
             svc = self._get_external_terminal_service()
 
             center_text = (
-                f"Provider: OpenCode\n"
+                f"Provider: {self._provider.display_name}\n"  # type: ignore[attr-defined]
                 f"Profile:  {profile}\n"
                 f"Task:     {task[:80]}{'…' if len(task) > 80 else ''}\n\n"
                 "Status: launching external terminal…"
@@ -1629,7 +1650,10 @@ if _TEXTUAL_AVAILABLE:
 
         def _on_external_done(self, result: dict) -> None:
             """Update center and right panels after external terminal launch."""
-            center_text = render_center_external_launch_status(result)
+            center_text = render_center_external_launch_status(
+                result,
+                provider_name=self._provider.display_name,  # type: ignore[attr-defined]
+            )
             try:
                 self.query_one("#center-status", Static).update(center_text)
             except Exception:  # noqa: BLE001
