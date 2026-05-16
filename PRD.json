@@ -880,7 +880,7 @@
     {
       "title": "P24.2 Review Phase 1 audit/safe run actions",
       "description": "Review P24.1.\n\nWrite review output to:\n`docs/audit/TUI_PHASE1_P24_AGENT_RUN_ACTIONS_REVIEW.md`\n\nScope:\n- Review `[A]` and `[S]` behavior.\n- Review task/context prerequisite behavior.\n- Review use of existing run orchestration.\n- Review fake OpenCode tests.\n- Review center and right panel output.\n- Review session artifacts.\n\nCheck:\n- Audit profile and safe profile are correctly passed.\n- Context is generated before run when required.\n- No real OpenCode is required in tests.\n- Fake OpenCode tests actually launch the fake command, not just parser paths.\n- Successful and early-failure runs leave inspectable artifacts.\n- Guard/check/handoff results are visible if they ran.\n- The center panel is honest about not being a fully embedded interactive terminal.\n- Vibecode does not call an LLM directly.\n\nRequire evidence:\n- Test output.\n- Fake run artifact paths.\n- Example status/event output.\n- Confirmation that existing `run`, `monitor`, and `runs show` behavior remains compatible.\n\nWatch for:\n- Hiding early run failures.\n- Mixing stdout/stderr/debug logs into an unreadable dump.\n- Starting OpenCode on TUI startup.\n- Hardcoded profile assumptions.\n- Regressions in existing run-controller tests.\n- Claims that Phase 1 provides a real Windows Terminal.\n\nDo not modify implementation files.\nOnly write the review document.",
-      "completed": false,
+      "completed": true,
       "engine": "copilot",
       "model": "gpt-5.4",
       "engine_args": [
