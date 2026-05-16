@@ -987,7 +987,7 @@
     {
       "title": "P27.2 Review TUI event/session watcher and artifact surfacing",
       "description": "Review P27.1.\n\nWrite review output to:\n`docs/audit/TUI_PHASE2_P27_EVENT_ARTIFACT_SURFACING_REVIEW.md`\n\nScope:\n- Review event model.\n- Review artifact/session watcher.\n- Review right panel debug information.\n- Review bounded log reading.\n- Review tests.\n\nCheck:\n- Right panel distinguishes Vibecode debug from agent output.\n- Artifact paths are accurate.\n- Missing artifacts are handled honestly.\n- Large logs are bounded/truncated clearly.\n- Run artifacts remain compatible with existing `runs list/show`.\n- Refresh/context/check/guard/handoff outputs are visible enough for debugging.\n- No LLM/OpenCode call is introduced by the watcher.\n\nRequire evidence:\n- Test output.\n- Example right panel/debug model output.\n- Example handling for missing artifacts.\n- Example truncation behavior.\n\nWatch for:\n- Reading giant logs into memory.\n- Showing stale artifact paths as current.\n- Hiding failures under generic “done”.\n- Coupling watcher to one session shape too tightly.\n- Breaking existing run artifact layout.\n\nDo not modify implementation files.\nOnly write the review document.",
-      "completed": false,
+      "completed": true,
       "engine": "copilot",
       "model": "auto",
       "engine_args": [
