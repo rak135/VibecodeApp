@@ -421,9 +421,10 @@ class TestRenderCenterContextStatus:
         assert "[A]" in text
         assert "[S]" in text
 
-    def test_notes_run_backend_not_wired(self):
+    def test_notes_run_actions_available(self):
         text = render_center_context_status("t", "/p", "/q")
-        assert "not yet wired" in text
+        assert "press A" in text
+        assert "press S" in text
 
     def test_long_task_is_truncated(self):
         long_task = "x" * 200

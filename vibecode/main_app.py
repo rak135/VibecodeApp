@@ -593,8 +593,8 @@ def render_center_context_status(
         f"OpenCode prompt:\n  {opencode_prompt_path}\n\n"
         "Status: context ready\n\n"
         "─── Next steps ───\n"
-        "[A] Audit profile   — run backend not yet wired\n"
-        "[S] Safe profile    — run backend not yet wired\n"
+        "[A] Audit profile   — press A to launch agent with audit rules\n"
+        "[S] Safe profile    — press S to launch agent with safe-mode rules\n"
     )
 
 
@@ -632,6 +632,204 @@ def render_context_preview(preview: dict) -> str:
 
     if preview.get("error"):
         lines += ["", f"ERROR: {preview['error']}"]
+
+    return "\n".join(lines)
+
+
+# ---------------------------------------------------------------------------
+# AgentRunService and run rendering helpers
+# ---------------------------------------------------------------------------
+
+
+class AgentRunService:
+    """Wraps RunController to execute agent runs from the TUI ([A] / [S]).
+
+    The optional *controller_factory* kwarg accepts any callable with the same
+    signature as :class:`~vibecode.run.RunController` — used in tests to inject
+    a fake factory that avoids needing a real OpenCode binary.
+    """
+
+    def __init__(self, controller_factory: object | None = None) -> None:
+        self._controller_factory = controller_factory
+
+    def run(
+        self,
+        repo_root: Path,
+        task: str,
+        profile: str,
+        *,
+        allow_dirty: bool = True,
+        guard_mode: str = "advisory",
+        sink: object | None = None,
+        session_id: str | None = None,
+    ) -> dict:
+        """Execute the agent run.  Designed to be called from a background thread.
+
+        Returns a result dict with keys::
+
+            session_id, task, profile, run_dir,
+            overall_status, exit_code,
+            context_pack_path, prompt_path,
+            guard_passed, guard_errors, guard_warnings,
+            checks_passed, handoff_passed,
+            artifact_paths, error
+
+        ``error`` is ``None`` on success, a string on failure.
+        """
+        from vibecode.run import RunController
+        from vibecode.session_log import RunSession
+
+        factory = self._controller_factory or RunController
+        controller = factory(
+            root=repo_root,
+            task=task,
+            platform="opencode",
+            profile_name=profile,
+            allow_dirty=allow_dirty,
+            no_index=False,
+            guard_mode=guard_mode,
+            sink=sink,
+            session_id=session_id,
+        )
+
+        result: dict = {
+            "session_id": controller.session_id,
+            "task": task,
+            "profile": profile,
+            "run_dir": None,
+            "overall_status": "error",
+            "exit_code": None,
+            "context_pack_path": None,
+            "prompt_path": None,
+            "guard_passed": None,
+            "guard_errors": 0,
+            "guard_warnings": 0,
+            "checks_passed": None,
+            "handoff_passed": None,
+            "artifact_paths": [],
+            "error": None,
+        }
+
+        try:
+            summary, exit_code = controller.execute()
+            result["exit_code"] = exit_code
+
+            session = RunSession(repo_root, controller.session_id)
+            result["run_dir"] = str(session.run_dir)
+            if session.context_pack_md.exists():
+                result["context_pack_path"] = str(session.context_pack_md)
+            if session.opencode_prompt_md.exists():
+                result["prompt_path"] = str(session.opencode_prompt_md)
+
+            if summary is not None:
+                result["overall_status"] = summary.overall_status
+                if summary.guard is not None:
+                    result["guard_passed"] = summary.guard.passed
+                    result["guard_errors"] = sum(
+                        1 for f in summary.guard.findings if f.severity == "error"
+                    )
+                    result["guard_warnings"] = sum(
+                        1 for f in summary.guard.findings if f.severity == "warning"
+                    )
+                if summary.checks is not None:
+                    result["checks_passed"] = not summary.checks.has_required_failures
+                if summary.handoff is not None:
+                    result["handoff_passed"] = summary.handoff.passed
+            else:
+                result["overall_status"] = "error"
+                result["error"] = "Run aborted — see run directory for details."
+
+            for attr in (
+                "events_jsonl",
+                "summary_json",
+                "guard_report_json",
+                "guard_report_md",
+                "checks_report_json",
+                "agent_stdout_log",
+            ):
+                p = getattr(session, attr, None)
+                if p is not None and p.exists():
+                    result["artifact_paths"].append(str(p))
+
+        except Exception as exc:  # noqa: BLE001
+            result["error"] = str(exc)
+
+        return result
+
+
+def render_center_run_status(
+    task: str,
+    profile: str,
+    status: str,
+    *,
+    session_id: str | None = None,
+    run_dir: str | None = None,
+) -> str:
+    """Return center panel header text during/after an agent run (pure, testable)."""
+    task_short = task[:80] + ("…" if len(task) > 80 else "")
+    lines = [
+        "Provider: OpenCode",
+        f"Profile:  {profile}",
+        f"Task:     {task_short}",
+        "",
+        f"Status: {status}",
+    ]
+    if session_id:
+        lines.append(f"Session: {session_id}")
+    if run_dir:
+        lines.append(f"Run dir: {run_dir}")
+    return "\n".join(lines)
+
+
+def render_right_run_result(result: dict) -> str:
+    """Return right-panel text summarising a completed agent run (pure)."""
+    lines = [
+        "─── Run Result ───",
+        f"Session:   {result.get('session_id', '?')}",
+        f"Profile:   {result.get('profile', '?')}",
+        f"Status:    {result.get('overall_status', 'unknown')}",
+        f"Exit code: {result.get('exit_code')}",
+    ]
+
+    if result.get("run_dir"):
+        lines.append(f"Run dir: {result['run_dir']}")
+
+    guard_passed = result.get("guard_passed")
+    if guard_passed is not None:
+        g_status = "PASSED" if guard_passed else "FAILED"
+        lines.append(
+            f"Guard:     {g_status}"
+            f" ({result.get('guard_errors', 0)} errors,"
+            f" {result.get('guard_warnings', 0)} warnings)"
+        )
+    else:
+        lines.append("Guard:     skipped")
+
+    checks_passed = result.get("checks_passed")
+    if checks_passed is not None:
+        lines.append(f"Checks:    {'PASSED' if checks_passed else 'FAILED'}")
+    else:
+        lines.append("Checks:    skipped")
+
+    handoff_passed = result.get("handoff_passed")
+    if handoff_passed is not None:
+        lines.append(f"Handoff:   {'PASSED' if handoff_passed else 'FAILED'}")
+    else:
+        lines.append("Handoff:   skipped")
+
+    if result.get("context_pack_path"):
+        lines += ["", f"Context pack:  {result['context_pack_path']}"]
+    if result.get("prompt_path"):
+        lines.append(f"Prompt:        {result['prompt_path']}")
+
+    artifacts = result.get("artifact_paths") or []
+    if artifacts:
+        lines += ["", "Artifacts:"]
+        for path in artifacts[:10]:
+            lines.append(f"  {path}")
+
+    if result.get("error"):
+        lines += ["", f"ERROR: {result['error']}"]
 
     return "\n".join(lines)
 
@@ -717,6 +915,25 @@ def render_left_panel(
 # Textual TUI application
 # ---------------------------------------------------------------------------
 
+# ---------------------------------------------------------------------------
+# Event sink bridge (main TUI)
+# ---------------------------------------------------------------------------
+
+
+class MainAppEventSink:
+    """Routes VibecodeEvents from the RunController thread into VibecodeMainApp.
+
+    Uses Textual's ``call_from_thread`` to safely transfer calls from the
+    background worker thread to the Textual event loop.
+    """
+
+    def __init__(self, app: "VibecodeMainApp") -> None:
+        self._app = app
+
+    def emit(self, event: object) -> None:
+        self._app.call_from_thread(self._app.handle_run_event, event)
+
+
 if _TEXTUAL_AVAILABLE:
 
     class ContextInputScreen(Screen):
@@ -778,6 +995,7 @@ if _TEXTUAL_AVAILABLE:
             guard_service: object | None = None,
             check_service: object | None = None,
             handoff_service: object | None = None,
+            run_service: object | None = None,
         ) -> None:
             super().__init__()
             self._repo_path = repo_path
@@ -788,7 +1006,9 @@ if _TEXTUAL_AVAILABLE:
             self._guard_service = guard_service
             self._check_service = check_service
             self._handoff_service = handoff_service
+            self._run_service = run_service
             self._current_task: str | None = None
+            self._pending_run_profile: str | None = None
 
         def _get_refresh_service(self) -> object:
             if self._refresh_service is None:
@@ -821,6 +1041,11 @@ if _TEXTUAL_AVAILABLE:
             if self._handoff_service is None:
                 self._handoff_service = HandoffService()
             return self._handoff_service
+
+        def _get_run_service(self) -> object:
+            if self._run_service is None:
+                self._run_service = AgentRunService()
+            return self._run_service
 
         # ------------------------------------------------------------------
         # Compose
@@ -888,10 +1113,12 @@ if _TEXTUAL_AVAILABLE:
             self.push_screen(ContextInputScreen(), self._on_context_task_received)
 
         def action_cmd_audit(self) -> None:
-            self._log_not_impl("A", "Audit profile")
+            """Prompt for a task (or reuse current) and start an audit-profile run."""
+            self._start_run("audit")
 
         def action_cmd_safe(self) -> None:
-            self._log_not_impl("S", "Safe agent profile")
+            """Prompt for a task (or reuse current) and start a safe-profile run."""
+            self._start_run("safe")
 
         def action_cmd_guard(self) -> None:
             """Run guard and show results in right panel."""
@@ -944,9 +1171,6 @@ if _TEXTUAL_AVAILABLE:
                 self.query_one("#main-event-log", RichLog).write(message)
             except Exception:  # noqa: BLE001
                 pass
-
-        def _log_not_impl(self, key: str, label: str) -> None:
-            self._log_event(f"[{key}] {label}: not implemented yet.")
 
         def _on_inspect_done(self, result: dict) -> None:
             self._log_event(render_inspect_map_result(result))
@@ -1057,6 +1281,104 @@ if _TEXTUAL_AVAILABLE:
 
         def _on_context_error(self, error: str) -> None:
             self._log_event(f"[C] Context generation error: {error}")
+
+        def _start_run(self, profile: str) -> None:
+            """Kick off an agent run in a background thread.
+
+            Prompts for a task first if :attr:`_current_task` is not set.
+            """
+            if not self._current_task:
+                self._pending_run_profile = profile
+                self.push_screen(ContextInputScreen(), self._on_run_task_received_for_run)
+                return
+            self._pending_run_profile = None
+            task = self._current_task
+            key = profile[0].upper()
+            self._log_event(
+                f"[{key}] Starting {profile!r} run: "
+                f"{task[:60]}{'…' if len(task) > 60 else ''}"
+            )
+            svc = self._get_run_service()
+            sink = MainAppEventSink(self)
+
+            center_text = render_center_run_status(task, profile, "running...")
+            try:
+                self.query_one("#center-status", Static).update(center_text)
+                self.query_one("#center-output", RichLog).clear()
+            except Exception:  # noqa: BLE001
+                pass
+
+            def _worker() -> None:
+                try:
+                    result = svc.run(  # type: ignore[attr-defined]
+                        self._repo_path,
+                        task,
+                        profile,
+                        allow_dirty=True,
+                        sink=sink,
+                    )
+                    self.call_from_thread(self._on_run_done, result)
+                except Exception as exc:  # noqa: BLE001
+                    self.call_from_thread(self._on_run_error, str(exc))
+
+            threading.Thread(
+                target=_worker, daemon=True, name=f"tui-run-{profile}"
+            ).start()
+
+        def _on_run_task_received_for_run(self, task: str | None) -> None:
+            """Called when ContextInputScreen is dismissed during a run action."""
+            profile = self._pending_run_profile
+            self._pending_run_profile = None
+            if not task:
+                key = profile[0].upper() if profile else "A/S"
+                self._log_event(f"[{key}] Run cancelled — no task entered.")
+                return
+            self._current_task = task
+            if profile:
+                self._start_run(profile)
+
+        def handle_run_event(self, event: object) -> None:
+            """Route a VibecodeEvent from the run worker into the TUI panels."""
+            from vibecode.monitor_app import (
+                format_agent_line,
+                format_vibecode_line,
+                route_event,
+            )
+
+            pane = route_event(event)  # type: ignore[arg-type]
+            if pane == "agent":
+                try:
+                    self.query_one("#center-output", RichLog).write(
+                        format_agent_line(event)  # type: ignore[arg-type]
+                    )
+                except Exception:  # noqa: BLE001
+                    pass
+            else:
+                self._log_event(format_vibecode_line(event))  # type: ignore[arg-type]
+
+        def _on_run_done(self, result: dict) -> None:
+            """Update panels and refresh status after an agent run completes."""
+            final_text = render_center_run_status(
+                result.get("task", ""),
+                result.get("profile", ""),
+                result.get("overall_status", "unknown"),
+                session_id=result.get("session_id"),
+                run_dir=result.get("run_dir"),
+            )
+            try:
+                self.query_one("#center-status", Static).update(final_text)
+            except Exception:  # noqa: BLE001
+                pass
+            self._log_event(render_right_run_result(result))
+            profile = result.get("profile", "?")
+            status = result.get("overall_status", "?")
+            key = profile[0].upper() if profile else "?"
+            self._log_event(f"[{key}] Run complete: {status}")
+            self._refresh_left_panel()
+
+        def _on_run_error(self, error: str) -> None:
+            """Log an unhandled exception from the run worker."""
+            self._log_event(f"[A/S] Run worker error: {error}")
 
         def _on_refresh_done(self, report: object) -> None:
             self._log_event(
