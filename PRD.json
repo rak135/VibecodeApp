@@ -745,7 +745,7 @@
     {
       "title": "P20.3 Apply Refresh/Rebuild review fixes",
       "description": "Read:\n`docs/audit/TUI_PHASE1_P20_REFRESH_REBUILD_REVIEW.md`\n\nGoal:\nApply only concrete fixes from the P20.2 review.\n\nAllowed changes:\n- Preservation allowlist fixes.\n- Disposable cleanup fixes.\n- Report model improvements.\n- Idempotency fixes.\n- Test coverage improvements.\n- Safer reuse of existing init/index/inventory/validate functions.\n\nDo not expand scope:\n- Do not implement the full TUI layout here.\n- Do not launch OpenCode here.\n- Do not add external terminal integration here.\n- Do not add provider abstraction here.\n\nRequired verification:\n- Refresh on missing `.vibecode`.\n- Refresh on existing `.vibecode` with customized manual files.\n- Refresh with logs/runs present.\n- Refresh with disposable generated/current artifacts present.\n- Validation report is returned honestly.\n\nRequired commands:\n- `git status --short`\n- `python -m compileall vibecode -q`\n- affected refresh tests\n- full `python -m pytest -p no:cacheprovider -q` if practical\n- `git status --short`\n\nIf no fixes are needed:\n- Write:\n  `docs/audit/TUI_PHASE1_P20_REFRESH_REBUILD_FIX.md`\n- State that no implementation changes were needed and why.\n\nCommit requirement:\n- If implementation/test files changed and validation passes, create a git commit.\n- Use the repository’s commit style.\n- Do not push.\n- Do not open a PR.",
-      "completed": false,
+      "completed": true,
       "engine": "opencode",
       "model": "deepseek/deepseek-v4-pro",
       "engine_args": [

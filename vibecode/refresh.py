@@ -159,6 +159,17 @@ class VibecodeRefreshService:
             elif write_profile(root, profile_name, profile_data, force=False):
                 report.created_missing_manual_files.append(rel)
 
+        from vibecode.write_rules import HUMAN_MAINTAINED_PATHS
+
+        covered_manual = set(templates.keys()) | {profile_path(name) for name in PROFILES}
+        uncovered = sorted(set(HUMAN_MAINTAINED_PATHS) - covered_manual)
+        if uncovered:
+            report.warnings.append(
+                "Human-maintained paths not covered by templates/profiles: "
+                + ", ".join(uncovered)
+                + ". These files will not be created or preserved by refresh."
+            )
+
     def _clean_disposable(self, root: Path, report: RefreshReport) -> None:
         """Delete allowlisted disposable files and directory contents."""
         for rel_dir in _DISPOSABLE_DIR_CONTENTS:

@@ -321,6 +321,7 @@ def _file_templates(project_id: str, project_name: str, repo_root: Path | None =
                         "entrypoints.md",
                         "risky_files.md",
                         "repo_tree.generated.md",
+                        "risk_report.json",
                     ],
                 },
                 indent=2,

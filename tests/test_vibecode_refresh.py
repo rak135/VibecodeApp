@@ -389,3 +389,69 @@ def test_refresh_report_repo_path_matches_root(tmp_path):
     _make_minimal_repo(tmp_path)
     report = VibecodeRefreshService(tmp_path).refresh()
     assert report.repo_path == tmp_path.resolve().as_posix()
+
+
+# ---------------------------------------------------------------------------
+# Tests: malformed project.yaml does not crash refresh
+# ---------------------------------------------------------------------------
+
+
+def test_refresh_survives_malformed_project_yaml(tmp_path):
+    """Refresh must not crash when .vibecode/project.yaml is malformed,
+    but it should report the error honestly."""
+    _make_minimal_repo(tmp_path)
+    (tmp_path / ".vibecode").mkdir()
+    (tmp_path / ".vibecode" / "project.yaml").write_text(
+        "project:\n  id: [[[bad yaml\n", encoding="utf-8"
+    )
+
+    report = VibecodeRefreshService(tmp_path).refresh()
+
+    assert (tmp_path / ".vibecode" / "architecture" / "INVARIANTS.md").is_file()
+    assert (tmp_path / ".vibecode" / "handoff" / "NOW.md").is_file()
+    assert report.errors
+    assert any("Invalid YAML" in e for e in report.errors)
+
+
+def test_refresh_preserves_malformed_project_yaml_byte_for_byte(tmp_path):
+    """Refresh must not overwrite a malformed project.yaml with defaults."""
+    _make_minimal_repo(tmp_path)
+    (tmp_path / ".vibecode").mkdir()
+    malformed = "project:\n  id: [[[bad yaml\n"
+    (tmp_path / ".vibecode" / "project.yaml").write_text(
+        malformed, encoding="utf-8"
+    )
+
+    VibecodeRefreshService(tmp_path).refresh()
+
+    assert (tmp_path / ".vibecode" / "project.yaml").read_text(
+        encoding="utf-8"
+    ) == malformed
+
+
+# ---------------------------------------------------------------------------
+# Tests: HUMAN_MAINTAINED_PATHS cross-check
+# ---------------------------------------------------------------------------
+
+
+def test_refresh_checks_human_maintained_paths_coverage(tmp_path):
+    """Refresh must verify that all HUMAN_MAINTAINED_PATHS are covered."""
+    _make_minimal_repo(tmp_path)
+    report = VibecodeRefreshService(tmp_path).refresh()
+
+    from vibecode.write_rules import HUMAN_MAINTAINED_PATHS
+    from vibecode.permissions import PROFILES, profile_path
+    from vibecode.project import _file_templates
+
+    templates = _file_templates("_", "_", tmp_path)
+    covered_manual = set(templates.keys()) | {profile_path(name) for name in PROFILES}
+    uncovered = sorted(set(HUMAN_MAINTAINED_PATHS) - covered_manual)
+
+    if uncovered:
+        assert any(
+            "Human-maintained paths not covered" in w for w in report.warnings
+        ), f"Expected warning for uncovered paths: {uncovered}"
+    else:
+        assert not any(
+            "Human-maintained paths not covered" in w for w in report.warnings
+        ), "Unexpected coverage warning when all paths are covered"
