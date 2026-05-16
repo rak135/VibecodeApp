@@ -176,6 +176,51 @@ def _make_raising_factory(error_msg: str):
     return _FakeController
 
 
+def _make_summary_factory(
+    *,
+    session_id: str = "fake-session-001",
+    agent_exit_code: int = 0,
+    agent_status: str = "success",
+    overall_status: str = "success",
+    guard_passed: bool = True,
+    checks_passed: bool = True,
+    handoff_passed: bool = True,
+):
+    """Return a RunController factory whose execute() returns a summary with
+    the given raw agent exit code, plus a wrapper exit code that differs from it
+    to prove the TUI uses the raw value.
+    """
+    from vibecode.run import RunSummary
+
+    class _FakeController:
+        def __init__(self, **kwargs: object) -> None:
+            self.session_id = session_id
+
+        def execute(self):
+            summary = RunSummary(
+                session_id=session_id,
+                started_at="2026-01-01T00:00:00+00:00",
+                finished_at="2026-01-01T00:01:00+00:00",
+                platform="opencode",
+                profile="safe",
+                repo_root="/fake/repo",
+                task="fake task",
+                dirty=False,
+                index_fresh=True,
+                command="fake-opencode",
+                exit_code=agent_exit_code,
+                stdout="out",
+                stderr="",
+                agent_status=agent_status,
+            )
+            # Wrapper exit code is deliberately different from agent_exit_code
+            # to verify the service uses the raw value.
+            wrapper_code = 99
+            return summary, wrapper_code
+
+    return _FakeController
+
+
 # ---------------------------------------------------------------------------
 # TestAgentRunService — unit tests with fake factory
 # ---------------------------------------------------------------------------
@@ -257,6 +302,67 @@ class TestAgentRunService:
     def test_default_factory_is_runcontroller(self, tmp_path):
         svc = AgentRunService()
         assert svc._controller_factory is None
+
+    def test_raw_agent_exit_code_used_not_wrapper(self, tmp_path):
+        svc = AgentRunService(
+            controller_factory=_make_summary_factory(
+                agent_exit_code=7, agent_status="failure", overall_status="failure"
+            )
+        )
+        result = svc.run(tmp_path, "task", "audit")
+        assert result["exit_code"] == 7
+
+    def test_raw_agent_exit_code_zero(self, tmp_path):
+        svc = AgentRunService(
+            controller_factory=_make_summary_factory(agent_exit_code=0)
+        )
+        result = svc.run(tmp_path, "task", "safe")
+        assert result["exit_code"] == 0
+
+    def test_abort_surfaces_specific_error_from_disk(self, tmp_path):
+        session_dir = tmp_path / ".vibecode" / "runs" / "fake-session-001"
+        session_dir.mkdir(parents=True, exist_ok=True)
+        summary_data = {
+            "$schema": "vibecode/run-summary/v1",
+            "session_id": "fake-session-001",
+            "overall_status": "error",
+            "error": "No .vibecode/project.yaml found.",
+        }
+        (session_dir / "summary.json").write_text(
+            json.dumps(summary_data), encoding="utf-8"
+        )
+        svc = AgentRunService(controller_factory=_make_noop_factory())
+        result = svc.run(tmp_path, "task", "safe")
+        assert "No .vibecode/project.yaml found." in result["error"]
+
+    def test_abort_fallback_when_no_summary_on_disk(self, tmp_path):
+        svc = AgentRunService(controller_factory=_make_noop_factory(session_id="no-disk"))
+        result = svc.run(tmp_path, "task", "safe")
+        assert "see run directory" in result["error"]
+
+    def test_artifact_paths_includes_handoff_report_json(self, tmp_path):
+        session_dir = tmp_path / ".vibecode" / "runs" / "fake-session-001"
+        session_dir.mkdir(parents=True, exist_ok=True)
+        (session_dir / "handoff_report.json").write_text("{}", encoding="utf-8")
+        svc = AgentRunService(controller_factory=_make_noop_factory())
+        result = svc.run(tmp_path, "task", "safe")
+        assert any("handoff_report.json" in p for p in result["artifact_paths"])
+
+    def test_artifact_paths_includes_agent_stderr_log(self, tmp_path):
+        session_dir = tmp_path / ".vibecode" / "runs" / "fake-session-001"
+        session_dir.mkdir(parents=True, exist_ok=True)
+        (session_dir / "agent_stderr.log").write_text("err", encoding="utf-8")
+        svc = AgentRunService(controller_factory=_make_noop_factory())
+        result = svc.run(tmp_path, "task", "safe")
+        assert any("agent_stderr.log" in p for p in result["artifact_paths"])
+
+    def test_artifact_paths_includes_metadata_json(self, tmp_path):
+        session_dir = tmp_path / ".vibecode" / "runs" / "fake-session-001"
+        session_dir.mkdir(parents=True, exist_ok=True)
+        (session_dir / "metadata.json").write_text("{}", encoding="utf-8")
+        svc = AgentRunService(controller_factory=_make_noop_factory())
+        result = svc.run(tmp_path, "task", "safe")
+        assert any("metadata.json" in p for p in result["artifact_paths"])
 
 
 # ---------------------------------------------------------------------------
@@ -432,6 +538,11 @@ class TestRenderRightRunResult:
     def test_shows_profile(self):
         text = render_right_run_result(self._result(profile="audit"))
         assert "audit" in text
+
+    def test_shows_nonzero_exit_code(self):
+        text = render_right_run_result(self._result(exit_code=7))
+        assert "7" in text
+        assert "Exit code" in text
 
 
 # ---------------------------------------------------------------------------

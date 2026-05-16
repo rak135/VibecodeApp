@@ -102,6 +102,11 @@ class RunSession:
         return self.run_dir / "checks_report.json"
 
     @property
+    def metadata_json(self) -> Path:
+        """Path for the run metadata record (JSON)."""
+        return self.run_dir / "metadata.json"
+
+    @property
     def handoff_report_json(self) -> Path:
         """Path for the handoff validation report (JSON)."""
         return self.run_dir / "handoff_report.json"

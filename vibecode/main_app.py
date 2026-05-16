@@ -641,6 +641,21 @@ def render_context_preview(preview: dict) -> str:
 # ---------------------------------------------------------------------------
 
 
+def _load_abort_error(session) -> str:
+    """Read the specific abort reason from the session summary.json on disk.
+
+    Returns the ``error`` field if the summary exists and contains one,
+    otherwise a generic fallback message.
+    """
+    try:
+        if session.summary_json.exists():
+            data = json.loads(session.summary_json.read_text(encoding="utf-8"))
+            return data.get("error", "Run aborted — see run directory for details.")
+    except Exception:
+        pass
+    return "Run aborted — see run directory for details."
+
+
 class AgentRunService:
     """Wraps RunController to execute agent runs from the TUI ([A] / [S]).
 
@@ -711,8 +726,7 @@ class AgentRunService:
         }
 
         try:
-            summary, exit_code = controller.execute()
-            result["exit_code"] = exit_code
+            summary, wrapper_exit_code = controller.execute()
 
             session = RunSession(repo_root, controller.session_id)
             result["run_dir"] = str(session.run_dir)
@@ -722,6 +736,7 @@ class AgentRunService:
                 result["prompt_path"] = str(session.opencode_prompt_md)
 
             if summary is not None:
+                result["exit_code"] = summary.exit_code
                 result["overall_status"] = summary.overall_status
                 if summary.guard is not None:
                     result["guard_passed"] = summary.guard.passed
@@ -736,8 +751,9 @@ class AgentRunService:
                 if summary.handoff is not None:
                     result["handoff_passed"] = summary.handoff.passed
             else:
+                result["exit_code"] = wrapper_exit_code
                 result["overall_status"] = "error"
-                result["error"] = "Run aborted — see run directory for details."
+                result["error"] = _load_abort_error(session)
 
             for attr in (
                 "events_jsonl",
@@ -745,7 +761,10 @@ class AgentRunService:
                 "guard_report_json",
                 "guard_report_md",
                 "checks_report_json",
+                "handoff_report_json",
+                "metadata_json",
                 "agent_stdout_log",
+                "agent_stderr_log",
             ):
                 p = getattr(session, attr, None)
                 if p is not None and p.exists():
