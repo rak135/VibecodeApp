@@ -1020,7 +1020,7 @@
     {
       "title": "P28.2 Review final TUI Phase 1+2 validation evidence",
       "description": "Review P28.1 validation report.\n\nWrite review output to:\n`docs/audit/TUI_PHASE1_PHASE2_P28_FINAL_VALIDATION_REVIEW.md`\n\nCheck:\n- `docs/PRD_TUI_PHASE1_PHASE2_VALIDATION.md`\n- Current code/tests only where needed to verify validation claims.\n- Referenced artifact paths and sample outputs where practical.\n\nRequire evidence:\n- Exact or summarized command outputs.\n- Proof that full or broadest practical pytest ran.\n- Proof that targeted TUI tests pass.\n- Proof that refresh preserves manual truth files.\n- Proof that refresh does not delete logs/runs.\n- Proof that context generation works from the TUI/service path.\n- Proof that fake OpenCode audit/safe run works.\n- Proof that external terminal adapter is tested without opening real terminals in CI.\n- Honest status of real Windows Terminal/OpenCode smoke.\n- Proof that final `git status --short` is clean or remaining dirt is unrelated and documented.\n\nWatch for:\n- Readiness claims while targeted tests fail.\n- Validation relying on old reports.\n- Tests that only check parser registration, not behavior.\n- Fake OpenCode not actually launched.\n- External terminal tests opening real terminals.\n- Manual truth preservation not proven.\n- Right-panel debug claims without artifact evidence.\n- Hidden failures in guard/check/handoff.\n\nDo not modify implementation files.\nOnly write the review document.",
-      "completed": false,
+      "completed": true,
       "engine": "copilot",
       "model": "auto",
       "engine_args": [
