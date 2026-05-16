@@ -15,6 +15,7 @@ Columns:
 from __future__ import annotations
 
 import json
+import re
 import sys
 import threading
 from pathlib import Path
@@ -23,7 +24,8 @@ try:
     from textual.app import App, ComposeResult
     from textual.binding import Binding
     from textual.containers import Horizontal, Vertical
-    from textual.widgets import Footer, Label, RichLog, Static
+    from textual.screen import Screen
+    from textual.widgets import Footer, Input, Label, RichLog, Static
 
     _TEXTUAL_AVAILABLE = True
 except ImportError:
@@ -56,6 +58,188 @@ _CENTER_PLACEHOLDER = (
     "implemented in Phase 1.  Use 'vibecode monitor'\n"
     "to run an agent session with live output."
 )
+
+
+# ---------------------------------------------------------------------------
+# Context preview helpers (testable without Textual)
+# ---------------------------------------------------------------------------
+
+
+def _get_section_content(content: str, section_heading: str) -> list[str]:
+    """Return non-empty, non-blockquote lines from a markdown ## section."""
+    lines = content.splitlines()
+    in_section = False
+    result: list[str] = []
+    for line in lines:
+        stripped = line.strip()
+        if stripped.startswith("## ") and section_heading.lower() in stripped.lower():
+            in_section = True
+            continue
+        if in_section and stripped.startswith("## "):
+            break
+        if in_section and stripped and not stripped.startswith(">"):
+            result.append(stripped)
+    return result
+
+
+def _extract_file_paths(content: str) -> list[str]:
+    """Return up to 10 file paths from the 'Relevant files' section."""
+    paths: list[str] = []
+    for line in _get_section_content(content, "Relevant files with reasons"):
+        m = re.match(r"-\s+`([^`]+)`", line)
+        if m:
+            paths.append(m.group(1))
+    return paths[:10]
+
+
+def _extract_architecture_docs(content: str) -> list[str]:
+    """Return architecture doc paths from 'Relevant architecture' section."""
+    docs: list[str] = []
+    for line in _get_section_content(content, "Relevant architecture"):
+        m = re.match(r"-\s+`([^`]+)`", line)
+        if m:
+            docs.append(m.group(1))
+    return docs
+
+
+def _extract_required_checks_from_pack(content: str) -> list[str]:
+    """Return up to 5 check commands from 'Required checks' section."""
+    checks: list[str] = []
+    for line in _get_section_content(content, "Required checks"):
+        m = re.search(r"`([^`]+)`", line)
+        if m:
+            checks.append(m.group(1))
+    return checks[:5]
+
+
+def _extract_protected_paths_from_pack(content: str) -> list[str]:
+    """Return up to 8 protected path names from 'Protected paths' section."""
+    paths: list[str] = []
+    for line in _get_section_content(content, "Protected paths"):
+        m = re.match(r"-\s+`([^`]+)`", line)
+        if m:
+            paths.append(m.group(1))
+    return paths[:8]
+
+
+def _extract_pack_warnings(content: str) -> list[str]:
+    """Return warning lines from the context pack (e.g. truncation notices)."""
+    warnings: list[str] = []
+    for line in content.splitlines():
+        if "Context limit reached" in line:
+            warnings.append("Context limit reached; some sections omitted.")
+        elif "WARNING:" in line and line.strip().startswith("-"):
+            warnings.append(line.strip().lstrip("- "))
+    return warnings[:5]
+
+
+class ContextPreviewService:
+    """Generates context artifacts and summarises them for TUI display.
+
+    Wraps the existing :func:`write_context_pack` and
+    :func:`write_opencode_prompt` functions; does not duplicate their logic.
+    """
+
+    def run(self, repo_root: Path, task: str) -> dict:
+        """Generate context for *task* and return a preview dict.
+
+        The returned dict always has the following keys::
+
+            task, platform, context_pack_path, opencode_prompt_path,
+            relevant_files, architecture_docs, required_checks,
+            protected_files, warnings, error
+
+        *error* is ``None`` on success; a string on failure.
+        """
+        from vibecode.context.platform_export import (
+            OPENCODE_PROMPT_PATH,
+            write_opencode_prompt,
+        )
+        from vibecode.context.renderer import CURRENT_CONTEXT_PACK, write_context_pack
+
+        result: dict = {
+            "task": task,
+            "platform": "opencode",
+            "context_pack_path": str(repo_root / CURRENT_CONTEXT_PACK),
+            "opencode_prompt_path": str(repo_root / OPENCODE_PROMPT_PATH),
+            "relevant_files": [],
+            "architecture_docs": [],
+            "required_checks": [],
+            "protected_files": [],
+            "warnings": [],
+            "error": None,
+        }
+        try:
+            pack_path = write_context_pack(repo_root, task)
+            content = pack_path.read_text(encoding="utf-8")
+            opencode_path = write_opencode_prompt(repo_root, content)
+            result["context_pack_path"] = str(pack_path)
+            result["opencode_prompt_path"] = str(opencode_path)
+            result["relevant_files"] = _extract_file_paths(content)
+            result["architecture_docs"] = _extract_architecture_docs(content)
+            result["required_checks"] = _extract_required_checks_from_pack(content)
+            result["protected_files"] = _extract_protected_paths_from_pack(content)
+            result["warnings"] = _extract_pack_warnings(content)
+        except Exception as exc:  # noqa: BLE001
+            result["error"] = str(exc)
+        return result
+
+
+def render_center_context_status(
+    task: str,
+    context_pack_path: str,
+    opencode_prompt_path: str,
+) -> str:
+    """Return center panel text when context is ready (pure, testable)."""
+    task_short = task[:100] + ("…" if len(task) > 100 else "")
+    return (
+        f"Provider: OpenCode\n"
+        f"Current task: {task_short}\n\n"
+        f"Context pack:\n  {context_pack_path}\n\n"
+        f"OpenCode prompt:\n  {opencode_prompt_path}\n\n"
+        "Status: context ready\n\n"
+        "─── Next steps ───\n"
+        "[A] Audit profile   — run backend not yet wired\n"
+        "[S] Safe profile    — run backend not yet wired\n"
+    )
+
+
+def render_context_preview(preview: dict) -> str:
+    """Return right-panel preview text summarising generated context (pure)."""
+    task_text = preview.get("task", "")
+    task_short = task_text[:80] + ("…" if len(task_text) > 80 else "")
+    lines = [
+        "─── Context Preview ───",
+        f"Task:     {task_short}",
+        f"Platform: {preview.get('platform', 'opencode')}",
+        "",
+        f"Pack:   {preview.get('context_pack_path', '')}",
+        f"Prompt: {preview.get('opencode_prompt_path', '')}",
+    ]
+
+    files = preview.get("relevant_files") or []
+    if files:
+        lines += ["", "Relevant files:"] + [f"  {f}" for f in files[:8]]
+
+    arch = preview.get("architecture_docs") or []
+    if arch:
+        lines += ["", "Architecture docs:"] + [f"  {d}" for d in arch[:4]]
+
+    checks = preview.get("required_checks") or []
+    if checks:
+        lines += ["", "Required checks:"] + [f"  {c}" for c in checks[:4]]
+
+    protected = preview.get("protected_files") or []
+    if protected:
+        lines += ["", "Protected/risky files:"] + [f"  {p}" for p in protected[:5]]
+
+    for w in preview.get("warnings") or []:
+        lines += ["", f"WARN: {w}"]
+
+    if preview.get("error"):
+        lines += ["", f"ERROR: {preview['error']}"]
+
+    return "\n".join(lines)
 
 
 # ---------------------------------------------------------------------------
@@ -141,6 +325,33 @@ def render_left_panel(
 
 if _TEXTUAL_AVAILABLE:
 
+    class ContextInputScreen(Screen):
+        """Single-field input screen for entering a task description."""
+
+        BINDINGS = [
+            Binding("escape", "cancel", "Cancel"),
+        ]
+
+        def compose(self) -> ComposeResult:
+            yield Label(
+                "Enter task description (Enter to confirm, Escape to cancel):",
+                id="context-input-label",
+            )
+            yield Input(
+                placeholder="e.g. Add pagination to the user list endpoint",
+                id="context-input",
+            )
+
+        def on_mount(self) -> None:
+            self.query_one("#context-input", Input).focus()
+
+        def on_input_submitted(self, event: Input.Submitted) -> None:
+            task = event.value.strip()
+            self.dismiss(task or None)
+
+        def action_cancel(self) -> None:
+            self.dismiss(None)
+
     class VibecodeMainApp(App):
         """Primary three-column control shell for vibecode.
 
@@ -168,11 +379,14 @@ if _TEXTUAL_AVAILABLE:
             repo_path: Path,
             status: object,
             refresh_service: object | None = None,
+            context_service: object | None = None,
         ) -> None:
             super().__init__()
             self._repo_path = repo_path
             self._status = status
             self._refresh_service = refresh_service
+            self._context_service = context_service
+            self._current_task: str | None = None
 
         def _get_refresh_service(self) -> object:
             if self._refresh_service is None:
@@ -180,6 +394,11 @@ if _TEXTUAL_AVAILABLE:
 
                 self._refresh_service = VibecodeRefreshService(self._repo_path)
             return self._refresh_service
+
+        def _get_context_service(self) -> object:
+            if self._context_service is None:
+                self._context_service = ContextPreviewService()
+            return self._context_service
 
         # ------------------------------------------------------------------
         # Compose
@@ -239,7 +458,13 @@ if _TEXTUAL_AVAILABLE:
                 self._log_event(f"[I] Failed to read map: {exc}")
 
         def action_cmd_context(self) -> None:
-            self._log_not_impl("C", "Create context")
+            """Prompt for a task and generate context artifacts."""
+            if not (self._repo_path / ".vibecode").exists():
+                self._log_event(
+                    "[C] .vibecode not found. Run 'vibecode init' or [R] Refresh first."
+                )
+                return
+            self.push_screen(ContextInputScreen(), self._on_context_task_received)
 
         def action_cmd_audit(self) -> None:
             self._log_not_impl("A", "Audit profile")
@@ -268,6 +493,52 @@ if _TEXTUAL_AVAILABLE:
 
         def _log_not_impl(self, key: str, label: str) -> None:
             self._log_event(f"[{key}] {label}: not implemented yet.")
+
+        def _on_context_task_received(self, task: str | None) -> None:
+            """Called when ContextInputScreen is dismissed."""
+            if not task:
+                self._log_event("[C] Context creation cancelled.")
+                return
+            self._current_task = task
+            self._log_event(f"[C] Generating context for: {task[:60]}{'…' if len(task) > 60 else ''}")
+            svc = self._get_context_service()
+
+            def _worker() -> None:
+                try:
+                    preview = svc.run(self._repo_path, task)  # type: ignore[attr-defined]
+                    self.call_from_thread(self._on_context_done, preview)
+                except Exception as exc:  # noqa: BLE001
+                    self.call_from_thread(self._on_context_error, str(exc))
+
+            threading.Thread(target=_worker, daemon=True, name="tui-context").start()
+
+        def _on_context_done(self, preview: dict) -> None:
+            """Update center and right panels after context generation."""
+            if preview.get("error"):
+                self._log_event(f"[C] Context generation failed: {preview['error']}")
+                self._log_event(render_context_preview(preview))
+                return
+
+            # Update center panel with task + artifact paths + status.
+            center_text = render_center_context_status(
+                preview["task"],
+                preview["context_pack_path"],
+                preview["opencode_prompt_path"],
+            )
+            try:
+                self.query_one("#center-status", Static).update(center_text)
+            except Exception:  # noqa: BLE001
+                pass
+
+            # Write context preview into the event log (right panel).
+            self._log_event(render_context_preview(preview))
+            self._log_event(
+                f"[C] Context ready — task: {preview['task'][:60]}"
+                f"{'…' if len(preview['task']) > 60 else ''}"
+            )
+
+        def _on_context_error(self, error: str) -> None:
+            self._log_event(f"[C] Context generation error: {error}")
 
         def _on_refresh_done(self, report: object) -> None:
             self._log_event(
@@ -305,6 +576,12 @@ if _TEXTUAL_AVAILABLE:
             self._log_event(f"[R] Refresh failed: {error}")
 
 else:
+
+    class ContextInputScreen:  # type: ignore[no-redef]
+        """Stub when Textual is not installed."""
+
+        def __init__(self, **kwargs: object) -> None:
+            pass
 
     class VibecodeMainApp:  # type: ignore[no-redef]
         """Stub when Textual is not installed."""

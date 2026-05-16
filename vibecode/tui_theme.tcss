@@ -230,3 +230,18 @@ Footer {
     color: #8b949e;
     padding: 0 1;
 }
+
+/* Context input screen */
+
+#context-input-label {
+    color: #c9d1d9;
+    padding: 2 4 1 4;
+    text-style: bold;
+}
+
+#context-input {
+    margin: 0 4;
+    border: solid #30363d;
+    background: #0d1117;
+    color: #c9d1d9;
+}
