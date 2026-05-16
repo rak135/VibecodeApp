@@ -43,6 +43,7 @@ _ACTIONS_TEXT = (
     "  [C] Create context for task\n"
     "  [A] Run audit profile\n"
     "  [S] Run safe agent profile\n"
+    "  [E] Launch external terminal\n"
     "  [G] Run guard\n"
     "  [T] Run tests/checks\n"
     "  [H] Handoff check\n"
@@ -52,11 +53,15 @@ _ACTIONS_TEXT = (
 _CENTER_PLACEHOLDER = (
     "Provider: OpenCode\n"
     "Current task: none\n\n"
-    "─── Phase 1 placeholder ───\n"
+    "─── Phase 1 / Phase 2 ───\n"
     "No command running.\n\n"
-    "Note: A fully embedded interactive terminal is not\n"
-    "implemented in Phase 1.  Use 'vibecode monitor'\n"
-    "to run an agent session with live output."
+    "Options:\n"
+    "  [A]/[S] — Vibecode-orchestrated run with event streaming\n"
+    "  [E]     — Launch OpenCode in external Windows Terminal\n\n"
+    "Note: An interactive terminal is not implemented inside the TUI.\n"
+    "Use [E] to open a real terminal window for a fully interactive\n"
+    "OpenCode session.  The TUI remains the Vibecode cockpit.\n"
+    "Use 'vibecode monitor' for orchestrated run with live output."
 )
 
 
@@ -854,6 +859,164 @@ def render_right_run_result(result: dict) -> str:
 
 
 # ---------------------------------------------------------------------------
+# ExternalTerminalService and rendering helpers (Phase 2)
+# ---------------------------------------------------------------------------
+
+
+class ExternalTerminalService:
+    """Generate context and launch OpenCode in an external terminal.
+
+    Wraps :class:`~vibecode.adapters.external_terminal.WindowsTerminalOpenCodeAdapter`;
+    contains no TUI logic.
+
+    The optional *adapter* kwarg accepts any object implementing the
+    :meth:`launch` interface — used in tests to inject a fake adapter that
+    avoids spawning real terminal processes.
+    """
+
+    def __init__(self, adapter: object | None = None) -> None:
+        self._adapter = adapter
+
+    def _get_adapter(self) -> object:
+        if self._adapter is None:
+            from vibecode.adapters.external_terminal import WindowsTerminalOpenCodeAdapter
+
+            self._adapter = WindowsTerminalOpenCodeAdapter()
+        return self._adapter
+
+    def run(
+        self,
+        repo_root: Path,
+        task: str,
+        profile: str = "safe",
+        *,
+        opencode_command: str | None = None,
+        session_id: str | None = None,
+        env: dict | None = None,
+    ) -> dict:
+        """Generate context and launch an external terminal for *task*.
+
+        Returns a result dict with keys::
+
+            launched, command, terminal_kind, pid, error_message,
+            prompt_path, context_pack_path, task, profile
+
+        ``error_message`` is ``None`` on success, a string on failure.
+        ``launched`` is ``True`` when the terminal process was started.
+        """
+        result: dict = {
+            "launched": False,
+            "command": "",
+            "terminal_kind": "",
+            "pid": None,
+            "error_message": None,
+            "prompt_path": "",
+            "context_pack_path": "",
+            "task": task,
+            "profile": profile,
+        }
+
+        # Ensure the OpenCode prompt file is up-to-date before launch.
+        try:
+            from vibecode.context.platform_export import write_opencode_prompt
+            from vibecode.context.renderer import write_context_pack
+
+            pack_path = write_context_pack(repo_root, task)
+            content = pack_path.read_text(encoding="utf-8")
+            prompt_path = write_opencode_prompt(repo_root, content)
+            result["context_pack_path"] = str(pack_path)
+            result["prompt_path"] = str(prompt_path)
+        except Exception as exc:  # noqa: BLE001
+            result["error_message"] = f"Context generation failed: {exc}"
+            return result
+
+        # Resolve opencode command.
+        if opencode_command is None:
+            from vibecode.adapters.opencode import resolve_opencode_command
+
+            opencode_command = resolve_opencode_command() or "opencode"
+
+        adapter = self._get_adapter()
+        launch_result = adapter.launch(  # type: ignore[attr-defined]
+            repo_root,
+            opencode_command,
+            prompt_path,
+            profile=profile,
+            session_id=session_id,
+            env=env,
+        )
+
+        result["launched"] = launch_result.launched
+        result["command"] = launch_result.command
+        result["terminal_kind"] = launch_result.terminal_kind
+        result["pid"] = launch_result.pid
+        result["error_message"] = launch_result.error_message
+        return result
+
+
+def render_center_external_launch_status(result: dict) -> str:
+    """Return center panel text after an external terminal launch (pure, testable)."""
+    task = result.get("task", "")
+    task_short = task[:80] + ("…" if len(task) > 80 else "")
+    profile = result.get("profile", "")
+    lines = [
+        "Provider: OpenCode",
+        f"Profile:  {profile}",
+        f"Task:     {task_short}",
+        "",
+    ]
+    if result.get("launched"):
+        terminal = result.get("terminal_kind", "?")
+        pid = result.get("pid")
+        pid_str = f" (PID {pid})" if pid else ""
+        lines += [
+            f"Status: external terminal launched ({terminal}){pid_str}",
+            "",
+            "─── Interactive session active ───",
+            "The interactive OpenCode session is running in the",
+            "external terminal window.",
+            "",
+            f"Prompt: {result.get('prompt_path', '')}",
+            "",
+            "Return here for Vibecode guard, checks, and handoff.",
+        ]
+    else:
+        lines += [
+            "Status: launch failed",
+            "",
+            f"Error: {result.get('error_message') or 'unknown error'}",
+        ]
+    return "\n".join(lines)
+
+
+def render_right_external_launch_log(result: dict) -> str:
+    """Return right-panel log text for an external terminal launch (pure)."""
+    lines = [
+        "─── External Terminal Launch ───",
+        f"Task:    {result.get('task', '?')}",
+        f"Profile: {result.get('profile', '?')}",
+    ]
+    if result.get("context_pack_path"):
+        lines.append(f"Context: {result['context_pack_path']}")
+    if result.get("prompt_path"):
+        lines.append(f"Prompt:  {result['prompt_path']}")
+
+    if result.get("launched"):
+        lines.append(f"Terminal: {result.get('terminal_kind', '?')}")
+        if result.get("pid"):
+            lines.append(f"PID:     {result['pid']}")
+        if result.get("command"):
+            lines.append(f"Command: {result['command']}")
+        lines.append("Result:  LAUNCHED")
+    else:
+        lines.append("Result:  FAILED")
+        if result.get("error_message"):
+            lines.append(f"Error:   {result['error_message']}")
+
+    return "\n".join(lines)
+
+
+# ---------------------------------------------------------------------------
 # Pure rendering helpers (testable without Textual)
 # ---------------------------------------------------------------------------
 
@@ -986,7 +1149,7 @@ if _TEXTUAL_AVAILABLE:
         """Primary three-column control shell for vibecode.
 
         Left panel  — status overview and action menu.
-        Center panel— agent console (Phase 1: placeholder + output area).
+        Center panel— agent console (Phase 1 / Phase 2).
         Right panel — Vibecode event log.
         """
 
@@ -998,6 +1161,7 @@ if _TEXTUAL_AVAILABLE:
             Binding("c", "cmd_context", "Context"),
             Binding("a", "cmd_audit", "Audit"),
             Binding("s", "cmd_safe", "Safe run"),
+            Binding("e", "cmd_external", "External terminal"),
             Binding("g", "cmd_guard", "Guard"),
             Binding("t", "cmd_tests", "Tests"),
             Binding("h", "cmd_handoff", "Handoff"),
@@ -1015,6 +1179,7 @@ if _TEXTUAL_AVAILABLE:
             check_service: object | None = None,
             handoff_service: object | None = None,
             run_service: object | None = None,
+            external_terminal_service: object | None = None,
         ) -> None:
             super().__init__()
             self._repo_path = repo_path
@@ -1026,8 +1191,10 @@ if _TEXTUAL_AVAILABLE:
             self._check_service = check_service
             self._handoff_service = handoff_service
             self._run_service = run_service
+            self._external_terminal_service = external_terminal_service
             self._current_task: str | None = None
             self._pending_run_profile: str | None = None
+            self._pending_external_profile: str | None = None
 
         def _get_refresh_service(self) -> object:
             if self._refresh_service is None:
@@ -1065,6 +1232,11 @@ if _TEXTUAL_AVAILABLE:
             if self._run_service is None:
                 self._run_service = AgentRunService()
             return self._run_service
+
+        def _get_external_terminal_service(self) -> object:
+            if self._external_terminal_service is None:
+                self._external_terminal_service = ExternalTerminalService()
+            return self._external_terminal_service
 
         # ------------------------------------------------------------------
         # Compose
@@ -1138,6 +1310,10 @@ if _TEXTUAL_AVAILABLE:
         def action_cmd_safe(self) -> None:
             """Prompt for a task (or reuse current) and start a safe-profile run."""
             self._start_run("safe")
+
+        def action_cmd_external(self) -> None:
+            """Prompt for a task (or reuse current) and launch in external terminal."""
+            self._start_external("safe")
 
         def action_cmd_guard(self) -> None:
             """Run guard and show results in right panel."""
@@ -1398,6 +1574,79 @@ if _TEXTUAL_AVAILABLE:
         def _on_run_error(self, error: str) -> None:
             """Log an unhandled exception from the run worker."""
             self._log_event(f"[A/S] Run worker error: {error}")
+
+        def _start_external(self, profile: str) -> None:
+            """Kick off an external terminal launch in a background thread.
+
+            Prompts for a task first if :attr:`_current_task` is not set.
+            """
+            if not self._current_task:
+                self._pending_external_profile = profile
+                self.push_screen(ContextInputScreen(), self._on_external_task_received)
+                return
+            self._pending_external_profile = None
+            task = self._current_task
+            self._log_event(
+                f"[E] Launching external terminal ({profile!r}): "
+                f"{task[:60]}{'…' if len(task) > 60 else ''}"
+            )
+            svc = self._get_external_terminal_service()
+
+            center_text = (
+                f"Provider: OpenCode\n"
+                f"Profile:  {profile}\n"
+                f"Task:     {task[:80]}{'…' if len(task) > 80 else ''}\n\n"
+                "Status: launching external terminal…"
+            )
+            try:
+                self.query_one("#center-status", Static).update(center_text)
+            except Exception:  # noqa: BLE001
+                pass
+
+            def _worker() -> None:
+                try:
+                    result = svc.run(  # type: ignore[attr-defined]
+                        self._repo_path, task, profile
+                    )
+                    self.call_from_thread(self._on_external_done, result)
+                except Exception as exc:  # noqa: BLE001
+                    self.call_from_thread(self._on_external_error, str(exc))
+
+            threading.Thread(
+                target=_worker, daemon=True, name="tui-external"
+            ).start()
+
+        def _on_external_task_received(self, task: str | None) -> None:
+            """Called when ContextInputScreen is dismissed during external launch."""
+            profile = self._pending_external_profile
+            self._pending_external_profile = None
+            if not task:
+                self._log_event("[E] External terminal launch cancelled — no task entered.")
+                return
+            self._current_task = task
+            if profile:
+                self._start_external(profile)
+
+        def _on_external_done(self, result: dict) -> None:
+            """Update center and right panels after external terminal launch."""
+            center_text = render_center_external_launch_status(result)
+            try:
+                self.query_one("#center-status", Static).update(center_text)
+            except Exception:  # noqa: BLE001
+                pass
+            self._log_event(render_right_external_launch_log(result))
+            if result.get("launched"):
+                self._log_event(
+                    f"[E] External terminal launched ({result.get('terminal_kind', '?')})"
+                )
+            else:
+                self._log_event(
+                    f"[E] External terminal launch failed: {result.get('error_message', '?')}"
+                )
+
+        def _on_external_error(self, error: str) -> None:
+            """Log an unhandled exception from the external terminal worker."""
+            self._log_event(f"[E] External terminal worker error: {error}")
 
         def _on_refresh_done(self, report: object) -> None:
             self._log_event(
