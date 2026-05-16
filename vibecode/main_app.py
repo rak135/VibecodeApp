@@ -50,21 +50,35 @@ _ACTIONS_TEXT = (
     "  [Q] Quit"
 )
 
-def _make_center_placeholder(provider_name: str) -> str:
-    """Return center-panel placeholder text for *provider_name*."""
-    return (
-        f"Provider: {provider_name}\n"
-        "Current task: none\n\n"
-        "─── Phase 1 / Phase 2 ───\n"
-        "No command running.\n\n"
-        "Options:\n"
-        f"  [A]/[S] — Vibecode-orchestrated run with event streaming\n"
-        f"  [E]     — Launch {provider_name} in external Windows Terminal\n\n"
-        "Note: An interactive terminal is not implemented inside the TUI.\n"
-        f"Use [E] to open a real terminal window for a fully interactive\n"
-        f"{provider_name} session.  The TUI remains the Vibecode cockpit.\n"
-        "Use 'vibecode monitor' for orchestrated run with live output."
-    )
+def _make_center_placeholder(provider_name: str, available: bool | None = None, status_msg: str = "") -> str:
+    """Return center-panel placeholder text for *provider_name*.
+
+    When *available* is not None, an availability line is included.
+    """
+    lines = [
+        f"Provider: {provider_name}",
+    ]
+    if available is not None:
+        status_line = f"Status:   {'available' if available else 'unavailable'}"
+        if not available and status_msg:
+            status_line += f" ({status_msg})"
+        lines.append(status_line)
+    lines += [
+        "Current task: none",
+        "",
+        "─── Phase 1 / Phase 2 ───",
+        "No command running.",
+        "",
+        "Options:",
+        f"  [A]/[S] — Vibecode-orchestrated run with event streaming",
+        f"  [E]     — Launch {provider_name} in external Windows Terminal",
+        "",
+        "Note: An interactive terminal is not implemented inside the TUI.",
+        f"Use [E] to open a real terminal window for a fully interactive",
+        f"{provider_name} session.  The TUI remains the Vibecode cockpit.",
+        "Use 'vibecode monitor' for orchestrated run with live output.",
+    ]
+    return "\n".join(lines)
 
 
 # Module-level constant kept for backward compatibility with tests and imports.
@@ -1207,6 +1221,7 @@ if _TEXTUAL_AVAILABLE:
             else:
                 from vibecode.adapters.provider import get_default_provider
                 self._provider = get_default_provider()
+            self._provider_status = self._provider.check_availability()  # type: ignore[attr-defined]
             self._current_task: str | None = None
             self._pending_run_profile: str | None = None
             self._pending_external_profile: str | None = None
@@ -1260,6 +1275,12 @@ if _TEXTUAL_AVAILABLE:
         def compose(self) -> ComposeResult:
             left_text = render_left_panel(self._repo_path, self._status)
             provider_name = self._provider.display_name  # type: ignore[attr-defined]
+            provider_status = self._provider_status  # type: ignore[attr-defined]
+            placeholder = _make_center_placeholder(
+                provider_name,
+                available=provider_status.available,  # type: ignore[attr-defined]
+                status_msg=provider_status.message,  # type: ignore[attr-defined]
+            )
             yield Label("VibecodeApp — Control Shell", id="main-tui-title")
             with Horizontal(id="tui-columns"):
                 with Vertical(id="left-panel"):
@@ -1267,7 +1288,7 @@ if _TEXTUAL_AVAILABLE:
                     yield Static(left_text, id="left-status")
                 with Vertical(id="center-panel"):
                     yield Label("Agent Console", id="center-panel-label")
-                    yield Static(_make_center_placeholder(provider_name), id="center-status")
+                    yield Static(placeholder, id="center-status")
                     yield RichLog(id="center-output", highlight=False, markup=False)
                 with Vertical(id="right-panel"):
                     yield Label("Vibecode Events", id="right-panel-label")
@@ -1321,14 +1342,32 @@ if _TEXTUAL_AVAILABLE:
 
         def action_cmd_audit(self) -> None:
             """Prompt for a task (or reuse current) and start an audit-profile run."""
+            if not self._provider.supports_internal_run:  # type: ignore[attr-defined]
+                self._log_event(f"[A] Internal run not supported by {self._provider.display_name}.")  # type: ignore[attr-defined]
+                return
+            if not self._provider_status:  # type: ignore[attr-defined]
+                self._log_event(f"[A] Provider unavailable: {self._provider_status.message}")  # type: ignore[attr-defined]
+                return
             self._start_run("audit")
 
         def action_cmd_safe(self) -> None:
             """Prompt for a task (or reuse current) and start a safe-profile run."""
+            if not self._provider.supports_internal_run:  # type: ignore[attr-defined]
+                self._log_event(f"[S] Internal run not supported by {self._provider.display_name}.")  # type: ignore[attr-defined]
+                return
+            if not self._provider_status:  # type: ignore[attr-defined]
+                self._log_event(f"[S] Provider unavailable: {self._provider_status.message}")  # type: ignore[attr-defined]
+                return
             self._start_run("safe")
 
         def action_cmd_external(self) -> None:
             """Prompt for a task (or reuse current) and launch in external terminal."""
+            if not self._provider.supports_external_launch:  # type: ignore[attr-defined]
+                self._log_event(f"[E] External launch not supported by {self._provider.display_name}.")  # type: ignore[attr-defined]
+                return
+            if not self._provider_status:  # type: ignore[attr-defined]
+                self._log_event(f"[E] Provider unavailable: {self._provider_status.message}")  # type: ignore[attr-defined]
+                return
             self._start_external("safe")
 
         def action_cmd_guard(self) -> None:

@@ -317,6 +317,26 @@ class TestMakeCenterPlaceholder:
 
         assert "Phase 1" in _CENTER_PLACEHOLDER
 
+    def test_shows_available_status(self):
+        from vibecode.main_app import _make_center_placeholder
+
+        text = _make_center_placeholder("MyAgent", available=True, status_msg="ready")
+        assert "Status:   available" in text
+        assert "unavailable" not in text
+
+    def test_shows_unavailable_status_with_message(self):
+        from vibecode.main_app import _make_center_placeholder
+
+        text = _make_center_placeholder("MyAgent", available=False, status_msg="not found")
+        assert "Status:   unavailable (not found)" in text
+
+    def test_backward_compatible_without_availability(self):
+        from vibecode.main_app import _make_center_placeholder
+
+        text = _make_center_placeholder("MyAgent")
+        assert "Status:" not in text
+        assert "MyAgent" in text
+
 
 # ---------------------------------------------------------------------------
 # VibecodeMainApp accepts a custom provider
@@ -392,3 +412,173 @@ class TestUnavailableProvider:
         with patch("vibecode.adapters.opencode.shutil.which", return_value=None):
             status = p.check_availability()
         assert not status
+
+
+# ---------------------------------------------------------------------------
+# Provider capability gating in MainApp
+# ---------------------------------------------------------------------------
+
+
+class _GatedStubProvider(AgentProvider):
+    """Stub provider whose capabilities can be configured for gating tests."""
+
+    def __init__(
+        self,
+        name: str = "Stub",
+        internal: bool = False,
+        external: bool = False,
+        available: bool = True,
+        status_msg: str = "",
+    ) -> None:
+        self._name = name
+        self._internal = internal
+        self._external = external
+        self._available = available
+        self._status_msg = status_msg
+
+    @property
+    def display_name(self) -> str:
+        return self._name
+
+    def check_availability(self) -> ProviderStatus:
+        return ProviderStatus(available=self._available, message=self._status_msg)
+
+    @property
+    def context_artifacts(self) -> list[str]:
+        return []
+
+    @property
+    def supports_internal_run(self) -> bool:
+        return self._internal
+
+    @property
+    def supports_external_launch(self) -> bool:
+        return self._external
+
+
+class TestMainAppProviderGating:
+    def test_audit_blocked_when_no_internal_support(self, tmp_path):
+        from vibecode.main_app import VibecodeMainApp
+        from vibecode.repo_status import RepoStatus
+
+        status = RepoStatus(repo_path=tmp_path)
+        provider = _GatedStubProvider(name="Stub", internal=False)
+        app = VibecodeMainApp(repo_path=tmp_path, status=status, provider=provider)
+        events: list[str] = []
+        app._log_event = events.append  # type: ignore[attr-defined]
+        app._start_run = lambda p: events.append(f"START_RUN:{p}")  # type: ignore[attr-defined]
+
+        app.action_cmd_audit()  # type: ignore[attr-defined]
+        assert any("not supported" in e and "[A]" in e for e in events)
+        assert not any("START_RUN" in e for e in events)
+
+    def test_safe_blocked_when_no_internal_support(self, tmp_path):
+        from vibecode.main_app import VibecodeMainApp
+        from vibecode.repo_status import RepoStatus
+
+        status = RepoStatus(repo_path=tmp_path)
+        provider = _GatedStubProvider(name="Stub", internal=False)
+        app = VibecodeMainApp(repo_path=tmp_path, status=status, provider=provider)
+        events: list[str] = []
+        app._log_event = events.append  # type: ignore[attr-defined]
+        app._start_run = lambda p: events.append(f"START_RUN:{p}")  # type: ignore[attr-defined]
+
+        app.action_cmd_safe()  # type: ignore[attr-defined]
+        assert any("not supported" in e and "[S]" in e for e in events)
+        assert not any("START_RUN" in e for e in events)
+
+    def test_audit_blocked_when_provider_unavailable(self, tmp_path):
+        from vibecode.main_app import VibecodeMainApp
+        from vibecode.repo_status import RepoStatus
+
+        status = RepoStatus(repo_path=tmp_path)
+        provider = _GatedStubProvider(
+            name="Stub", internal=True, available=False, status_msg="missing binary"
+        )
+        app = VibecodeMainApp(repo_path=tmp_path, status=status, provider=provider)
+        events: list[str] = []
+        app._log_event = events.append  # type: ignore[attr-defined]
+        app._start_run = lambda p: events.append(f"START_RUN:{p}")  # type: ignore[attr-defined]
+
+        app.action_cmd_audit()  # type: ignore[attr-defined]
+        assert any("unavailable" in e.lower() and "[A]" in e for e in events)
+        assert any("missing binary" in e for e in events)
+        assert not any("START_RUN" in e for e in events)
+
+    def test_external_blocked_when_no_external_support(self, tmp_path):
+        from vibecode.main_app import VibecodeMainApp
+        from vibecode.repo_status import RepoStatus
+
+        status = RepoStatus(repo_path=tmp_path)
+        provider = _GatedStubProvider(name="Stub", external=False)
+        app = VibecodeMainApp(repo_path=tmp_path, status=status, provider=provider)
+        events: list[str] = []
+        app._log_event = events.append  # type: ignore[attr-defined]
+        app._start_external = lambda p: events.append(f"START_EXT:{p}")  # type: ignore[attr-defined]
+
+        app.action_cmd_external()  # type: ignore[attr-defined]
+        assert any("not supported" in e and "[E]" in e for e in events)
+        assert not any("START_EXT" in e for e in events)
+
+    def test_external_blocked_when_provider_unavailable(self, tmp_path):
+        from vibecode.main_app import VibecodeMainApp
+        from vibecode.repo_status import RepoStatus
+
+        status = RepoStatus(repo_path=tmp_path)
+        provider = _GatedStubProvider(
+            name="Stub", external=True, available=False, status_msg="offline"
+        )
+        app = VibecodeMainApp(repo_path=tmp_path, status=status, provider=provider)
+        events: list[str] = []
+        app._log_event = events.append  # type: ignore[attr-defined]
+        app._start_external = lambda p: events.append(f"START_EXT:{p}")  # type: ignore[attr-defined]
+
+        app.action_cmd_external()  # type: ignore[attr-defined]
+        assert any("unavailable" in e.lower() and "[E]" in e for e in events)
+        assert any("offline" in e for e in events)
+        assert not any("START_EXT" in e for e in events)
+
+    def test_audit_proceeds_when_supported_and_available(self, tmp_path):
+        from vibecode.main_app import VibecodeMainApp
+        from vibecode.repo_status import RepoStatus
+
+        status = RepoStatus(repo_path=tmp_path)
+        provider = _GatedStubProvider(
+            name="Stub", internal=True, available=True, status_msg="ready"
+        )
+        app = VibecodeMainApp(repo_path=tmp_path, status=status, provider=provider)
+        events: list[str] = []
+        app._log_event = events.append  # type: ignore[attr-defined]
+        app._start_run = lambda p: events.append(f"START_RUN:{p}")  # type: ignore[attr-defined]
+
+        app.action_cmd_audit()  # type: ignore[attr-defined]
+        assert any("START_RUN:audit" in e for e in events)
+
+    def test_external_proceeds_when_supported_and_available(self, tmp_path):
+        from vibecode.main_app import VibecodeMainApp
+        from vibecode.repo_status import RepoStatus
+
+        status = RepoStatus(repo_path=tmp_path)
+        provider = _GatedStubProvider(
+            name="Stub", external=True, available=True, status_msg="ready"
+        )
+        app = VibecodeMainApp(repo_path=tmp_path, status=status, provider=provider)
+        events: list[str] = []
+        app._log_event = events.append  # type: ignore[attr-defined]
+        app._start_external = lambda p: events.append(f"START_EXT:{p}")  # type: ignore[attr-defined]
+
+        app.action_cmd_external()  # type: ignore[attr-defined]
+        assert any("START_EXT:safe" in e for e in events)
+
+    def test_constructor_stores_provider_status(self, tmp_path):
+        from vibecode.main_app import VibecodeMainApp
+        from vibecode.repo_status import RepoStatus
+
+        status = RepoStatus(repo_path=tmp_path)
+        provider = _GatedStubProvider(
+            name="Stub", available=False, status_msg="not installed"
+        )
+        app = VibecodeMainApp(repo_path=tmp_path, status=status, provider=provider)
+        ps = app._provider_status  # type: ignore[attr-defined]
+        assert ps.available is False
+        assert "not installed" in ps.message
