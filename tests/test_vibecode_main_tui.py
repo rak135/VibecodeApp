@@ -541,3 +541,199 @@ class TestExistingCliRoutingUnaffected:
         with pytest.raises(SystemExit) as exc_info:
             main(["index", "--help"])
         assert exc_info.value.code == 0
+
+
+# ---------------------------------------------------------------------------
+# Refresh action / key-binding / widget-tree coverage (P21.2)
+# ---------------------------------------------------------------------------
+
+
+class TestActionRefreshRepo:
+    """Test the _on_refresh_done callback directly — the key path for logging."""
+
+    def test_on_refresh_done_logs_artifact_paths(self, tmp_path):
+        from vibecode.main_app import _TEXTUAL_AVAILABLE, VibecodeMainApp
+        from vibecode.repo_status import RepoStatus
+
+        if not _TEXTUAL_AVAILABLE:
+            pytest.skip("Textual not available")
+
+        report = type(
+            "FakeReport",
+            (),
+            dict(
+                generated_artifacts=[
+                    ".vibecode/index/file_inventory.json",
+                    ".vibecode/index/symbol_map.json",
+                ],
+                validation_status="ok",
+                warnings=[],
+                errors=[],
+                next_recommended_action="Ready.",
+            ),
+        )
+
+        log_messages: list[str] = []
+
+        class _FakeEventLog:
+            def write(self, msg):
+                log_messages.append(msg)
+
+        status = RepoStatus(repo_path=tmp_path)
+        app = VibecodeMainApp(repo_path=tmp_path, status=status)
+
+        # Patch query_one and _log_event on the app
+        original_log_event = app._log_event
+        try:
+            app.query_one = lambda selector, *_: _FakeEventLog()
+            app._on_refresh_done(report)
+        finally:
+            app._log_event = original_log_event
+
+        has_count = any("artifacts: 2 written" in m for m in log_messages)
+        has_path_1 = any("file_inventory.json" in m for m in log_messages)
+        has_path_2 = any("symbol_map.json" in m for m in log_messages)
+        assert has_count, f"Expected artifact count log, got: {log_messages}"
+        assert has_path_1, f"Expected artifact path file_inventory.json in log, got: {log_messages}"
+        assert has_path_2, f"Expected artifact path symbol_map.json in log, got: {log_messages}"
+
+    def test_on_refresh_done_logs_completion_status(self, tmp_path):
+        from vibecode.main_app import _TEXTUAL_AVAILABLE, VibecodeMainApp
+        from vibecode.repo_status import RepoStatus
+
+        if not _TEXTUAL_AVAILABLE:
+            pytest.skip("Textual not available")
+
+        report = type(
+            "FakeReport",
+            (),
+            dict(
+                generated_artifacts=[],
+                validation_status="ok",
+                warnings=[],
+                errors=[],
+                next_recommended_action="Ready.",
+            ),
+        )
+
+        log_messages: list[str] = []
+
+        class _FakeEventLog:
+            def write(self, msg):
+                log_messages.append(msg)
+
+        status = RepoStatus(repo_path=tmp_path)
+        app = VibecodeMainApp(repo_path=tmp_path, status=status)
+        app.query_one = lambda selector, *_: _FakeEventLog()
+        app._on_refresh_done(report)
+
+        assert any("Refresh complete" in m for m in log_messages)
+
+    def test_on_refresh_error_logs_failure(self, tmp_path):
+        from vibecode.main_app import _TEXTUAL_AVAILABLE, VibecodeMainApp
+        from vibecode.repo_status import RepoStatus
+
+        if not _TEXTUAL_AVAILABLE:
+            pytest.skip("Textual not available")
+
+        log_messages: list[str] = []
+
+        class _FakeEventLog:
+            def write(self, msg):
+                log_messages.append(msg)
+
+        status = RepoStatus(repo_path=tmp_path)
+        app = VibecodeMainApp(repo_path=tmp_path, status=status)
+        app.query_one = lambda selector, *_: _FakeEventLog()
+        app._on_refresh_error("disk full")
+
+        assert any("Refresh failed" in m for m in log_messages)
+        assert any("disk full" in m for m in log_messages)
+
+
+class TestRefreshBindingsTable:
+    def test_bindings_include_r_mapping(self):
+        from vibecode.main_app import _TEXTUAL_AVAILABLE, VibecodeMainApp
+
+        if not _TEXTUAL_AVAILABLE:
+            pytest.skip("Textual not available")
+
+        bindings = getattr(VibecodeMainApp, "BINDINGS", [])
+        refresh_binding = None
+        for b in bindings:
+            if hasattr(b, "key") and b.key == "r":
+                refresh_binding = b
+                break
+        assert refresh_binding is not None, "No binding for key 'r' found"
+        assert refresh_binding.action == "refresh_repo", (
+            f"Expected 'refresh_repo' action, got {refresh_binding.action!r}"
+        )
+
+    def test_bindings_count_matches_actions_text(self):
+        from vibecode.main_app import _ACTIONS_TEXT, _TEXTUAL_AVAILABLE, VibecodeMainApp
+
+        if not _TEXTUAL_AVAILABLE:
+            pytest.skip("Textual not available")
+
+        bindings = getattr(VibecodeMainApp, "BINDINGS", [])
+        action_keys_in_text = [
+            k for k in ["[R]", "[I]", "[C]", "[A]", "[S]", "[G]", "[T]", "[H]", "[Q]"]
+            if k in _ACTIONS_TEXT
+        ]
+        binding_keys = [getattr(b, "key", None) for b in bindings]
+        expected_lower = [k.strip("[]").lower() for k in action_keys_in_text]
+        assert all(k in binding_keys for k in expected_lower), (
+            f"Action keys in text: {expected_lower}, binding keys: {binding_keys}"
+        )
+
+
+class TestComposeThreeColumnLayout:
+    def test_bindings_and_action_methods_aligned(self, tmp_path):
+        from vibecode.main_app import _ACTIONS_TEXT, _TEXTUAL_AVAILABLE, VibecodeMainApp
+        from vibecode.repo_status import RepoStatus
+
+        if not _TEXTUAL_AVAILABLE:
+            pytest.skip("Textual not available")
+
+        bindings = getattr(VibecodeMainApp, "BINDINGS", [])
+        binding_actions = {getattr(b, "action", None) for b in bindings}
+
+        app = VibecodeMainApp(repo_path=tmp_path, status=RepoStatus(repo_path=tmp_path))
+        action_methods = {n for n in dir(app) if n.startswith("action_")}
+        for act in binding_actions:
+            if act and act != "app.exit":  # textal built-in
+                method_name = f"action_{act}"
+                assert method_name in action_methods, f"Binding action '{act}' has no method {method_name!r} on app"
+
+    def test_on_mount_logs_ready_and_repo(self, tmp_path):
+        from vibecode.main_app import _TEXTUAL_AVAILABLE, VibecodeMainApp
+        from vibecode.repo_status import RepoStatus
+
+        if not _TEXTUAL_AVAILABLE:
+            pytest.skip("Textual not available")
+
+        log_messages: list[str] = []
+
+        class _FakeEventLog:
+            def write(self, msg):
+                log_messages.append(msg)
+
+        status = RepoStatus(repo_path=tmp_path)
+        app = VibecodeMainApp(repo_path=tmp_path, status=status)
+        app.query_one = lambda selector, *_: _FakeEventLog()
+        app.on_mount()
+
+        assert any("ready" in m.lower() for m in log_messages)
+        assert any(str(tmp_path) in m for m in log_messages)
+
+    def test_title_and_css_path_set(self, tmp_path):
+        from vibecode.main_app import _TEXTUAL_AVAILABLE, VibecodeMainApp
+        from vibecode.repo_status import RepoStatus
+
+        if not _TEXTUAL_AVAILABLE:
+            pytest.skip("Textual not available")
+
+        assert VibecodeMainApp.TITLE == "VibecodeApp"
+        css = getattr(VibecodeMainApp, "CSS_PATH", None)
+        assert css is not None
+        assert css.name == "tui_theme.tcss"

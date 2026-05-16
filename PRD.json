@@ -782,7 +782,7 @@
     {
       "title": "P21.3 Apply three-column TUI shell review fixes",
       "description": "Read:\n`docs/audit/TUI_PHASE1_P21_THREE_COLUMN_SHELL_REVIEW.md`\n\nGoal:\nApply only concrete fixes from the P21.2 review.\n\nAllowed changes:\n- TUI startup fixes.\n- Layout fixes.\n- Status display fixes.\n- Keyboard binding fixes.\n- Refresh action wiring fixes.\n- Tests/smoke improvements.\n- Better wording around non-interactive center console.\n\nDo not expand scope:\n- Do not implement full task/context flow here unless review identifies a tiny wiring correction only.\n- Do not implement embedded PTY.\n- Do not implement external Windows Terminal here.\n- Do not add broad provider abstractions here.\n\nRequired commands:\n- `git status --short`\n- `python -m compileall vibecode -q`\n- affected TUI tests\n- full `python -m pytest -p no:cacheprovider -q` if practical\n- `git status --short`\n\nIf no fixes are needed:\n- Write:\n  `docs/audit/TUI_PHASE1_P21_THREE_COLUMN_SHELL_FIX.md`\n- State that no implementation changes were needed and why.\n\nCommit requirement:\n- If implementation/test files changed and validation passes, create a git commit.\n- Use the repository’s commit style.\n- Do not push.\n- Do not open a PR.",
-      "completed": false,
+      "completed": true,
       "engine": "opencode",
       "model": "deepseek/deepseek-v4-pro",
       "engine_args": [

@@ -280,6 +280,8 @@ if _TEXTUAL_AVAILABLE:
             arts = list(report.generated_artifacts)  # type: ignore[attr-defined]
             if arts:
                 self._log_event(f"    artifacts: {len(arts)} written")
+                for a in list(arts)[:20]:
+                    self._log_event(f"      {a}")
             nxt = report.next_recommended_action  # type: ignore[attr-defined]
             if nxt:
                 self._log_event(f"    → {nxt}")
@@ -293,6 +295,9 @@ if _TEXTUAL_AVAILABLE:
                 self.query_one("#left-status", Static).update(
                     render_left_panel(self._repo_path, new_status)
                 )
+                ctx_path = self._repo_path / ".vibecode" / "current" / "context_pack.md"
+                if ctx_path.exists():
+                    self._log_event(f"    context pack: {ctx_path}")
             except Exception as exc:  # noqa: BLE001
                 self._log_event(f"    status refresh failed: {exc}")
 
