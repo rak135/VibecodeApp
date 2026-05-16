@@ -806,7 +806,7 @@
     {
       "title": "P22.2 Review TUI task/context flow and preview",
       "description": "Review P22.1.\n\nWrite review output to:\n`docs/audit/TUI_PHASE1_P22_CONTEXT_FLOW_REVIEW.md`\n\nScope:\n- Review `[C] Create context for task`.\n- Review context generation wiring.\n- Review right panel context preview.\n- Review center panel current task/status.\n- Review failure handling.\n- Review tests.\n\nCheck:\n- `[C]` does not call an LLM.\n- `[C]` does not launch OpenCode.\n- Existing context generation logic is reused.\n- Full context remains in artifacts.\n- UI preview is concise and useful.\n- Missing `.vibecode` or stale index behavior is honest and safe.\n- Failure path does not crash the TUI.\n- Existing CLI context behavior still works.\n\nRequire evidence:\n- Test output or summarized validation.\n- Example of context preview fields.\n- Artifact paths generated in a test/smoke run if safe.\n- Explanation of how context preview avoids dumping massive files into the UI.\n\nWatch for:\n- Duplicated context-selection logic.\n- Hardcoded OpenCode prompt paths that conflict with existing behavior.\n- Hiding context generation errors.\n- UI blocking without feedback.\n- LLM/OpenCode invocation hidden behind context generation.\n\nDo not modify implementation files.\nOnly write the review document.",
-      "completed": false,
+      "completed": true,
       "engine": "copilot",
       "model": "gpt-5.4",
       "engine_args": [
