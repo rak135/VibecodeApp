@@ -998,7 +998,7 @@
     {
       "title": "P27.3 Apply event/artifact surfacing review fixes",
       "description": "Read:\n`docs/audit/TUI_PHASE2_P27_EVENT_ARTIFACT_SURFACING_REVIEW.md`\n\nGoal:\nApply only concrete fixes from the P27.2 review.\n\nAllowed changes:\n- Event model fixes.\n- Artifact watcher fixes.\n- Right panel display fixes.\n- Truncation/bounds fixes.\n- Tests.\n\nDo not expand scope:\n- Do not implement new provider support.\n- Do not implement embedded terminal.\n- Do not change run artifact layout broadly unless required for compatibility.\n\nRequired commands:\n- `git status --short`\n- `python -m compileall vibecode -q`\n- affected event/artifact/TUI tests\n- full `python -m pytest -p no:cacheprovider -q` if practical\n- `git status --short`\n\nIf no fixes are needed:\n- Write:\n  `docs/audit/TUI_PHASE2_P27_EVENT_ARTIFACT_SURFACING_FIX.md`\n- State that no implementation changes were needed and why.\n\nCommit requirement:\n- If implementation/test files changed and validation passes, create a git commit.\n- Use the repository’s commit style.\n- Do not push.\n- Do not open a PR.",
-      "completed": false,
+      "completed": true,
       "engine": "opencode",
       "model": "deepseek/deepseek-v4-pro",
       "engine_args": [
