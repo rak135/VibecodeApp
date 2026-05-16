@@ -93,12 +93,30 @@ def _extract_file_paths(content: str) -> list[str]:
 
 
 def _extract_architecture_docs(content: str) -> list[str]:
-    """Return architecture doc paths from 'Relevant architecture' section."""
+    """Return architecture doc paths from 'Relevant architecture' section.
+
+    Only top-level bullets are captured; nested (indented) source-file
+    bullets are excluded to avoid misclassifying source files as docs.
+    """
     docs: list[str] = []
-    for line in _get_section_content(content, "Relevant architecture"):
-        m = re.match(r"-\s+`([^`]+)`", line)
-        if m:
-            docs.append(m.group(1))
+    lines = content.splitlines()
+    in_section = False
+    for line in lines:
+        stripped = line.strip()
+        if stripped.startswith("## ") and "Relevant architecture".lower() in stripped.lower():
+            in_section = True
+            continue
+        if in_section and stripped.startswith("## "):
+            break
+        if in_section and stripped and not stripped.startswith(">"):
+            # Only match top-level bullets — the original line must start
+            # with "- " (no leading whitespace) to exclude nested
+            # source-file bullets that happen to match the same pattern.
+            if not line.startswith("- "):
+                continue
+            m = re.match(r"-\s+`([^`]+)`", stripped)
+            if m:
+                docs.append(m.group(1))
     return docs
 
 

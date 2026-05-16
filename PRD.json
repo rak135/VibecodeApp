@@ -819,7 +819,7 @@
     {
       "title": "P22.3 Apply context flow review fixes",
       "description": "Read:\n`docs/audit/TUI_PHASE1_P22_CONTEXT_FLOW_REVIEW.md`\n\nGoal:\nApply only concrete fixes from the P22.2 review.\n\nAllowed changes:\n- Context action wiring fixes.\n- Context preview summarization fixes.\n- Error handling fixes.\n- Missing/stale `.vibecode` behavior corrections.\n- Tests.\n\nDo not expand scope:\n- Do not implement audit/safe run if it was not already part of the reviewed fix.\n- Do not implement external Windows Terminal.\n- Do not implement embedded PTY.\n- Do not add provider abstraction beyond simple OpenCode labels.\n\nRequired commands:\n- `git status --short`\n- `python -m compileall vibecode -q`\n- affected context/TUI tests\n- full `python -m pytest -p no:cacheprovider -q` if practical\n- `git status --short`\n\nIf no fixes are needed:\n- Write:\n  `docs/audit/TUI_PHASE1_P22_CONTEXT_FLOW_FIX.md`\n- State that no implementation changes were needed and why.\n\nCommit requirement:\n- If implementation/test files changed and validation passes, create a git commit.\n- Use the repository’s commit style.\n- Do not push.\n- Do not open a PR.",
-      "completed": false,
+      "completed": true,
       "engine": "opencode",
       "model": "deepseek/deepseek-v4-pro",
       "engine_args": [

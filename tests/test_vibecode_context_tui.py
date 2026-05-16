@@ -26,8 +26,7 @@ Coverage:
 from __future__ import annotations
 
 from pathlib import Path
-from types import SimpleNamespace
-from unittest.mock import MagicMock, patch
+from unittest.mock import patch
 
 import pytest
 
@@ -157,6 +156,10 @@ class TestExtractArchitectureDocs:
 
     def test_returns_empty_when_no_section(self):
         assert _extract_architecture_docs("# Empty\n") == []
+
+    def test_excludes_nested_source_file_bullets(self):
+        docs = _extract_architecture_docs(_SAMPLE_PACK)
+        assert not any("vibecode/cli.py" in d for d in docs)
 
 
 # ---------------------------------------------------------------------------
