@@ -86,3 +86,7 @@ git branch --show-current
 ## Final assessment
 
 The product surfaces needed for supervised Phase 1+2 use are in good shape, but the workspace is not fully ready until the handoff placeholder wording is cleaned up.
+
+## Review note (2026-05-16)
+
+This report was originally written at HEAD `d70f746`. A subsequent final validation review (see `docs/audit/TUI_PHASE1_PHASE2_P28_FINAL_VALIDATION_REVIEW.md`) was conducted at HEAD `bdedd65`. The HEAD mismatch does not invalidate the report's core conclusions, but this report should be treated as commit-pinned evidence rather than current-HEAD evidence. Fresh command outputs in the review document confirm the same pass/fail patterns observed here.

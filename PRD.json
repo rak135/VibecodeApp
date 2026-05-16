@@ -1031,7 +1031,7 @@
     {
       "title": "P28.3 Apply final TUI validation review fixes or record follow-ups",
       "description": "Read:\n`docs/audit/TUI_PHASE1_PHASE2_P28_FINAL_VALIDATION_REVIEW.md`\n\nGoal:\nApply only concrete, safe validation-report fixes from the review. If the review identifies substantial product or architecture work, do not start it here. Record follow-up tasks or document future work according to the repository process.\n\nAllowed changes:\n- Small test/report corrections.\n- Validation evidence corrections.\n- Minor wiring fixes if review identifies a clear safe defect.\n- Documentation of known limitations.\n\nDo not expand scope:\n- Do not implement embedded PTY.\n- Do not add real new providers.\n- Do not do broad refactors.\n- Do not hide failing validation.\n\nRun if source/tests changed:\n- `python -m compileall vibecode -q`\n- affected tests\n- relevant targeted TUI/run/external-terminal tests\n- full `python -m pytest -p no:cacheprovider -q` if practical\n- `git status --short`\n\nIf no fixes are needed:\n- Write:\n  `docs/audit/TUI_PHASE1_PHASE2_P28_FINAL_VALIDATION_FIX.md`\n\nIf fixes change validation outcome, update:\n`docs/PRD_TUI_PHASE1_PHASE2_VALIDATION.md`\n\nCommit requirement:\n- If implementation/test/report files changed and validation passes, create a git commit.\n- Use the repository’s commit style.\n- Do not push.\n- Do not open a PR.\n\nAcceptance criteria:\n- Final validation truth is corrected if needed.\n- Any unresolved issues are explicitly documented.\n- The repository ends in a clean or honestly documented state.",
-      "completed": false,
+      "completed": true,
       "engine": "opencode",
       "model": "deepseek/deepseek-v4-pro",
       "engine_args": [
