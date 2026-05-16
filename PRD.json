@@ -843,7 +843,7 @@
     {
       "title": "P23.2 Review TUI safety/action wiring",
       "description": "Review P23.1.\n\nWrite review output to:\n`docs/audit/TUI_PHASE1_P23_SAFETY_ACTIONS_REVIEW.md`\n\nScope:\n- Review `[I]`, `[G]`, `[T]`, `[H]` behavior.\n- Review service wrappers around map/guard/check/handoff.\n- Review UI result reporting.\n- Review tests.\n\nCheck:\n- Existing map/guard/check/handoff logic is reused.\n- Failing checks/guards are not hidden.\n- Right panel shows enough detail to debug.\n- Full artifacts/logs are linked or path-referenced.\n- Missing/stale index is handled honestly.\n- The TUI remains alive after failures.\n- No LLM/OpenCode call is introduced.\n\nRequire evidence:\n- Test output.\n- Example success/failure event output if available.\n- Confirmation that existing CLI commands still pass.\n\nWatch for:\n- Converting non-zero check result into success.\n- Swallowing stderr.\n- Re-running destructive operations unexpectedly.\n- Hardcoded command assumptions.\n- UI code directly mutating lots of filesystem state.\n\nDo not modify implementation files.\nOnly write the review document.",
-      "completed": false,
+      "completed": true,
       "engine": "copilot",
       "model": "gpt-5.4",
       "engine_args": [
