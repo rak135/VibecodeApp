@@ -954,12 +954,10 @@
     {
       "title": "P26.2 Review provider abstraction for Agent Console",
       "description": "Review P26.1.\n\nWrite review output to:\n`docs/audit/TUI_PHASE2_P26_PROVIDER_ABSTRACTION_REVIEW.md`\n\nScope:\n- Review provider abstraction shape.\n- Review OpenCode provider implementation.\n- Review TUI integration.\n- Review tests.\n- Review whether abstraction is too big or too fake.\n\nCheck:\n- OpenCode works as the only real provider.\n- Future providers are not falsely advertised as working.\n- Provider interface is small and useful.\n- TUI uses provider metadata instead of hardcoding everywhere.\n- Existing OpenCode run/monitor behavior still works.\n- No LLM call is introduced.\n- No broad plugin architecture overengineering.\n\nRequire evidence:\n- Test output.\n- Example provider status display.\n- Explanation of how OpenCode run and external terminal launch connect to the provider.\n\nWatch for:\n- Abstract factory overkill.\n- Fake provider options that do nothing.\n- Breaking existing OpenCode adapter.\n- Provider logic mixed into Textual widgets.\n- Unsupported platforms reported as success.\n\nDo not modify implementation files.\nOnly write the review document.",
-      "completed": false,
+      "completed": true,
       "engine": "copilot",
-      "model": "gpt-5.4",
+      "model": "auto",
       "engine_args": [
-        "--reasoning-effort",
-        "high",
         "--stream",
         "off"
       ]
@@ -980,10 +978,8 @@
       "description": "Goal:\nMake the right panel useful for real debugging by surfacing Vibecode events, session artifacts, and generated context/run outputs.\n\nWhy it matters:\nThe user wants the right side to show logs and useful debug information: what context goes to the agent, refresh/index logs, guard/check/handoff outputs, and artifact paths. Raw spam is not enough. The panel should answer what Vibecode did and where evidence is.\n\nRequired behavior:\n- Add a TUI event model if not already present, e.g. `TuiEventLog`.\n- Add artifact/session watcher service if needed, e.g. `SessionArtifactWatcher`.\n- Right panel should show:\n  - latest Vibecode events;\n  - refresh/rebuild report;\n  - context preview;\n  - run/session id;\n  - paths to:\n    - context pack;\n    - OpenCode prompt;\n    - agent stdout/stderr logs;\n    - events.jsonl;\n    - summary.json;\n    - guard report;\n    - checks report;\n    - handoff report;\n  - warnings/errors;\n  - next recommended action.\n- It should not dump entire huge files by default.\n- It should support manual refresh/reload of displayed artifact state if needed.\n- It should handle missing artifacts honestly.\n- It should distinguish:\n  - context/debug events from Vibecode;\n  - agent output from center panel;\n  - validation/guard/check/handoff results.\n\nImplementation details:\n- Reuse `.vibecode/runs/<session_id>/` structure.\n- Reuse `.vibecode/current/*` artifacts.\n- Avoid blocking the UI while reading files.\n- Keep file reading safe and bounded.\n- Add utility to summarize long logs.\n- Keep exact full artifacts on disk and show paths.\n\nTesting requirements:\n- Event log records refresh/context/run/check events.\n- Artifact watcher handles missing files.\n- Artifact watcher reads/summarizes existing files.\n- Right panel model contains expected paths.\n- Large logs are bounded/truncated with a clear marker.\n- Existing runs show functionality remains compatible.\n\nRequired commands:\n- `git status --short`\n- `python -m compileall vibecode -q`\n- targeted event/artifact watcher tests\n- targeted TUI panel tests\n- full `python -m pytest -p no:cacheprovider -q` if practical\n\nAcceptance criteria:\n- Right panel provides useful debug cockpit information.\n- Generated context and run artifacts are easy to locate.\n- Missing/failing artifacts are visible, not hidden.\n- The TUI remains readable with large logs.",
       "completed": false,
       "engine": "copilot",
-      "model": "claude-sonnet-4.6",
+      "model": "auto",
       "engine_args": [
-        "--reasoning-effort",
-        "high",
         "--stream",
         "off"
       ]
@@ -993,10 +989,8 @@
       "description": "Review P27.1.\n\nWrite review output to:\n`docs/audit/TUI_PHASE2_P27_EVENT_ARTIFACT_SURFACING_REVIEW.md`\n\nScope:\n- Review event model.\n- Review artifact/session watcher.\n- Review right panel debug information.\n- Review bounded log reading.\n- Review tests.\n\nCheck:\n- Right panel distinguishes Vibecode debug from agent output.\n- Artifact paths are accurate.\n- Missing artifacts are handled honestly.\n- Large logs are bounded/truncated clearly.\n- Run artifacts remain compatible with existing `runs list/show`.\n- Refresh/context/check/guard/handoff outputs are visible enough for debugging.\n- No LLM/OpenCode call is introduced by the watcher.\n\nRequire evidence:\n- Test output.\n- Example right panel/debug model output.\n- Example handling for missing artifacts.\n- Example truncation behavior.\n\nWatch for:\n- Reading giant logs into memory.\n- Showing stale artifact paths as current.\n- Hiding failures under generic “done”.\n- Coupling watcher to one session shape too tightly.\n- Breaking existing run artifact layout.\n\nDo not modify implementation files.\nOnly write the review document.",
       "completed": false,
       "engine": "copilot",
-      "model": "gpt-5.4",
+      "model": "auto",
       "engine_args": [
-        "--reasoning-effort",
-        "high",
         "--stream",
         "off"
       ]
@@ -1017,10 +1011,8 @@
       "description": "Goal:\nRun a fresh validation pass proving the TUI-first Phase 1+2 workflow is ready or honestly not ready for supervised use.\n\nWrite validation report to:\n`docs/PRD_TUI_PHASE1_PHASE2_VALIDATION.md`\n\nWhy it matters:\nAfter implementing multiple TUI and terminal-integration tasks, the project needs a hard evidence pass. Do not rely on old dogfood reports. Do not claim readiness if the core path fails.\n\nValidation scope:\n- TUI command behavior.\n- Refresh/rebuild preservation.\n- Context generation.\n- Guard/check/handoff actions.\n- Phase 1 audit/safe run actions with fake OpenCode.\n- Phase 2 external Windows Terminal launch adapter with mocked/fake launch.\n- Provider abstraction with OpenCode.\n- Right-panel event/artifact surfacing.\n- Existing CLI commands.\n\nRequired validation steps:\n- Start with `git status --short`.\n- Run compile.\n- Run full pytest if practical.\n- Run targeted tests for:\n  - CLI entrypoint/no-args behavior;\n  - repo status/resolution;\n  - refresh/rebuild preservation;\n  - TUI shell/actions;\n  - context flow;\n  - guard/check/handoff actions;\n  - fake OpenCode audit/safe run;\n  - external terminal adapter;\n  - provider abstraction;\n  - event/artifact watcher.\n- Run CLI discovery:\n  - `python -m vibecode.cli --help`\n  - `python -m vibecode.cli init --help`\n  - `python -m vibecode.cli index --help`\n  - `python -m vibecode.cli context --help`\n  - `python -m vibecode.cli run --help`\n  - `python -m vibecode.cli monitor --help`\n  - `python -m vibecode.cli runs --help`\n  - `python -m vibecode.cli guard --help`\n  - `python -m vibecode.cli check --help`\n  - `python -m vibecode.cli handoff-check --help`\n  - `python -m vibecode.cli serve --help` if safe\n- Run a safe fixture/manual smoke for:\n  - `vibecode` TUI startup if non-interactive smoke is available;\n  - refresh/rebuild on a temporary repo;\n  - manual truth preservation;\n  - context generation;\n  - fake OpenCode run;\n  - artifact inspection.\n- Run external terminal launch only in fake/mocked mode by default.\n- Real Windows Terminal/OpenCode smoke is optional:\n  - run only if safe and available;\n  - otherwise skip with exact reason.\n- Finish with `git status --short`.\n\nValidation report must contain:\n- Exact commands.\n- Pass/fail/skipped table.\n- Artifact paths inspected.\n- Evidence that manual files are preserved.\n- Evidence that logs/runs are not deleted.\n- Evidence that no real LLM call is required for tests.\n- Known limitations.\n- Clear final verdict:\n  - ready for supervised dogfood;\n  - not ready;\n  - or partially ready with blockers.\n\nWhat not to change:\n- Do not implement broad fixes in this validation task.\n- If substantial bugs are found, record them as follow-up tasks.\n- Do not hide failures.\n- Do not run real OpenCode if unsafe, unavailable, costly, or likely to modify important user work.\n\nRequired commands:\n- `git status --short`\n- `python -m compileall vibecode -q`\n- targeted test subsets listed above\n- `python -m pytest -p no:cacheprovider -q` if practical\n- CLI help commands listed above\n- `git status --short`\n\nAcceptance criteria:\n- Validation report is created.\n- It contains fresh evidence, not old claims.\n- Core TUI path is honestly assessed.\n- Fake OpenCode and external terminal adapter paths are validated without requiring real LLM spend.",
       "completed": false,
       "engine": "copilot",
-      "model": "claude-sonnet-4.6",
+      "model": "auto",
       "engine_args": [
-        "--reasoning-effort",
-        "high",
         "--stream",
         "off"
       ]
@@ -1030,10 +1022,8 @@
       "description": "Review P28.1 validation report.\n\nWrite review output to:\n`docs/audit/TUI_PHASE1_PHASE2_P28_FINAL_VALIDATION_REVIEW.md`\n\nCheck:\n- `docs/PRD_TUI_PHASE1_PHASE2_VALIDATION.md`\n- Current code/tests only where needed to verify validation claims.\n- Referenced artifact paths and sample outputs where practical.\n\nRequire evidence:\n- Exact or summarized command outputs.\n- Proof that full or broadest practical pytest ran.\n- Proof that targeted TUI tests pass.\n- Proof that refresh preserves manual truth files.\n- Proof that refresh does not delete logs/runs.\n- Proof that context generation works from the TUI/service path.\n- Proof that fake OpenCode audit/safe run works.\n- Proof that external terminal adapter is tested without opening real terminals in CI.\n- Honest status of real Windows Terminal/OpenCode smoke.\n- Proof that final `git status --short` is clean or remaining dirt is unrelated and documented.\n\nWatch for:\n- Readiness claims while targeted tests fail.\n- Validation relying on old reports.\n- Tests that only check parser registration, not behavior.\n- Fake OpenCode not actually launched.\n- External terminal tests opening real terminals.\n- Manual truth preservation not proven.\n- Right-panel debug claims without artifact evidence.\n- Hidden failures in guard/check/handoff.\n\nDo not modify implementation files.\nOnly write the review document.",
       "completed": false,
       "engine": "copilot",
-      "model": "gpt-5.4",
+      "model": "auto",
       "engine_args": [
-        "--reasoning-effort",
-        "high",
         "--stream",
         "off"
       ]
