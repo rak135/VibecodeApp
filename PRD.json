@@ -917,7 +917,7 @@
     {
       "title": "P25.2 Review Phase 2 external Windows Terminal launch adapter",
       "description": "Review P25.1.\n\nWrite review output to:\n`docs/audit/TUI_PHASE2_P25_EXTERNAL_TERMINAL_REVIEW.md`\n\nScope:\n- Review external terminal adapter design.\n- Review Windows command construction/quoting.\n- Review TUI wiring.\n- Review failure behavior.\n- Review tests.\n\nCheck:\n- The implementation does not fake embedded interactivity in Textual.\n- External terminal launch is clearly separate from Phase 1 internal run orchestration.\n- Windows paths with spaces are safely handled.\n- Missing `wt.exe` or unsupported platform is handled honestly.\n- Generated OpenCode prompt path is used.\n- Center/right panels report launch status usefully.\n- No real Windows Terminal/OpenCode is required in automated tests.\n- No direct LLM call is introduced.\n\nRequire evidence:\n- Test output.\n- Example constructed command.\n- Failure-path behavior for missing terminal.\n- Explanation of how this can be extended to more providers later.\n\nWatch for:\n- Shell injection/quoting mistakes.\n- Hardcoded local repo paths.\n- CI tests opening real terminals.\n- Launching external terminal unexpectedly.\n- Breaking existing `run`/`monitor`.\n- Hiding launch failures.\n\nDo not modify implementation files.\nOnly write the review document.",
-      "completed": false,
+      "completed": true,
       "engine": "copilot",
       "model": "gpt-5.4",
       "engine_args": [
