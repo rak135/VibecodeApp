@@ -72,6 +72,11 @@ def _quote_ps_single(value: str) -> str:
     return value.replace("'", "''")
 
 
+def _quote_cmd(value: str) -> str:
+    """Minimal quoting for a path inside a cmd.exe double-quoted argument."""
+    return value.replace('"', '""')
+
+
 def build_opencode_shell_command(
     opencode_command: str,
     prompt_path: Path,
@@ -114,6 +119,39 @@ def build_opencode_shell_command(
     parts.append("Write-Host '---------------------------------';")
     parts.append(opencode_command)
     return " ".join(parts)
+
+
+def build_opencode_cmd_command(
+    opencode_command: str,
+    prompt_path: Path,
+    *,
+    repo_root: Path,
+    profile: str | None = None,
+    session_id: str | None = None,
+) -> str:
+    """Return a cmd.exe command string that sets context and starts OpenCode.
+
+    The returned string is suitable as the argument to ``cmd.exe /K``.
+    Uses ``&`` for command chaining, ``set`` for environment variables,
+    and ``cd /d`` for directory change.
+
+    This is the minimal fallback for machines where neither Windows
+    Terminal nor PowerShell is available.
+    """
+    parts: list[str] = []
+    if profile:
+        parts.append(f"set VIBECODE_PROFILE={profile}")
+    if session_id:
+        parts.append(f"set VIBECODE_SESSION_ID={session_id}")
+    parts += [
+        f"set VIBECODE_PROMPT_PATH={_quote_cmd(str(prompt_path))}",
+        f'cd /d "{_quote_cmd(str(repo_root))}"',
+        f"echo --- Vibecode external session ---",
+        f"echo Prompt: {_quote_cmd(str(prompt_path))}",
+        f"echo ---------------------------------",
+        opencode_command,
+    ]
+    return " & ".join(parts)
 
 
 # ---------------------------------------------------------------------------
@@ -260,15 +298,15 @@ class WindowsTerminalOpenCodeAdapter:
                 ),
             )
 
-        shell_cmd = build_opencode_shell_command(
-            opencode_command,
-            prompt_path,
-            profile=profile,
-            session_id=session_id,
-        )
         repo_str = str(repo_root)
 
         if terminal == "windows-terminal":
+            shell_cmd = build_opencode_shell_command(
+                opencode_command,
+                prompt_path,
+                profile=profile,
+                session_id=session_id,
+            )
             wt = self._find_wt()
             ps = self._find_ps()
             args = [wt, "new-tab", "-d", repo_str, "--", ps, "-NoExit", "-Command", shell_cmd]
@@ -276,8 +314,27 @@ class WindowsTerminalOpenCodeAdapter:
                 f"{os.path.basename(wt)} new-tab -d \"{repo_str}\" "
                 f"-- {os.path.basename(ps)} -NoExit -Command <opencode_cmd>"
             )
+        elif terminal == "cmd":
+            shell_cmd = build_opencode_cmd_command(
+                opencode_command,
+                prompt_path,
+                repo_root=repo_root,
+                profile=profile,
+                session_id=session_id,
+            )
+            args = ["cmd.exe", "/K", shell_cmd]
+            display = (
+                f"cmd.exe /K \"cd /d \"{repo_str}\" & "
+                f"set VIBECODE_PROMPT_PATH=... & <opencode_cmd>\""
+            )
         else:
             # PowerShell (pwsh or powershell.exe) without Windows Terminal.
+            shell_cmd = build_opencode_shell_command(
+                opencode_command,
+                prompt_path,
+                profile=profile,
+                session_id=session_id,
+            )
             ps = self._find_ps()
             repo_ps = _quote_ps_single(repo_str)
             args = [ps, "-NoExit", "-Command", f"Set-Location '{repo_ps}'; {shell_cmd}"]

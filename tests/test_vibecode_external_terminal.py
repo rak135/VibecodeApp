@@ -22,6 +22,8 @@ no LLM call introduced.
 
 from __future__ import annotations
 
+import os
+import threading
 from pathlib import Path
 from unittest.mock import MagicMock, patch
 
@@ -30,6 +32,7 @@ import pytest
 from vibecode.adapters.external_terminal import (
     ExternalTerminalLaunchResult,
     WindowsTerminalOpenCodeAdapter,
+    build_opencode_cmd_command,
     build_opencode_shell_command,
     detect_terminal,
 )
@@ -429,6 +432,152 @@ class TestWindowsTerminalAdapterPowerShellFallback:
 
 
 # ---------------------------------------------------------------------------
+# WindowsTerminalOpenCodeAdapter — cmd.exe fallback
+# ---------------------------------------------------------------------------
+
+
+class TestWindowsTerminalAdapterCmdFallback:
+    def _cmd_which(self, name: str) -> str | None:
+        if name in ("wt.exe", "wt", "pwsh.exe", "pwsh", "powershell.exe", "powershell"):
+            return None
+        if name in ("cmd.exe", "cmd"):
+            return "C:\\Windows\\System32\\cmd.exe"
+        return None
+
+    def test_terminal_kind_is_cmd(self, tmp_path):
+        with patch("vibecode.adapters.external_terminal.os.name", "nt"):
+            adapter = WindowsTerminalOpenCodeAdapter(
+                _which_fn=self._cmd_which,
+                _popen_fn=lambda args, **kw: _fake_proc(),
+            )
+            result = adapter.launch(tmp_path, "opencode", tmp_path / "prompt.md")
+        assert result.terminal_kind == "cmd"
+
+    def test_launched_true(self, tmp_path):
+        with patch("vibecode.adapters.external_terminal.os.name", "nt"):
+            adapter = WindowsTerminalOpenCodeAdapter(
+                _which_fn=self._cmd_which,
+                _popen_fn=lambda args, **kw: _fake_proc(),
+            )
+            result = adapter.launch(tmp_path, "opencode", tmp_path / "prompt.md")
+        assert result.launched is True
+
+    def test_does_not_use_powershell(self, tmp_path):
+        """cmd.exe fallback must not attempt to launch PowerShell."""
+        captured = {}
+
+        def capture_popen(args, **kw):
+            captured["args"] = args
+            return _fake_proc()
+
+        with patch("vibecode.adapters.external_terminal.os.name", "nt"):
+            adapter = WindowsTerminalOpenCodeAdapter(
+                _which_fn=self._cmd_which, _popen_fn=capture_popen
+            )
+            adapter.launch(tmp_path, "opencode", tmp_path / "prompt.md")
+
+        binary = os.path.basename(str(captured["args"][0]))
+        assert binary == "cmd.exe"
+
+    def test_popen_args_include_cmd_exe(self, tmp_path):
+        captured = {}
+
+        def capture_popen(args, **kw):
+            captured["args"] = args
+            return _fake_proc()
+
+        with patch("vibecode.adapters.external_terminal.os.name", "nt"):
+            adapter = WindowsTerminalOpenCodeAdapter(
+                _which_fn=self._cmd_which, _popen_fn=capture_popen
+            )
+            adapter.launch(tmp_path, "opencode", tmp_path / "prompt.md")
+
+        assert captured["args"][0].endswith("cmd.exe")
+
+    def test_popen_args_include_k_flag(self, tmp_path):
+        captured = {}
+
+        def capture_popen(args, **kw):
+            captured["args"] = args
+            return _fake_proc()
+
+        with patch("vibecode.adapters.external_terminal.os.name", "nt"):
+            adapter = WindowsTerminalOpenCodeAdapter(
+                _which_fn=self._cmd_which, _popen_fn=capture_popen
+            )
+            adapter.launch(tmp_path, "opencode", tmp_path / "prompt.md")
+
+        assert "/K" in captured["args"]
+
+    def test_cd_in_command(self, tmp_path):
+        captured = {}
+
+        def capture_popen(args, **kw):
+            captured["args"] = args
+            return _fake_proc()
+
+        with patch("vibecode.adapters.external_terminal.os.name", "nt"):
+            adapter = WindowsTerminalOpenCodeAdapter(
+                _which_fn=self._cmd_which, _popen_fn=capture_popen
+            )
+            adapter.launch(tmp_path, "opencode", tmp_path / "prompt.md")
+
+        args_joined = " ".join(str(a) for a in captured["args"])
+        assert "cd /d" in args_joined
+
+    def test_prompt_path_in_command(self, tmp_path):
+        captured = {}
+
+        def capture_popen(args, **kw):
+            captured["args"] = args
+            return _fake_proc()
+
+        prompt = tmp_path / "opencode_prompt.md"
+        with patch("vibecode.adapters.external_terminal.os.name", "nt"):
+            adapter = WindowsTerminalOpenCodeAdapter(
+                _which_fn=self._cmd_which, _popen_fn=capture_popen
+            )
+            adapter.launch(tmp_path, "opencode", prompt)
+
+        args_joined = " ".join(str(a) for a in captured["args"])
+        assert "opencode_prompt.md" in args_joined
+
+    def test_profile_passed_to_command(self, tmp_path):
+        captured = {}
+
+        def capture_popen(args, **kw):
+            captured["args"] = args
+            return _fake_proc()
+
+        with patch("vibecode.adapters.external_terminal.os.name", "nt"):
+            adapter = WindowsTerminalOpenCodeAdapter(
+                _which_fn=self._cmd_which, _popen_fn=capture_popen
+            )
+            adapter.launch(tmp_path, "opencode", tmp_path / "prompt.md", profile="audit")
+
+        args_joined = " ".join(str(a) for a in captured["args"])
+        assert "audit" in args_joined
+
+    def test_pid_returned(self, tmp_path):
+        with patch("vibecode.adapters.external_terminal.os.name", "nt"):
+            adapter = WindowsTerminalOpenCodeAdapter(
+                _which_fn=self._cmd_which,
+                _popen_fn=lambda args, **kw: _fake_proc(7777),
+            )
+            result = adapter.launch(tmp_path, "opencode", tmp_path / "prompt.md")
+        assert result.pid == 7777
+
+    def test_command_field_populated(self, tmp_path):
+        with patch("vibecode.adapters.external_terminal.os.name", "nt"):
+            adapter = WindowsTerminalOpenCodeAdapter(
+                _which_fn=self._cmd_which,
+                _popen_fn=lambda args, **kw: _fake_proc(),
+            )
+            result = adapter.launch(tmp_path, "opencode", tmp_path / "prompt.md")
+        assert result.command != ""
+
+
+# ---------------------------------------------------------------------------
 # ExternalTerminalService
 # ---------------------------------------------------------------------------
 
@@ -742,3 +891,266 @@ class TestNoRealOpenCodeRequired:
             result = svc.run(tmp_path, "task", "safe")
 
         assert "exit_code" not in result
+
+
+# ---------------------------------------------------------------------------
+# build_opencode_cmd_command
+# ---------------------------------------------------------------------------
+
+
+class TestBuildOpencodeCmdCommand:
+    def test_contains_opencode_command(self, tmp_path):
+        prompt = tmp_path / "opencode_prompt.md"
+        cmd = build_opencode_cmd_command("opencode", prompt, repo_root=tmp_path)
+        assert "opencode" in cmd
+
+    def test_contains_prompt_path(self, tmp_path):
+        prompt = tmp_path / ".vibecode" / "current" / "opencode_prompt.md"
+        cmd = build_opencode_cmd_command("opencode", prompt, repo_root=tmp_path)
+        assert "VIBECODE_PROMPT_PATH" in cmd
+        assert str(prompt).replace("'", "''") in cmd
+
+    def test_contains_cd_flag(self, tmp_path):
+        prompt = tmp_path / "prompt.md"
+        cmd = build_opencode_cmd_command("opencode", prompt, repo_root=tmp_path)
+        assert "cd /d" in cmd
+
+    def test_uses_ampersand_separator(self, tmp_path):
+        prompt = tmp_path / "prompt.md"
+        cmd = build_opencode_cmd_command("opencode", prompt, repo_root=tmp_path)
+        assert " & " in cmd
+
+    def test_does_not_contain_powershell_syntax(self, tmp_path):
+        prompt = tmp_path / "prompt.md"
+        cmd = build_opencode_cmd_command("opencode", prompt, repo_root=tmp_path)
+        assert "$env" not in cmd
+        assert "Set-Location" not in cmd
+
+    def test_profile_included(self, tmp_path):
+        prompt = tmp_path / "prompt.md"
+        cmd = build_opencode_cmd_command("opencode", prompt, repo_root=tmp_path, profile="safe")
+        assert "VIBECODE_PROFILE" in cmd
+        assert "safe" in cmd
+
+    def test_session_id_included(self, tmp_path):
+        prompt = tmp_path / "prompt.md"
+        cmd = build_opencode_cmd_command("opencode run", prompt, repo_root=tmp_path, session_id="abc-123")
+        assert "VIBECODE_SESSION_ID" in cmd
+        assert "abc-123" in cmd
+
+    def test_no_profile_not_in_output(self, tmp_path):
+        prompt = tmp_path / "prompt.md"
+        cmd = build_opencode_cmd_command("opencode", prompt, repo_root=tmp_path)
+        assert "VIBECODE_PROFILE" not in cmd
+
+    def test_no_session_id_not_in_output(self, tmp_path):
+        prompt = tmp_path / "prompt.md"
+        cmd = build_opencode_cmd_command("opencode", prompt, repo_root=tmp_path)
+        assert "VIBECODE_SESSION_ID" not in cmd
+
+    def test_banner_lines_present(self, tmp_path):
+        prompt = tmp_path / "prompt.md"
+        cmd = build_opencode_cmd_command("opencode", prompt, repo_root=tmp_path)
+        assert "Vibecode external session" in cmd
+
+    def test_path_with_spaces(self, tmp_path):
+        space_path = tmp_path / "my project"
+        space_path.mkdir()
+        prompt = space_path / "prompt.md"
+        cmd = build_opencode_cmd_command("opencode", prompt, repo_root=space_path)
+        assert "my project" in cmd
+
+
+# ---------------------------------------------------------------------------
+# [E] external terminal action / callback wiring tests
+# ---------------------------------------------------------------------------
+
+
+class TestExternalActionCallbacks:
+    def _make_app(self, tmp_path: Path, ext_service: object | None = None):
+        from vibecode.main_app import _TEXTUAL_AVAILABLE, VibecodeMainApp
+        from vibecode.repo_status import RepoStatus
+
+        if not _TEXTUAL_AVAILABLE:
+            pytest.skip("Textual not available")
+
+        status = RepoStatus(repo_path=tmp_path)
+        app = VibecodeMainApp(
+            repo_path=tmp_path,
+            status=status,
+            external_terminal_service=ext_service,
+        )
+        app._log_event = lambda msg: None
+        return app
+
+    # --- DI / service accessors ---
+
+    def test_external_service_is_none_by_default(self, tmp_path):
+        app = self._make_app(tmp_path)
+        assert app._external_terminal_service is None
+
+    def test_external_service_injected(self, tmp_path):
+        class FakeSvc:
+            pass
+
+        svc = FakeSvc()
+        app = self._make_app(tmp_path, ext_service=svc)
+        assert app._external_terminal_service is svc
+
+    def test_get_external_service_returns_external_terminal_service(self, tmp_path):
+        app = self._make_app(tmp_path)
+        from vibecode.main_app import ExternalTerminalService
+
+        svc = app._get_external_terminal_service()
+        assert isinstance(svc, ExternalTerminalService)
+
+    def test_get_external_service_is_idempotent(self, tmp_path):
+        app = self._make_app(tmp_path)
+        assert app._get_external_terminal_service() is app._get_external_terminal_service()
+
+    def test_pending_external_profile_none_on_init(self, tmp_path):
+        app = self._make_app(tmp_path)
+        assert app._pending_external_profile is None
+
+    # --- action_cmd_external without current task ---
+
+    def test_external_pushes_screen_when_no_task(self, tmp_path):
+        app = self._make_app(tmp_path)
+        pushed: list = []
+        app.push_screen = lambda *a, **kw: pushed.append(a)
+        app.action_cmd_external()
+        assert len(pushed) == 1
+        assert app._pending_external_profile == "safe"
+
+    def test_external_does_not_push_screen_when_task_set(self, tmp_path):
+        app = self._make_app(tmp_path)
+        app._current_task = "existing task"
+        pushed: list = []
+        app.push_screen = lambda *a, **kw: pushed.append(a)
+        with patch.object(threading.Thread, "start", lambda self: None):
+            app.action_cmd_external()
+        assert pushed == []
+
+    # --- action_cmd_external with current task set ---
+
+    def test_external_starts_thread_when_task_set(self, tmp_path):
+        app = self._make_app(tmp_path)
+        app._current_task = "existing task"
+        app._log_event = lambda msg: None
+        threads: list[str] = []
+
+        with patch.object(threading.Thread, "start", lambda self: threads.append(self.name)):
+            app.action_cmd_external()
+
+        assert any("tui-external" in t for t in threads)
+
+    def test_external_logs_starting_message(self, tmp_path):
+        app = self._make_app(tmp_path)
+        app._current_task = "existing task"
+        log: list[str] = []
+        app._log_event = lambda msg: log.append(msg)
+
+        with patch.object(threading.Thread, "start", lambda self: None):
+            app.action_cmd_external()
+
+        assert any("external" in m.lower() for m in log)
+
+    # --- _on_external_task_received ---
+
+    def test_external_cancel_clears_pending_profile(self, tmp_path):
+        app = self._make_app(tmp_path)
+        log: list[str] = []
+        app._log_event = lambda msg: log.append(msg)
+        app._pending_external_profile = "safe"
+        app._on_external_task_received(None)
+        assert app._pending_external_profile is None
+        assert any("cancel" in m.lower() for m in log)
+
+    def test_external_cancel_does_not_set_current_task(self, tmp_path):
+        app = self._make_app(tmp_path)
+        app._log_event = lambda msg: None
+        app._current_task = "was set"
+        app._pending_external_profile = "safe"
+        app._on_external_task_received(None)
+        assert app._current_task == "was set"
+
+    def test_external_task_received_sets_current_task(self, tmp_path):
+        app = self._make_app(tmp_path)
+        app._log_event = lambda msg: None
+        app._pending_external_profile = "safe"
+
+        threads: list[str] = []
+        with patch.object(threading.Thread, "start", lambda self: threads.append(self.name)):
+            app._on_external_task_received("new task")
+
+        assert app._current_task == "new task"
+        assert any("tui-external" in t for t in threads)
+
+    # --- _on_external_done ---
+
+    def test_on_external_done_logs_completion(self, tmp_path):
+        app = self._make_app(tmp_path)
+        log: list[str] = []
+        app._log_event = lambda msg: log.append(msg)
+
+        class _FakeWidget:
+            def update(self, text: str) -> None:
+                pass
+
+        app.query_one = lambda sel, *_: _FakeWidget()
+
+        result = {
+            "launched": True,
+            "command": "wt new-tab ...",
+            "terminal_kind": "windows-terminal",
+            "pid": 1234,
+            "error_message": None,
+            "prompt_path": "/repo/prompt.md",
+            "context_pack_path": "/repo/pack.md",
+            "task": "task",
+            "profile": "safe",
+        }
+        app._on_external_done(result)
+        assert any(
+            "LAUNCHED" in m or "launched" in m.lower()
+            for m in log
+        )
+
+    def test_on_external_done_failure_logs_error(self, tmp_path):
+        app = self._make_app(tmp_path)
+        log: list[str] = []
+        app._log_event = lambda msg: log.append(msg)
+
+        class _FakeWidget:
+            def update(self, text: str) -> None:
+                pass
+
+        app.query_one = lambda sel, *_: _FakeWidget()
+
+        result = {
+            "launched": False,
+            "command": "",
+            "terminal_kind": "unavailable",
+            "pid": None,
+            "error_message": "no terminal found",
+            "prompt_path": "",
+            "context_pack_path": "",
+            "task": "task",
+            "profile": "safe",
+        }
+        app._on_external_done(result)
+        assert any("FAILED" in m or "failed" in m.lower() for m in log)
+
+    # --- _on_external_error ---
+
+    def test_on_external_error_logs_error(self, tmp_path):
+        app = self._make_app(tmp_path)
+        log: list[str] = []
+        app._log_event = lambda msg: log.append(msg)
+        app._on_external_error("something went wrong")
+        assert any("something went wrong" in m for m in log)
+
+    def test_on_external_error_does_not_raise(self, tmp_path):
+        app = self._make_app(tmp_path)
+        app._log_event = lambda msg: None
+        app._on_external_error("boom")

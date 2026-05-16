@@ -930,7 +930,7 @@
     {
       "title": "P25.3 Apply external terminal review fixes",
       "description": "Read:\n`docs/audit/TUI_PHASE2_P25_EXTERNAL_TERMINAL_REVIEW.md`\n\nGoal:\nApply only concrete fixes from the P25.2 review.\n\nAllowed changes:\n- Command quoting fixes.\n- Adapter interface fixes.\n- Missing terminal/platform handling fixes.\n- TUI launch status improvements.\n- Tests.\n\nDo not expand scope:\n- Do not implement full provider registry unless the review identifies a small prerequisite.\n- Do not implement embedded PTY.\n- Do not change OpenCode prompt generation semantics beyond what is required.\n\nRequired commands:\n- `git status --short`\n- `python -m compileall vibecode -q`\n- affected external terminal/TUI tests\n- full `python -m pytest -p no:cacheprovider -q` if practical\n- `git status --short`\n\nIf no fixes are needed:\n- Write:\n  `docs/audit/TUI_PHASE2_P25_EXTERNAL_TERMINAL_FIX.md`\n- State that no implementation changes were needed and why.\n\nCommit requirement:\n- If implementation/test files changed and validation passes, create a git commit.\n- Use the repository’s commit style.\n- Do not push.\n- Do not open a PR.",
-      "completed": false,
+      "completed": true,
       "engine": "opencode",
       "model": "deepseek/deepseek-v4-pro",
       "engine_args": [
